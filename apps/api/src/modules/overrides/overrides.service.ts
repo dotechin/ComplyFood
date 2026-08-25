@@ -26,17 +26,17 @@ export class OverridesService {
       throw new BadRequestException('A reason is required for every override');
     }
     const entry = await this.logsService.findOne(dto.logEntryId, orgId);
-    // Mark log entry as overridden
-    entry.status = LogStatus.OVERRIDDEN;
-    // Update the specific field in log entry fields
-    entry.fields = { ...entry.fields, [dto.fieldName]: dto.newValue };
-    await this.logsService['repo'].save(entry);
+    await this.logsService.update(entry.id, orgId, {
+      status: LogStatus.OVERRIDDEN,
+      fields: { ...entry.fields, [dto.fieldName]: dto.newValue },
+    });
 
     const record = this.repo.create({ ...dto, userId });
     return this.repo.save(record);
   }
 
-  findByLogEntry(logEntryId: string) {
+  async findByLogEntry(logEntryId: string, orgId: string) {
+    await this.logsService.findOne(logEntryId, orgId);
     return this.repo.find({ where: { logEntryId }, order: { createdAt: 'DESC' } });
   }
 
@@ -45,7 +45,7 @@ export class OverridesService {
     return this.repo
       .createQueryBuilder('or')
       .innerJoin('log_entries', 'le', 'le.id = or.log_entry_id AND le.org_id = :orgId', { orgId })
-      .orderBy('or.createdAt', 'DESC')
+      .orderBy('or.created_at', 'DESC')
       .getMany();
   }
 }

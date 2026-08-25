@@ -28,4 +28,9 @@ export class AuthService {
     const user = await this.usersService.create(email, password, role, orgId);
     return this.login(user);
   }
+
+  async requestPasswordReset(email: string) {
+    await this.usersService.findByEmail(email);
+    return { message: 'If the account exists, a password reset link will be sent.' };
+  }
 }

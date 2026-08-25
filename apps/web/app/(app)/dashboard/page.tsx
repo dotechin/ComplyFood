@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { LogTable } from '@complyfood/ui';
 import type { LogEntry } from '@complyfood/shared';
-import { apiGet, apiPatch } from '../../lib/api';
+import { apiGet, apiPatch } from '../../../lib/api';
 
 export default function DashboardPage() {
   const [entries, setEntries] = useState<LogEntry[]>([]);

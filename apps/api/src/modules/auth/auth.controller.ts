@@ -18,6 +18,10 @@ class LoginDto {
   @IsString() password: string;
 }
 
+class PasswordResetRequestDto {
+  @IsEmail() email: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -37,5 +41,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: any) {
     return user;
+  }
+
+  @Post('password-reset/request')
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+    return this.authService.requestPasswordReset(dto.email);
   }
 }

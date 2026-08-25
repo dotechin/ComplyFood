@@ -38,7 +38,18 @@ export class AutomationService {
   async generateDailyForms() {
     const rules = await this.presetRepo.find();
     for (const rule of rules) {
-      await this.logsService.create(rule.orgId, 'system', {
+      await this.logsService.create(rule.orgId, null, {
+        type: rule.type as LogType,
+        fields: rule.defaults || {},
+        presetId: rule.id,
+      });
+    }
+  }
+
+  async generateDailyFormsForOrg(orgId: string) {
+    const rules = await this.presetRepo.find({ where: { orgId } });
+    for (const rule of rules) {
+      await this.logsService.create(rule.orgId, null, {
         type: rule.type as LogType,
         fields: rule.defaults || {},
         presetId: rule.id,

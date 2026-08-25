@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ChecklistTemplate } from '@complyfood/shared';
-import { apiGet } from '../../lib/api';
+import { apiGet } from '../../../lib/api';
 
 export default function ChecklistsPage() {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);

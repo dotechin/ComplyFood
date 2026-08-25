@@ -1,48 +1,72 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Document } from '@complyfood/shared';
-import { apiGet, apiPost } from '../../lib/api';
+import type { Document, LogEntry } from '@complyfood/shared';
+import { apiDownload, apiGet, apiUpload } from '../../../lib/api';
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<Document[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fileName, setFileName] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [linkedEntryId, setLinkedEntryId] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    apiGet<Document[]>('/documents')
-      .then(setDocs)
+    Promise.all([apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
+      .then(([documents, entries]) => {
+        setDocs(documents);
+        setLogs(entries);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const handleRequestUpload = async (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileName.trim()) return;
-    const result = await apiPost<{ uploadUrl: string; document: Document }>('/documents/upload-url', {
-      fileName,
-    });
-    setDocs((prev) => [result.document, ...prev]);
-    setFileName('');
-    alert(`Upload URL ready: ${result.uploadUrl}`);
+    if (!file) {
+      setError('Please choose a file to upload.');
+      return;
+    }
+    setError('');
+    const formData = new FormData();
+    formData.append('file', file);
+    if (linkedEntryId) {
+      formData.append('linkedEntryId', linkedEntryId);
+    }
+    const document = await apiUpload<Document>('/documents', formData);
+    setDocs((prev) => [document, ...prev]);
+    setFile(null);
+    setLinkedEntryId('');
   };
 
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Documents</h1>
-      <form onSubmit={handleRequestUpload} className="mb-6 flex gap-2">
+      <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
         <input
-          type="text"
-          placeholder="File name (e.g. certificate.pdf)"
-          value={fileName}
-          onChange={(e) => setFileName(e.target.value)}
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="file"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
+        <select
+          value={linkedEntryId}
+          onChange={(e) => setLinkedEntryId(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">No linked log entry</option>
+          {logs.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.type} · {new Date(entry.createdAt).toLocaleDateString()}
+            </option>
+          ))}
+        </select>
         <button
           type="submit"
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
-          Get Upload URL
+          Upload document
         </button>
+        {error && <p className="text-sm text-red-600 md:col-span-3">{error}</p>}
       </form>
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
@@ -54,6 +78,7 @@ export default function DocumentsPage() {
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Linked Entry</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Uploaded</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
@@ -66,11 +91,20 @@ export default function DocumentsPage() {
                   <td className="px-4 py-3 text-gray-500">
                     {new Date(doc.createdAt).toLocaleDateString()}
                   </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Download
+                    </button>
+                  </td>
                 </tr>
               ))}
               {docs.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                  <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                     No documents yet.
                   </td>
                 </tr>

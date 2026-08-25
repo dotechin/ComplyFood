@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { LogStatus, LogType } from '../logs/entities/log-entry.entity';
 import { LogsService } from '../logs/logs.service';
 import { OverridesService } from '../overrides/overrides.service';
-import { LogType } from '../logs/entities/log-entry.entity';
 
 @Injectable()
 export class ReportsService {
@@ -13,17 +13,103 @@ export class ReportsService {
   async getComplianceSummary(orgId: string, type?: LogType, locationId?: string) {
     const logs = await this.logsService.findAll(orgId, type, locationId);
     const overrides = await this.overridesService.findByOrg(orgId);
-    return { totalLogs: logs.length, totalOverrides: overrides.length, logs, overrides };
+    const byStatus = {
+      pending: logs.filter((log) => log.status === LogStatus.PENDING).length,
+      confirmed: logs.filter((log) => log.status === LogStatus.CONFIRMED).length,
+      overridden: logs.filter((log) => log.status === LogStatus.OVERRIDDEN).length,
+    };
+    const byType = logs.reduce<Record<string, number>>((acc, log) => {
+      acc[log.type] = (acc[log.type] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      totalLogs: logs.length,
+      totalOverrides: overrides.length,
+      byStatus,
+      byType,
+      recentLogs: logs.slice(0, 10),
+      recentOverrides: overrides.slice(0, 10),
+    };
   }
 
-  async generateCsv(orgId: string, type?: LogType) {
-    const logs = await this.logsService.findAll(orgId, type);
-    const header = 'id,type,status,submittedBy,submittedAt,createdAt
-';
+  async generateCsv(orgId: string, type?: LogType, locationId?: string, status?: LogStatus) {
+    const logs = await this.logsService.findAll(orgId, type, locationId, status);
+    const header = 'id,type,status,locationId,submittedBy,submittedAt,createdAt,fields\n';
     const rows = logs
-      .map((l) => `${l.id},${l.type},${l.status},${l.submittedBy},${l.submittedAt},${l.createdAt}`)
-      .join('
-');
+      .map((log) =>
+        [
+          log.id,
+          log.type,
+          log.status,
+          log.locationId ?? '',
+          log.submittedBy ?? '',
+          log.submittedAt?.toISOString?.() ?? '',
+          log.createdAt.toISOString?.() ?? '',
+          JSON.stringify(log.fields).replace(/"/g, '""'),
+        ]
+          .map((value) => `"${String(value)}"`)
+          .join(','),
+      )
+      .join('\n');
     return header + rows;
+  }
+
+  async generatePdf(orgId: string, type?: LogType, locationId?: string) {
+    const summary = await this.getComplianceSummary(orgId, type, locationId);
+    const lines = [
+      'ComplyFood Compliance Report',
+      '',
+      `Total logs: ${summary.totalLogs}`,
+      `Total overrides: ${summary.totalOverrides}`,
+      `Pending: ${summary.byStatus.pending}`,
+      `Confirmed: ${summary.byStatus.confirmed}`,
+      `Overridden: ${summary.byStatus.overridden}`,
+      '',
+      'Logs by type:',
+      ...Object.entries(summary.byType).map(([key, value]) => `- ${key}: ${value}`),
+      '',
+      'Recent logs:',
+      ...summary.recentLogs.map(
+        (log) => `${log.type} | ${log.status} | ${log.createdAt.toISOString?.() ?? log.createdAt}`,
+      ),
+    ];
+
+    return this.buildPdf(lines);
+  }
+
+  private buildPdf(lines: string[]): Buffer {
+    const textCommands = lines
+      .map((line, index) => `1 0 0 1 50 ${770 - index * 18} Tm (${this.escapePdfText(line)}) Tj`)
+      .join('\n');
+    const stream = `BT\n/F1 12 Tf\n${textCommands}\nET`;
+
+    const objects = [
+      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj',
+      '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj',
+      '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj',
+      '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj',
+      `5 0 obj\n<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream\nendobj`,
+    ];
+
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    for (const object of objects) {
+      offsets.push(Buffer.byteLength(pdf, 'utf8'));
+      pdf += `${object}\n`;
+    }
+    const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    for (let i = 1; i < offsets.length; i += 1) {
+      pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    return Buffer.from(pdf, 'utf8');
+  }
+
+  private escapePdfText(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   }
 }

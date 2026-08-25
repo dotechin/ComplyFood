@@ -46,6 +46,15 @@ export interface AuditEvent {
   createdAt: string;
 }
 
+export interface ReportSummary {
+  totalLogs: number;
+  totalOverrides: number;
+  byStatus: Record<string, number>;
+  byType: Record<string, number>;
+  recentLogs: LogEntry[];
+  recentOverrides: OverrideRecord[];
+}
+
 export interface ChecklistTemplate {
   id: string;
   orgId: string;
@@ -61,6 +70,15 @@ export interface PresetRule {
   type: string;
   schedule: Record<string, any> | null;
   defaults: Record<string, any> | null;
+  createdAt: string;
+}
+
+export interface ReminderRule {
+  id: string;
+  orgId: string;
+  type: string;
+  cronExpression: string;
+  lastTriggeredAt: string | null;
   createdAt: string;
 }
 
