@@ -20,7 +20,7 @@ export class OverridesController {
   }
 
   @Get('log/:logEntryId')
-  findByLog(@Param('logEntryId') logEntryId: string) {
-    return this.overridesService.findByLogEntry(logEntryId);
+  findByLog(@CurrentUser() user: any, @Param('logEntryId') logEntryId: string) {
+    return this.overridesService.findByLogEntry(logEntryId, user.orgId);
   }
 }

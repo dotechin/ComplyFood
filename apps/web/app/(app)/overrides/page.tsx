@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AuditTable } from '@complyfood/ui';
 import type { OverrideRecord } from '@complyfood/shared';
-import { apiGet } from '../../lib/api';
+import { apiGet } from '../../../lib/api';
 
 export default function OverridesPage() {
   const [records, setRecords] = useState<OverrideRecord[]>([]);

@@ -13,5 +13,10 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type PasswordResetRequestInput = z.infer<typeof passwordResetRequestSchema>;

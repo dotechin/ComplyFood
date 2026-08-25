@@ -31,4 +31,10 @@ export class AutomationController {
   createReminder(@CurrentUser() user: any, @Body() body: any) {
     return this.automationService.createReminder(user.orgId, body);
   }
+
+  @Post('generate')
+  @Roles(UserRole.ADMIN)
+  generate(@CurrentUser() user: any) {
+    return this.automationService.generateDailyFormsForOrg(user.orgId);
+  }
 }

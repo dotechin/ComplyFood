@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
@@ -23,13 +22,13 @@ export function Sidebar() {
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => (
             <li key={item.href}>
-              <Link
+              <a
                 href={item.href}
                 className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
-              </Link>
+              </a>
             </li>
           ))}
         </ul>
