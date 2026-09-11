@@ -51,6 +51,8 @@ export default function ChecklistsPage() {
 
   const generateTask = async (id: string) => {
     try {
+      setError('');
+      setMessage('');
       await apiPost<LogEntry>(`/checklists/${id}/generate`, {});
       setMessage('Checklist task created in daily logs.');
     } catch (err) {

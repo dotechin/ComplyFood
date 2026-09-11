@@ -46,7 +46,10 @@ export default function ReportsPage() {
 
   useEffect(() => {
     apiGet<User>('/users/me')
-      .then(setUser)
+      .then((resolvedUser) => {
+        setUser(resolvedUser);
+        return resolvedUser;
+      })
       .catch((err: Error) => {
         setSummary(null);
         setAuditEvents([]);
@@ -65,7 +68,9 @@ export default function ReportsPage() {
       try {
         const reportSummary = await apiGet<ReportSummary>(`/reports/summary${query}`);
         setSummary(reportSummary);
-        if (canViewAudit) {
+        const canViewResolvedAudit =
+          user.role === UserRole.ADMIN || user.role === UserRole.AUDITOR;
+        if (canViewResolvedAudit) {
           setAuditEvents(await apiGet<AuditEvent[]>(`/audit${query}`));
         } else {
           setAuditEvents([]);

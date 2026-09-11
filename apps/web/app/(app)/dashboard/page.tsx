@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const acknowledgeReminder = async (id: string) => {
     try {
       setError('');
+      setMessage('');
       await apiPost(`/automation/reminders/${id}/acknowledge`, {});
       setSnapshot((prev) =>
         prev ? { ...prev, dueReminders: prev.dueReminders.filter((reminder) => reminder.id !== id) } : prev,
