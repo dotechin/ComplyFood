@@ -10,6 +10,9 @@ export class AuditEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ name: 'org_id', nullable: true })
+  orgId: string | null;
+
   @Column({ name: 'entity_type' })
   entityType: string;
 

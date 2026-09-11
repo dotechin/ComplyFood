@@ -13,13 +13,13 @@ class RegisterDto {
   @IsOptional() @IsUUID() orgId?: string;
 }
 
-class LoginDto {
-  @IsEmail() email: string;
-  @IsString() password: string;
-}
-
 class PasswordResetRequestDto {
   @IsEmail() email: string;
+}
+
+class PasswordResetConfirmDto {
+  @IsString() token: string;
+  @IsString() @MinLength(8) password: string;
 }
 
 @Controller('auth')
@@ -46,5 +46,10 @@ export class AuthController {
   @Post('password-reset/request')
   requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
     return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('password-reset/confirm')
+  resetPassword(@Body() dto: PasswordResetConfirmDto) {
+    return this.authService.resetPassword(dto.token, dto.password);
   }
 }

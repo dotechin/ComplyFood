@@ -21,14 +21,20 @@ export class OrganizationsService {
     return this.orgRepo.findOne({ where: { id }, relations: ['locations'] });
   }
 
-  async updateOrg(id: string, data: Partial<Organization>) {
-    const org = await this.orgRepo.findOne({ where: { id } });
+  async updateOrg(id: string, currentOrgId: string, data: Partial<Organization>) {
+    if (id !== currentOrgId) {
+      throw new NotFoundException('Organization not found');
+    }
+    const org = await this.orgRepo.findOne({ where: { id: currentOrgId } });
     if (!org) throw new NotFoundException('Organization not found');
     Object.assign(org, data);
     return this.orgRepo.save(org);
   }
 
-  createLocation(orgId: string, data: Partial<Location>) {
+  async createLocation(orgId: string, currentOrgId: string, data: Partial<Location>) {
+    if (orgId !== currentOrgId) {
+      throw new NotFoundException('Organization not found');
+    }
     return this.locRepo.save(this.locRepo.create({ ...data, orgId }));
   }
 
@@ -36,7 +42,9 @@ export class OrganizationsService {
     return this.locRepo.find({ where: { orgId } });
   }
 
-  async deleteLocation(id: string) {
-    await this.locRepo.delete(id);
+  async deleteLocation(id: string, orgId: string) {
+    const location = await this.locRepo.findOne({ where: { id, orgId } });
+    if (!location) throw new NotFoundException('Location not found');
+    await this.locRepo.remove(location);
   }
 }

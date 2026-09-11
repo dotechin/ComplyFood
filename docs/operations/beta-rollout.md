@@ -1,0 +1,33 @@
+# Beta Rollout Checklist
+
+## Objective
+Validate the MVP with a small number of food businesses before production rollout.
+
+## Entry criteria
+- CI passes on every change
+- Password reset, logs, overrides, checklists, reminders, reports, and document upload work end to end
+- Core authorization rules are verified for admin, staff, and auditor access
+
+## Pilot group
+- 2–3 food businesses in the initial target segment
+- At least 1 admin user and 2 staff users per business
+- One auditor or consultant account for read-only verification where applicable
+
+## Test scenarios
+- Sign in and recover password
+- Update organization profile and locations
+- Create and confirm daily logs
+- Submit an override with a reason
+- Generate checklist tasks and complete them
+- Review dashboard reminders
+- Export reports and upload documents
+
+## Feedback capture
+- Weekly review of usability issues
+- Track missing fields, confusing workflows, and reporting gaps
+- Record any compliance-specific edge cases raised by pilot users
+
+## Exit criteria
+- No critical auth, authorization, or data-loss defects
+- Daily workflows can be completed without manual repository intervention
+- Pilot users confirm the reports and audit trail are usable for inspections

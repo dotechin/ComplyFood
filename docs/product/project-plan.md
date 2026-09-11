@@ -2,13 +2,13 @@
 title: "ComplyFood — Project Plan"
 subtitle: "HACCP Compliance Automation Platform"
 date: "2026-08-25"
-version: "1.0"
-status: "Draft"
+version: "1.1"
+status: "Active working plan"
 ---
 
 # ComplyFood — Project Plan
 
-**Version:** 1.0 | **Date:** 2026-08-25 | **Status:** Draft
+**Version:** 1.1 | **Date:** 2026-08-25 | **Status:** Active working plan
 
 ---
 
@@ -56,7 +56,7 @@ The MVP does **not** include: advanced rule engine calibration, auditor portal, 
 ComplyFood/
 ├─ apps/
 │  ├─ web/              # Frontend — Next.js + TypeScript + Tailwind CSS
-│  └─ api/              # Backend — Node.js (NestJS) or Python (FastAPI)
+│  └─ api/              # Backend — Node.js (NestJS)
 ├─ packages/
 │  ├─ ui/               # Shared React component library
 │  ├─ shared/           # Shared types, utilities, constants
@@ -132,40 +132,67 @@ The exact calibration of preset values (temperature thresholds, task frequencies
 
 ---
 
+## Current Delivery Status
+
+The repository is no longer at the concept-only stage. The monorepo, NestJS API, Next.js web app, shared packages, database migration, and initial domain modules are already implemented. The current project need is to rebaseline delivery status, close the highest-value workflow gaps, and start using this plan as a live execution document instead of a draft.
+
+### Current status summary
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Repository and workspace | In place | pnpm + Turborepo monorepo with web, api, shared UI, and shared config |
+| Backend stack decision | Implemented | NestJS is already the working backend |
+| Frontend shell and navigation | In place | Main authenticated app pages and auth pages exist |
+| Core schema and modules | In place | Organizations, users, logs, overrides, documents, audit, reports, automation |
+| CI/CD | Implemented | GitHub Actions runs lint, build, and tests |
+| Password recovery | Implemented foundation | Request and confirm reset flows exist; production delivery details still need operational verification |
+| Daily operations workflow | Implemented foundation | Daily logs UI, checklist task generation, and override submission are available |
+| Reporting and storage | Implemented foundation | Summary, filtered exports, incident/override summaries, and S3-compatible storage are in place |
+| Hardening and release readiness | In progress | Automated tests and delivery docs exist, but staging verification and beta execution are still pending |
+
+---
+
 ## Milestones
 
-### Phase 1 — Foundation *(Weeks 1–4)*
-- [ ] Repository setup, tooling, CI/CD pipeline
-- [ ] Authentication: login, logout, RBAC, password recovery
-- [ ] Organization and user setup
-- [ ] Database schema (core entities)
-- [ ] Basic UI layout and navigation
+### Phase 1 — Rebaseline and Foundation Completion
+- [x] Repository setup and workspace tooling
+- [x] CI/CD pipeline
+- [x] Authentication: login, logout, JWT, RBAC
+- [x] Password recovery completion
+- [x] Organization and user setup foundations
+- [x] Database schema (core entities)
+- [x] Basic UI layout and navigation
+- [x] Phase output: roadmap and architecture docs aligned with implemented system
 
-### Phase 2 — Operations *(Weeks 5–8)*
-- [ ] Daily log modules: temperature, cleaning, receiving, incidents
-- [ ] Checklist template engine
-- [ ] Override system with audit log
-- [ ] Audit history view
+### Phase 2 — Core Operations Workflow
+- [x] Daily log management UI
+- [x] Log creation/edit flows for temperature, cleaning, receiving, and incidents
+- [x] Checklist template management and usage workflow
+- [x] Override submission flow wired into the UI
+- [x] Override persistence with audit trail in the backend
+- [x] Audit history view foundation
 
-### Phase 3 — Automation *(Weeks 9–12)*
-- [ ] Preset value configuration
-- [ ] Auto-generated daily forms
-- [ ] Reminder and notification system
-- [ ] Dashboard with today's required actions
+### Phase 3 — Automation Execution
+- [x] Preset value configuration foundation
+- [x] Auto-generated daily forms foundation
+- [x] Reminder and notification delivery
+- [x] Dashboard with today's required actions foundation
+- [x] Automation calibration rules and recurrence depth
 
-### Phase 4 — Reporting and Storage *(Weeks 13–16)*
-- [ ] PDF and CSV export
-- [ ] Report filters (date, location, task type)
-- [ ] Incident summaries
-- [ ] Document upload and storage
-- [ ] Override / exception reports
+### Phase 4 — Reporting and Storage Completion
+- [x] PDF and CSV export foundation
+- [x] Report filters (date, location, task type, status)
+- [x] Incident summaries
+- [x] Document upload and download foundation
+- [x] S3-compatible storage integration
+- [x] Override / exception reports
 
-### Phase 5 — Hardening and Release *(Weeks 17–20)*
-- [ ] Security review and penetration testing
+### Phase 5 — Hardening and Release
+- [x] Security review and authorization hardening
 - [ ] Performance optimisation
 - [ ] Beta testing with real business users
-- [ ] Deployment to production cloud
-- [ ] User documentation
+- [x] Deployment preparation documentation
+- [x] User documentation
 
 ---
 
@@ -174,25 +201,52 @@ The exact calibration of preset values (temperature thresholds, task frequencies
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js, TypeScript, Tailwind CSS |
-| Backend | Node.js (NestJS) or Python (FastAPI) |
+| Backend | Node.js (NestJS) |
 | Database | PostgreSQL |
 | Authentication | JWT, RBAC |
-| File Storage | S3-compatible (AWS S3 / Cloudflare R2 / MinIO) |
+| File Storage | S3-compatible object storage (with MinIO-compatible development setup) |
 | PDF Generation | Puppeteer or WeasyPrint |
 | Containerisation | Docker, Docker Compose |
 | Production Hosting | Cloud (AWS / GCP / Azure) with automated backups |
 
 ---
 
-## Next Steps
+## Phase-by-Phase Action Plan
 
-1. **Confirm tech stack** — choose between Node.js/NestJS and Python/FastAPI for the backend
-2. **Define business profile** — select the first target sector (e.g. restaurants, bakeries, small food producers) and map the exact daily forms required
-3. **Compliance mapping** — document the specific HACCP forms and registration requirements applicable to the target sector and region (Abruzzo / Chieti Province)
-4. **Design database schema** — finalise entity relationships and field definitions before coding begins
-5. **Set up repository structure** — initialise `apps/web` and `apps/api` with boilerplate, CI, linting, and test infrastructure
-6. **Define automation calibration scope** — schedule a dedicated session to define preset values, temperature thresholds, task frequencies, and reminder rules
-7. **Identify first beta users** — recruit 2–3 real food businesses willing to test the MVP
+1. **Phase 1 — Rebaseline and foundation completion**
+   - Update roadmap, README, and architecture documentation to match the codebase
+   - Add CI workflows and define required quality gates
+   - Finish password reset end to end
+   - Confirm that auth, organization, and role-management flows are complete enough to support daily use
+
+2. **Phase 2 — Core operations workflow**
+   - Deliver the missing daily logs UI
+   - Connect override creation to real user actions in the web app
+   - Expand checklist workflows from template listing to operational use
+   - Close gaps between backend capability and operator-facing flows
+
+3. **Phase 3 — Automation execution**
+   - Turn reminder rules into actual reminders
+   - Define preset calibration and recurrence behavior by business type
+   - Improve dashboard actionability and daily task generation visibility
+
+4. **Phase 4 — Reporting and storage completion**
+   - Add reporting filters and exception-focused views
+   - Extend incident and override summaries
+   - Replace local document persistence with the planned S3-compatible storage model
+
+5. **Phase 5 — Hardening and release**
+   - Add integration and end-to-end tests for critical flows
+   - Run security and authorization review
+   - Prepare beta rollout, production deployment, and user documentation
+
+## Immediate Next Steps
+
+1. Define the first target business profile and map its required HACCP forms
+2. Expand test coverage from unit tests to integration and end-to-end scenarios
+3. Validate reminder timing and document storage against a real staging environment
+4. Prepare pilot data and onboard the first beta businesses
+5. Profile performance of report generation, dashboard loading, and document transfer
 
 ---
 

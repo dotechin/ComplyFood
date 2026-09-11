@@ -49,7 +49,17 @@ ComplyFood/
 ```
 
 ### Roadmap
-1. **Phase 1 – Foundation:** auth, org setup, basic UI, DB schema
-2. **Phase 2 – Operations:** daily logs, checklists, override support, audit history
-3. **Phase 3 – Automation:** presets, reminders, recurring tasks, dashboard
-4. **Phase 4 – Reporting:** exports, filters, incident summaries, document attachments
+1. **Phase 1 – Rebaseline and Foundation Completion:** align docs with implementation, add CI, complete password recovery
+2. **Phase 2 – Core Operations Workflow:** daily logs UI, checklists in use, override flow wired end to end
+3. **Phase 3 – Automation Execution:** presets, generated daily forms, reminders, dashboard improvements
+4. **Phase 4 – Reporting and Storage Completion:** exports, filters, incident summaries, production-grade document storage
+
+### Current status
+- Monorepo, NestJS API, and Next.js web app are already in place
+- Core modules now include password reset, daily logs, checklists, overrides, reports, documents, audit, reminders, and automation
+- CI now runs lint, build, and tests through GitHub Actions
+- Current priorities are target-sector definition, staging validation, and beta onboarding
+
+### TODO
+- Resume prompt for next session:
+  `Continue work on /home/runner/work/ComplyFood/ComplyFood from the latest roadmap implementation state. Review /home/runner/work/ComplyFood/ComplyFood/README.md, /home/runner/work/ComplyFood/ComplyFood/docs/product/project-plan.md, /home/runner/work/ComplyFood/ComplyFood/docs/operations/beta-rollout.md, /home/runner/work/ComplyFood/ComplyFood/docs/operations/deployment.md, and /home/runner/work/ComplyFood/ComplyFood/docs/operations/user-guide.md, then proceed with the highest-priority remaining work: target-sector definition, staging validation for S3/reminders, integration/e2e coverage, beta onboarding prep, or performance profiling.`

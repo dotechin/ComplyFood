@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AuditTable } from '@complyfood/ui';
 import type { OverrideRecord } from '@complyfood/shared';
 import { apiGet } from '../../../lib/api';
 

@@ -11,7 +11,18 @@ import {
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
 
+function parseJson<T>(value: string, fallback: T): T {
+  if (!value.trim()) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error('Enter valid JSON before saving.');
+  }
+}
+
 export default function SettingsPage() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [presets, setPresets] = useState<PresetRule[]>([]);
@@ -20,40 +31,60 @@ export default function SettingsPage() {
   const [locationAddress, setLocationAddress] = useState('');
   const [presetType, setPresetType] = useState('temperature');
   const [presetDefaults, setPresetDefaults] = useState('{"item":"Fridge 1","temperature":"4"}');
+  const [presetSchedule, setPresetSchedule] = useState('{"active":true,"weekdays":[1,2,3,4,5,6,0]}');
   const [reminderType, setReminderType] = useState('temperature');
+  const [reminderMessage, setReminderMessage] = useState('Complete temperature tasks');
   const [cronExpression, setCronExpression] = useState('0 6 * * *');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    void Promise.all([
-      apiGet<Organization>('/organizations/me'),
-      apiGet<User[]>('/users'),
-      apiGet<PresetRule[]>('/automation/presets'),
-      apiGet<ReminderRule[]>('/automation/reminders'),
-    ])
-      .then(([org, orgUsers, orgPresets, orgReminders]) => {
+    apiGet<User>('/users/me')
+      .then((me) => {
+        setCurrentUser(me);
+        if (me.role !== UserRole.ADMIN) {
+          return null;
+        }
+        return Promise.all([
+          apiGet<Organization>('/organizations/me'),
+          apiGet<User[]>('/users'),
+          apiGet<PresetRule[]>('/automation/presets'),
+          apiGet<ReminderRule[]>('/automation/reminders'),
+        ]);
+      })
+      .then((data) => {
+        if (!data) return;
+        const [org, orgUsers, orgPresets, orgReminders] = data;
         setOrganization(org);
         setUsers(orgUsers);
         setPresets(orgPresets);
         setReminders(orgReminders);
       })
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading…</p>;
+  }
 
   const updateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization) return;
+    setError('');
     const updated = await apiPatch<Organization>(`/organizations/${organization.id}`, {
       name: organization.name,
       address: organization.address,
       category: organization.category,
     });
     setOrganization(updated);
+    setMessage('Organization saved.');
   };
 
   const addLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization || !locationName.trim()) return;
+    setError('');
     const location = await apiPost<Location>(`/organizations/${organization.id}/locations`, {
       name: locationName,
       address: locationAddress,
@@ -63,34 +94,70 @@ export default function SettingsPage() {
     );
     setLocationName('');
     setLocationAddress('');
+    setMessage('Location added.');
   };
 
   const createPreset = async (e: React.FormEvent) => {
     e.preventDefault();
-    const preset = await apiPost<PresetRule>('/automation/presets', {
-      type: presetType,
-      defaults: JSON.parse(presetDefaults),
-    });
-    setPresets((prev) => [preset, ...prev]);
+    try {
+      setError('');
+      setMessage('');
+      const preset = await apiPost<PresetRule>('/automation/presets', {
+        type: presetType,
+        defaults: parseJson<Record<string, unknown>>(presetDefaults, {}),
+        schedule: parseJson<Record<string, unknown>>(presetSchedule, { active: true }),
+      });
+      setPresets((prev) => [preset, ...prev]);
+      setMessage('Preset saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save preset');
+    }
   };
 
   const createReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const reminder = await apiPost<ReminderRule>('/automation/reminders', {
-      type: reminderType,
-      cronExpression,
-    });
-    setReminders((prev) => [reminder, ...prev]);
+    try {
+      setError('');
+      setMessage('');
+      const reminder = await apiPost<ReminderRule>('/automation/reminders', {
+        type: reminderType,
+        cronExpression,
+        message: reminderMessage,
+        isActive: true,
+      });
+      setReminders((prev) => [reminder, ...prev]);
+      setMessage('Reminder saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save reminder');
+    }
   };
 
   const updateRole = async (userId: string, role: UserRole) => {
-    const updated = await apiPatch<User>(`/users/${userId}/role`, { role });
-    setUsers((prev) => prev.map((user) => (user.id === userId ? updated : user)));
+    try {
+      const updated = await apiPatch<User>(`/users/${userId}/role`, { role });
+      setUsers((prev) => prev.map((user) => (user.id === userId ? updated : user)));
+      setMessage('User role updated.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update role');
+    }
   };
 
   const generateDailyTasks = async () => {
-    await apiPost('/automation/generate', {});
+    try {
+      await apiPost('/automation/generate', {});
+      setMessage('Daily tasks generated for active presets.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate daily tasks');
+    }
   };
+
+  if (currentUser && currentUser.role !== UserRole.ADMIN) {
+    return (
+      <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">
+        Settings are available to organization admins.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -100,6 +167,7 @@ export default function SettingsPage() {
           Organization profile, user management, locations, presets, and reminder rules.
         </p>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
       </div>
 
       {organization ? (
@@ -161,7 +229,7 @@ export default function SettingsPage() {
         </form>
 
         <div className="rounded-lg border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-gray-900">Users</h2>
             <button
               type="button"
@@ -208,7 +276,12 @@ export default function SettingsPage() {
             <textarea
               value={presetDefaults}
               onChange={(e) => setPresetDefaults(e.target.value)}
-              className="h-32 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="h-28 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              value={presetSchedule}
+              onChange={(e) => setPresetSchedule(e.target.value)}
+              className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
             <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
               Save preset
@@ -217,7 +290,8 @@ export default function SettingsPage() {
           <ul className="mt-4 space-y-2 text-sm text-gray-600">
             {presets.map((preset) => (
               <li key={preset.id}>
-                {preset.type}: {JSON.stringify(preset.defaults)}
+                <span className="font-medium">{preset.type}</span>: {JSON.stringify(preset.defaults)} · schedule{' '}
+                {JSON.stringify(preset.schedule)}
               </li>
             ))}
           </ul>
@@ -233,6 +307,12 @@ export default function SettingsPage() {
               placeholder="Reminder type"
             />
             <input
+              value={reminderMessage}
+              onChange={(e) => setReminderMessage(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Reminder message"
+            />
+            <input
               value={cronExpression}
               onChange={(e) => setCronExpression(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -245,7 +325,8 @@ export default function SettingsPage() {
           <ul className="mt-4 space-y-2 text-sm text-gray-600">
             {reminders.map((reminder) => (
               <li key={reminder.id}>
-                {reminder.type}: {reminder.cronExpression}
+                <span className="font-medium">{reminder.type}</span>: {reminder.cronExpression} ·{' '}
+                {reminder.message ?? 'No message'} · {reminder.isActive ? 'active' : 'inactive'}
               </li>
             ))}
           </ul>

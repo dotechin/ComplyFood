@@ -29,6 +29,7 @@ export class AuditInterceptor implements NestInterceptor {
       tap((responseData) => {
         if (!user) return;
         const event = this.auditRepo.create({
+          orgId: user.orgId ?? null,
           entityType: context.getClass().name,
           entityId: responseData?.id ?? null,
           action: request.method,

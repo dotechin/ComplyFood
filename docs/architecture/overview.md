@@ -37,10 +37,10 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - Styling: **Tailwind CSS**
 - State: React Query / Zustand
 - Auth: session cookies or JWT stored securely
-- Key pages: Dashboard, Daily Logs, Reports, Settings, Override Center
+- Key pages in the current implementation: Dashboard, Daily Logs, Reports, Settings, Checklists, Documents, Overrides, Login, Forgot Password, Reset Password
 
 #### Backend API — `apps/api`
-- Runtime: **Node.js with NestJS** (or Python FastAPI as alternative)
+- Runtime: **Node.js with NestJS**
 - REST API with JSON responses
 - JWT-based authentication with RBAC middleware
 - Modules: Auth, Users, Organizations, Logs, Checklists, Automation, Overrides, Reports, Documents
@@ -51,13 +51,13 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - All write operations generate an `audit_event` record
 
 #### File storage
-- S3-compatible object storage (AWS S3, Cloudflare R2, or self-hosted MinIO)
-- Stores uploaded PDFs, images, and generated report files
-- File references stored in the database; files served via signed URLs
+- Current implementation stores uploaded files in S3-compatible object storage
+- Local development is expected to use a MinIO-compatible endpoint
+- File references are stored in the database and downloaded through the API layer
 
 #### Reporting service
-- PDF generation: Puppeteer or WeasyPrint
-- CSV export: streaming generation for large datasets
+- Current implementation provides filtered summaries, incident and override breakdowns, CSV export, and a simple server-generated PDF
+- Production reporting can later move to a richer PDF generation strategy if needed
 - Triggered on-demand or via scheduled jobs
 
 ---
@@ -78,8 +78,9 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 ### Security considerations
 - All API endpoints require authentication (except login / password reset)
 - RBAC enforced at the API layer on every route
+- Organization-scoped queries are enforced on user, audit, and organization management flows
 - Override records and audit events are append-only; no delete endpoint exposed
-- File uploads are virus-scanned and size-limited
+- File uploads should be size-limited and virus-scanned before production rollout
 - HTTPS enforced in production
 - Secrets managed via environment variables; no credentials in source code
 

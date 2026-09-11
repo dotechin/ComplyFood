@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../common/decorators/roles.decorator';
@@ -35,24 +35,30 @@ export class OrganizationsController {
 
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  update(@Param('id') id: string, @Body() dto: Partial<OrgDto>) {
-    return this.orgsService.updateOrg(id, dto);
+  update(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: Partial<OrgDto>) {
+    return this.orgsService.updateOrg(id, user.orgId, dto);
   }
 
   @Get(':id/locations')
-  getLocations(@Param('id') id: string) {
+  getLocations(@CurrentUser() user: any, @Param('id') id: string) {
+    if (id !== user.orgId) {
+      throw new NotFoundException('Organization not found');
+    }
     return this.orgsService.findLocationsByOrg(id);
   }
 
   @Post(':id/locations')
   @Roles(UserRole.ADMIN)
-  addLocation(@Param('id') orgId: string, @Body() dto: LocationDto) {
-    return this.orgsService.createLocation(orgId, dto);
+  addLocation(@CurrentUser() user: any, @Param('id') orgId: string, @Body() dto: LocationDto) {
+    return this.orgsService.createLocation(orgId, user.orgId, dto);
   }
 
   @Delete(':orgId/locations/:locId')
   @Roles(UserRole.ADMIN)
-  removeLocation(@Param('locId') locId: string) {
-    return this.orgsService.deleteLocation(locId);
+  removeLocation(@CurrentUser() user: any, @Param('orgId') orgId: string, @Param('locId') locId: string) {
+    if (orgId !== user.orgId) {
+      throw new NotFoundException('Organization not found');
+    }
+    return this.orgsService.deleteLocation(locId, orgId);
   }
 }
