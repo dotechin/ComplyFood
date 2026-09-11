@@ -32,9 +32,7 @@ export default function DashboardPage() {
         prev
           ? {
               ...prev,
-              pendingLogs: prev.pendingLogs
-                .map((entry) => (entry.id === id ? updated : entry))
-                .filter((entry) => entry.id !== id),
+              pendingLogs: prev.pendingLogs.filter((entry) => entry.id !== updated.id),
             }
           : prev,
       );

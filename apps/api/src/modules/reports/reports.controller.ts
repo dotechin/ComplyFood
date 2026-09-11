@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -7,7 +7,14 @@ import { ReportsService } from './reports.service';
 import { LogStatus, LogType } from '../logs/entities/log-entry.entity';
 
 function parseDateBoundary(value: string, endOfDay = false) {
-  return new Date(`${value}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new BadRequestException('Dates must use YYYY-MM-DD format');
+  }
+  const date = new Date(`${value}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException('Invalid date value');
+  }
+  return date;
 }
 
 @Controller('reports')

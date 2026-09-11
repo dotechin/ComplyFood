@@ -28,6 +28,7 @@ export default function ChecklistsPage() {
     e.preventDefault();
     try {
       setError('');
+      setMessage('');
       const template = await apiPost<ChecklistTemplate>('/checklists', {
         name,
         type,

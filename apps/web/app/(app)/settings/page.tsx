@@ -97,6 +97,7 @@ export default function SettingsPage() {
     e.preventDefault();
     try {
       setError('');
+      setMessage('');
       const preset = await apiPost<PresetRule>('/automation/presets', {
         type: presetType,
         defaults: parseJson<Record<string, unknown>>(presetDefaults, {}),
