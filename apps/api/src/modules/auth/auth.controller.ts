@@ -13,11 +13,6 @@ class RegisterDto {
   @IsOptional() @IsUUID() orgId?: string;
 }
 
-class LoginDto {
-  @IsEmail() email: string;
-  @IsString() password: string;
-}
-
 class PasswordResetRequestDto {
   @IsEmail() email: string;
 }

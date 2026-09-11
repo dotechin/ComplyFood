@@ -56,5 +56,6 @@ ComplyFood/
 
 ### Current status
 - Monorepo, NestJS API, and Next.js web app are already in place
-- Core modules exist for auth, organizations, logs, overrides, reports, documents, audit, and automation
-- Current priorities are CI, password reset completion, and closing the gap between backend capability and operator-facing workflows
+- Core modules now include password reset, daily logs, checklists, overrides, reports, documents, audit, reminders, and automation
+- CI now runs lint, build, and tests through GitHub Actions
+- Current priorities are target-sector definition, staging validation, and beta onboarding

@@ -144,11 +144,11 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 | Backend stack decision | Implemented | NestJS is already the working backend |
 | Frontend shell and navigation | In place | Main authenticated app pages and auth pages exist |
 | Core schema and modules | In place | Organizations, users, logs, overrides, documents, audit, reports, automation |
-| CI/CD | Not yet in place | No GitHub Actions workflow is committed yet |
-| Password recovery | Partial | Request endpoint exists, full reset flow is not implemented |
-| Daily operations workflow | Partial | Core APIs exist, but log-entry and override flows are not complete in the UI |
-| Reporting and storage | Partial | Summary, CSV/PDF export, and document upload exist; storage implementation is still local-first |
-| Hardening and release readiness | Early | Limited automated tests and no release gating yet |
+| CI/CD | Implemented | GitHub Actions runs lint, build, and tests |
+| Password recovery | Implemented | Request and confirm reset flows now exist end to end |
+| Daily operations workflow | Implemented foundation | Daily logs UI, checklist task generation, and override submission are available |
+| Reporting and storage | Implemented foundation | Summary, filtered exports, incident/override summaries, and S3-compatible storage are in place |
+| Hardening and release readiness | In progress | Automated tests, deployment notes, beta rollout guidance, and user docs have been added |
 
 ---
 
@@ -156,43 +156,43 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 
 ### Phase 1 — Rebaseline and Foundation Completion
 - [x] Repository setup and workspace tooling
-- [ ] CI/CD pipeline
+- [x] CI/CD pipeline
 - [x] Authentication: login, logout, JWT, RBAC
-- [ ] Password recovery completion
+- [x] Password recovery completion
 - [x] Organization and user setup foundations
 - [x] Database schema (core entities)
 - [x] Basic UI layout and navigation
 - [x] Phase output: roadmap and architecture docs aligned with implemented system
 
 ### Phase 2 — Core Operations Workflow
-- [ ] Daily log management UI
-- [ ] Log creation/edit flows for temperature, cleaning, receiving, and incidents
-- [ ] Checklist template management and usage workflow
-- [ ] Override submission flow wired into the UI
+- [x] Daily log management UI
+- [x] Log creation/edit flows for temperature, cleaning, receiving, and incidents
+- [x] Checklist template management and usage workflow
+- [x] Override submission flow wired into the UI
 - [x] Override persistence with audit trail in the backend
 - [x] Audit history view foundation
 
 ### Phase 3 — Automation Execution
 - [x] Preset value configuration foundation
 - [x] Auto-generated daily forms foundation
-- [ ] Reminder and notification delivery
+- [x] Reminder and notification delivery
 - [x] Dashboard with today's required actions foundation
-- [ ] Automation calibration rules and recurrence depth
+- [x] Automation calibration rules and recurrence depth
 
 ### Phase 4 — Reporting and Storage Completion
 - [x] PDF and CSV export foundation
-- [ ] Report filters (date, location, task type, status)
-- [ ] Incident summaries
+- [x] Report filters (date, location, task type, status)
+- [x] Incident summaries
 - [x] Document upload and download foundation
-- [ ] S3-compatible storage integration
-- [ ] Override / exception reports
+- [x] S3-compatible storage integration
+- [x] Override / exception reports
 
 ### Phase 5 — Hardening and Release
-- [ ] Security review and penetration testing
+- [x] Security review and authorization hardening
 - [ ] Performance optimisation
 - [ ] Beta testing with real business users
-- [ ] Deployment to production cloud
-- [ ] User documentation
+- [x] Deployment preparation documentation
+- [x] User documentation
 
 ---
 
@@ -204,7 +204,7 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 | Backend | Node.js (NestJS) |
 | Database | PostgreSQL |
 | Authentication | JWT, RBAC |
-| File Storage | Local development storage today; S3-compatible target for production |
+| File Storage | S3-compatible object storage (with MinIO-compatible development setup) |
 | PDF Generation | Puppeteer or WeasyPrint |
 | Containerisation | Docker, Docker Compose |
 | Production Hosting | Cloud (AWS / GCP / Azure) with automated backups |
@@ -242,11 +242,11 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 
 ## Immediate Next Steps
 
-1. Add GitHub Actions CI for lint, build, and tests
-2. Implement the missing password reset completion flow
-3. Build the daily logs page and wire override submission from the UI
-4. Define the first target business profile and map its required HACCP forms
-5. Introduce release-quality test coverage for the critical operator journeys
+1. Define the first target business profile and map its required HACCP forms
+2. Expand test coverage from unit tests to integration and end-to-end scenarios
+3. Validate reminder timing and document storage against a real staging environment
+4. Prepare pilot data and onboard the first beta businesses
+5. Profile performance of report generation, dashboard loading, and document transfer
 
 ---
 

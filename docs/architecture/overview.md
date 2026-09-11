@@ -37,7 +37,7 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - Styling: **Tailwind CSS**
 - State: React Query / Zustand
 - Auth: session cookies or JWT stored securely
-- Key pages in the current implementation: Dashboard, Reports, Settings, Checklists, Documents, Overrides, Login, Forgot Password
+- Key pages in the current implementation: Dashboard, Daily Logs, Reports, Settings, Checklists, Documents, Overrides, Login, Forgot Password, Reset Password
 
 #### Backend API — `apps/api`
 - Runtime: **Node.js with NestJS**
@@ -51,12 +51,12 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - All write operations generate an `audit_event` record
 
 #### File storage
-- Current implementation stores uploaded files on local disk for development
-- Production target remains S3-compatible object storage (AWS S3, Cloudflare R2, or self-hosted MinIO)
-- File references are stored in the database; production delivery should move to signed URLs
+- Current implementation stores uploaded files in S3-compatible object storage
+- Local development is expected to use a MinIO-compatible endpoint
+- File references are stored in the database and downloaded through the API layer
 
 #### Reporting service
-- Current implementation provides CSV export and a simple server-generated PDF
+- Current implementation provides filtered summaries, incident and override breakdowns, CSV export, and a simple server-generated PDF
 - Production reporting can later move to a richer PDF generation strategy if needed
 - Triggered on-demand or via scheduled jobs
 
@@ -78,6 +78,7 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 ### Security considerations
 - All API endpoints require authentication (except login / password reset)
 - RBAC enforced at the API layer on every route
+- Organization-scoped queries are enforced on user, audit, and organization management flows
 - Override records and audit events are append-only; no delete endpoint exposed
 - File uploads are virus-scanned and size-limited
 - HTTPS enforced in production
