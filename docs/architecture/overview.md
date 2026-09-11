@@ -80,7 +80,7 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - RBAC enforced at the API layer on every route
 - Organization-scoped queries are enforced on user, audit, and organization management flows
 - Override records and audit events are append-only; no delete endpoint exposed
-- File uploads are virus-scanned and size-limited
+- File uploads should be size-limited and virus-scanned before production rollout
 - HTTPS enforced in production
 - Secrets managed via environment variables; no credentials in source code
 

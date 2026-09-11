@@ -145,10 +145,10 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 | Frontend shell and navigation | In place | Main authenticated app pages and auth pages exist |
 | Core schema and modules | In place | Organizations, users, logs, overrides, documents, audit, reports, automation |
 | CI/CD | Implemented | GitHub Actions runs lint, build, and tests |
-| Password recovery | Implemented | Request and confirm reset flows now exist end to end |
+| Password recovery | Implemented foundation | Request and confirm reset flows exist; production delivery details still need operational verification |
 | Daily operations workflow | Implemented foundation | Daily logs UI, checklist task generation, and override submission are available |
 | Reporting and storage | Implemented foundation | Summary, filtered exports, incident/override summaries, and S3-compatible storage are in place |
-| Hardening and release readiness | In progress | Automated tests, deployment notes, beta rollout guidance, and user docs have been added |
+| Hardening and release readiness | In progress | Automated tests and delivery docs exist, but staging verification and beta execution are still pending |
 
 ---
 
