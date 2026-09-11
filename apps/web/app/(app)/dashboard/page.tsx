@@ -27,6 +27,7 @@ export default function DashboardPage() {
 
   const handleConfirm = async (id: string) => {
     try {
+      setError('');
       const updated = await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
       setSnapshot((prev) =>
         prev
@@ -44,6 +45,7 @@ export default function DashboardPage() {
 
   const acknowledgeReminder = async (id: string) => {
     try {
+      setError('');
       await apiPost(`/automation/reminders/${id}/acknowledge`, {});
       setSnapshot((prev) =>
         prev ? { ...prev, dueReminders: prev.dueReminders.filter((reminder) => reminder.id !== id) } : prev,

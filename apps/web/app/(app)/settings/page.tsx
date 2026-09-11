@@ -13,7 +13,11 @@ import { apiGet, apiPatch, apiPost } from '../../../lib/api';
 
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
-  return JSON.parse(value) as T;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error('Enter valid JSON before saving.');
+  }
 }
 
 export default function SettingsPage() {

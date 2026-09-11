@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 import { UserRole, type ChecklistTemplate, type LogEntry, type User } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
 
+function parseJson<T>(value: string): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error('Enter valid JSON before saving the checklist.');
+  }
+}
+
 export default function ChecklistsPage() {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -32,7 +40,7 @@ export default function ChecklistsPage() {
       const template = await apiPost<ChecklistTemplate>('/checklists', {
         name,
         type,
-        fieldsConfig: JSON.parse(fieldsConfig),
+        fieldsConfig: parseJson<Record<string, unknown>>(fieldsConfig),
       });
       setTemplates((prev) => [template, ...prev]);
       setMessage('Checklist template created.');

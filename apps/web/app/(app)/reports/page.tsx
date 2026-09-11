@@ -56,18 +56,23 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    const requests: Promise<unknown>[] = [apiGet<ReportSummary>(`/reports/summary${query}`)];
-    if (canViewAudit) {
-      requests.push(apiGet<AuditEvent[]>(`/audit${query}`));
-    }
+    const load = async () => {
+      try {
+        const reportSummary = await apiGet<ReportSummary>(`/reports/summary${query}`);
+        setSummary(reportSummary);
+        if (canViewAudit) {
+          setAuditEvents(await apiGet<AuditEvent[]>(`/audit${query}`));
+        } else {
+          setAuditEvents([]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to load reports');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    Promise.all(requests)
-      .then(([rep, events]) => {
-        setSummary(rep as ReportSummary);
-        setAuditEvents((events as AuditEvent[]) ?? []);
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+    void load();
   }, [canViewAudit, query, user]);
 
   return (

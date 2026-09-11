@@ -41,8 +41,11 @@ describe('ReportsService', () => {
     expect(summary.totalOverrides).toBe(1);
     expect(summary.byStatus.pending).toBe(1);
     expect(summary.byType.incident).toBe(1);
+    expect(summary.incidentSummary.total).toBe(1);
+    expect(summary.incidentSummary.pending).toBe(0);
     expect(summary.incidentSummary.overridden).toBe(1);
     expect(summary.overridesByField.fields).toBe(1);
+    expect(summary.overridesByType.incident).toBe(1);
   });
 
   it('generates a PDF buffer', async () => {
