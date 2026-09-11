@@ -56,7 +56,7 @@ The MVP does **not** include: advanced rule engine calibration, auditor portal, 
 ComplyFood/
 ├─ apps/
 │  ├─ web/              # Frontend — Next.js + TypeScript + Tailwind CSS
-│  └─ api/              # Backend — Node.js (NestJS) or Python (FastAPI)
+│  └─ api/              # Backend — Node.js (NestJS)
 ├─ packages/
 │  ├─ ui/               # Shared React component library
 │  ├─ shared/           # Shared types, utilities, constants
@@ -162,7 +162,7 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 - [x] Organization and user setup foundations
 - [x] Database schema (core entities)
 - [x] Basic UI layout and navigation
-- [ ] Phase output: roadmap and architecture docs aligned with implemented system
+- [x] Phase output: roadmap and architecture docs aligned with implemented system
 
 ### Phase 2 — Core Operations Workflow
 - [ ] Daily log management UI
