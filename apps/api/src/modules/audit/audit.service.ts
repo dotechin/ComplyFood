@@ -10,8 +10,9 @@ export class AuditService {
     private readonly repo: Repository<AuditEvent>,
   ) {}
 
-  findAll(entityType?: string, entityId?: string) {
+  findAll(orgId: string, entityType?: string, entityId?: string) {
     const qb = this.repo.createQueryBuilder('ae').orderBy('ae.createdAt', 'DESC');
+    qb.andWhere('ae.orgId = :orgId', { orgId });
     if (entityType) qb.andWhere('ae.entityType = :entityType', { entityType });
     if (entityId) qb.andWhere('ae.entityId = :entityId', { entityId });
     return qb.getMany();

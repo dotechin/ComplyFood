@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { LogEntry, LogStatus, LogType } from './entities/log-entry.entity';
 
 interface CreateLogInput {
@@ -43,11 +43,19 @@ export class LogsService {
     type?: LogType,
     locationId?: string,
     status?: LogStatus,
+    dateFrom?: Date,
+    dateTo?: Date,
   ): Promise<LogEntry[]> {
     const where: Record<string, any> = { orgId };
     if (type) where.type = type;
     if (locationId) where.locationId = locationId;
     if (status) where.status = status;
+    if (dateFrom || dateTo) {
+      where.createdAt = Between(
+        dateFrom ?? new Date('2000-01-01T00:00:00.000Z'),
+        dateTo ?? new Date('2999-12-31T23:59:59.999Z'),
+      );
+    }
     return this.repo.find({ where, order: { createdAt: 'DESC' } });
   }
 
@@ -73,5 +81,20 @@ export class LogsService {
     entry.submittedBy = userId;
     entry.submittedAt = new Date();
     return this.repo.save(entry);
+  }
+
+  async hasPresetEntryForDate(orgId: string, presetId: string, date: Date): Promise<boolean> {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    const existing = await this.repo.findOne({
+      where: {
+        orgId,
+        presetId,
+        createdAt: Between(start, end),
+      },
+    });
+    return Boolean(existing);
   }
 }

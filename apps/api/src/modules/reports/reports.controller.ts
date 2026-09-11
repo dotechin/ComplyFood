@@ -6,6 +6,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReportsService } from './reports.service';
 import { LogStatus, LogType } from '../logs/entities/log-entry.entity';
 
+function parseDateBoundary(value: string, endOfDay = false) {
+  return new Date(`${value}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`);
+}
+
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReportsController {
@@ -17,8 +21,17 @@ export class ReportsController {
     @Query('type') type?: LogType,
     @Query('locationId') locationId?: string,
     @Query('status') status?: LogStatus,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
-    return this.reportsService.getComplianceSummary(user.orgId, type, locationId);
+    return this.reportsService.getComplianceSummary(
+      user.orgId,
+      type,
+      locationId,
+      status,
+      dateFrom ? parseDateBoundary(dateFrom) : undefined,
+      dateTo ? parseDateBoundary(dateTo, true) : undefined,
+    );
   }
 
   @Get('export/csv')
@@ -28,8 +41,17 @@ export class ReportsController {
     @Query('type') type?: LogType,
     @Query('locationId') locationId?: string,
     @Query('status') status?: LogStatus,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
-    const csv = await this.reportsService.generateCsv(user.orgId, type, locationId, status);
+    const csv = await this.reportsService.generateCsv(
+      user.orgId,
+      type,
+      locationId,
+      status,
+      dateFrom ? parseDateBoundary(dateFrom) : undefined,
+      dateTo ? parseDateBoundary(dateTo, true) : undefined,
+    );
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="compliance-report.csv"');
     res.send(csv);
@@ -41,8 +63,18 @@ export class ReportsController {
     @Res() res: Response,
     @Query('type') type?: LogType,
     @Query('locationId') locationId?: string,
+    @Query('status') status?: LogStatus,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
-    const pdf = await this.reportsService.generatePdf(user.orgId, type, locationId);
+    const pdf = await this.reportsService.generatePdf(
+      user.orgId,
+      type,
+      locationId,
+      status,
+      dateFrom ? parseDateBoundary(dateFrom) : undefined,
+      dateTo ? parseDateBoundary(dateTo, true) : undefined,
+    );
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="compliance-report.pdf"');
     res.send(pdf);

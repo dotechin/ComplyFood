@@ -37,4 +37,9 @@ export class ChecklistsController {
   remove(@CurrentUser() user: any, @Param('id') id: string) {
     return this.service.remove(id, user.orgId);
   }
+
+  @Post(':id/generate')
+  generate(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.service.generateLog(id, user.orgId, user.id);
+  }
 }

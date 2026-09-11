@@ -10,9 +10,19 @@ export class ReportsService {
     private readonly overridesService: OverridesService,
   ) {}
 
-  async getComplianceSummary(orgId: string, type?: LogType, locationId?: string) {
-    const logs = await this.logsService.findAll(orgId, type, locationId);
+  async getComplianceSummary(
+    orgId: string,
+    type?: LogType,
+    locationId?: string,
+    status?: LogStatus,
+    dateFrom?: Date,
+    dateTo?: Date,
+  ) {
+    const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
     const overrides = await this.overridesService.findByOrg(orgId);
+    const logIds = new Set(logs.map((log) => log.id));
+    const logById = new Map(logs.map((log) => [log.id, log]));
+    const filteredOverrides = overrides.filter((override) => logIds.has(override.logEntryId));
     const byStatus = {
       pending: logs.filter((log) => log.status === LogStatus.PENDING).length,
       confirmed: logs.filter((log) => log.status === LogStatus.CONFIRMED).length,
@@ -22,19 +32,43 @@ export class ReportsService {
       acc[log.type] = (acc[log.type] ?? 0) + 1;
       return acc;
     }, {});
+    const incidentLogs = logs.filter((log) => log.type === LogType.INCIDENT);
+    const overridesByField = filteredOverrides.reduce<Record<string, number>>((acc, override) => {
+      acc[override.fieldName] = (acc[override.fieldName] ?? 0) + 1;
+      return acc;
+    }, {});
+    const overridesByType = filteredOverrides.reduce<Record<string, number>>((acc, override) => {
+      const logType = logById.get(override.logEntryId)?.type ?? 'unknown';
+      acc[logType] = (acc[logType] ?? 0) + 1;
+      return acc;
+    }, {});
 
     return {
       totalLogs: logs.length,
-      totalOverrides: overrides.length,
+      totalOverrides: filteredOverrides.length,
       byStatus,
       byType,
+      incidentSummary: {
+        total: incidentLogs.length,
+        pending: incidentLogs.filter((log) => log.status === LogStatus.PENDING).length,
+        overridden: incidentLogs.filter((log) => log.status === LogStatus.OVERRIDDEN).length,
+      },
+      overridesByField,
+      overridesByType,
       recentLogs: logs.slice(0, 10),
-      recentOverrides: overrides.slice(0, 10),
+      recentOverrides: filteredOverrides.slice(0, 10),
     };
   }
 
-  async generateCsv(orgId: string, type?: LogType, locationId?: string, status?: LogStatus) {
-    const logs = await this.logsService.findAll(orgId, type, locationId, status);
+  async generateCsv(
+    orgId: string,
+    type?: LogType,
+    locationId?: string,
+    status?: LogStatus,
+    dateFrom?: Date,
+    dateTo?: Date,
+  ) {
+    const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
     const header = 'id,type,status,locationId,submittedBy,submittedAt,createdAt,fields\n';
     const rows = logs
       .map((log) =>
@@ -55,8 +89,15 @@ export class ReportsService {
     return header + rows;
   }
 
-  async generatePdf(orgId: string, type?: LogType, locationId?: string) {
-    const summary = await this.getComplianceSummary(orgId, type, locationId);
+  async generatePdf(
+    orgId: string,
+    type?: LogType,
+    locationId?: string,
+    status?: LogStatus,
+    dateFrom?: Date,
+    dateTo?: Date,
+  ) {
+    const summary = await this.getComplianceSummary(orgId, type, locationId, status, dateFrom, dateTo);
     const lines = [
       'ComplyFood Compliance Report',
       '',
@@ -65,9 +106,13 @@ export class ReportsService {
       `Pending: ${summary.byStatus.pending}`,
       `Confirmed: ${summary.byStatus.confirmed}`,
       `Overridden: ${summary.byStatus.overridden}`,
+      `Incidents: ${summary.incidentSummary.total}`,
       '',
       'Logs by type:',
       ...Object.entries(summary.byType).map(([key, value]) => `- ${key}: ${value}`),
+      '',
+      'Overrides by field:',
+      ...Object.entries(summary.overridesByField).map(([key, value]) => `- ${key}: ${value}`),
       '',
       'Recent logs:',
       ...summary.recentLogs.map(

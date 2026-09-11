@@ -8,6 +8,7 @@ export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [resetUrl, setResetUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -15,6 +16,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setMessage('');
+    setResetUrl('');
     const result = passwordResetRequestSchema.safeParse({ email });
     if (!result.success) {
       setError(result.error.errors[0].message);
@@ -34,6 +36,7 @@ export default function ForgotPasswordPage() {
         return;
       }
       setMessage(data.message);
+      setResetUrl(data.resetUrl ?? '');
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -60,6 +63,11 @@ export default function ForgotPasswordPage() {
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         {message && <p className="text-xs text-green-600">{message}</p>}
+        {resetUrl && (
+          <a href={resetUrl} className="block text-xs text-blue-600 hover:text-blue-700">
+            Open reset link
+          </a>
+        )}
         <button
           type="submit"
           disabled={loading}

@@ -26,19 +26,23 @@ describe('ReportsService', () => {
       },
       {
         id: '2',
-        type: LogType.CLEANING,
-        status: LogStatus.CONFIRMED,
+        type: LogType.INCIDENT,
+        status: LogStatus.OVERRIDDEN,
         createdAt: new Date('2026-01-02T00:00:00Z'),
       },
     ]);
-    overridesService.findByOrg.mockResolvedValue([{ id: 'override-1' }]);
+    overridesService.findByOrg.mockResolvedValue([
+      { id: 'override-1', logEntryId: '2', fieldName: 'fields' },
+    ]);
 
     const summary = await service.getComplianceSummary('org-1');
 
     expect(summary.totalLogs).toBe(2);
     expect(summary.totalOverrides).toBe(1);
     expect(summary.byStatus.pending).toBe(1);
-    expect(summary.byType.cleaning).toBe(1);
+    expect(summary.byType.incident).toBe(1);
+    expect(summary.incidentSummary.overridden).toBe(1);
+    expect(summary.overridesByField.fields).toBe(1);
   });
 
   it('generates a PDF buffer', async () => {

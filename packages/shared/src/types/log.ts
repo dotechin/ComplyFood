@@ -38,6 +38,7 @@ export interface OverrideRecord {
 
 export interface AuditEvent {
   id: string;
+  orgId: string | null;
   entityType: string;
   entityId: string | null;
   action: string;
@@ -51,6 +52,13 @@ export interface ReportSummary {
   totalOverrides: number;
   byStatus: Record<string, number>;
   byType: Record<string, number>;
+  incidentSummary: {
+    total: number;
+    pending: number;
+    overridden: number;
+  };
+  overridesByField: Record<string, number>;
+  overridesByType: Record<string, number>;
   recentLogs: LogEntry[];
   recentOverrides: OverrideRecord[];
 }
@@ -78,7 +86,20 @@ export interface ReminderRule {
   orgId: string;
   type: string;
   cronExpression: string;
+  message: string | null;
+  isActive: boolean;
   lastTriggeredAt: string | null;
+  createdAt: string;
+}
+
+export interface ReminderEvent {
+  id: string;
+  orgId: string;
+  reminderRuleId: string;
+  type: string;
+  message: string;
+  scheduledFor: string;
+  acknowledgedAt: string | null;
   createdAt: string;
 }
 

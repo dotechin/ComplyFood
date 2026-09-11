@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  IsDateString,
   IsEnum,
   IsObject,
   IsOptional,
@@ -19,6 +20,10 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { LogStatus, LogType } from './entities/log-entry.entity';
 import { LogsService } from './logs.service';
+
+function parseDateBoundary(value: string, endOfDay = false) {
+  return new Date(`${value}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`);
+}
 
 class CreateLogDto {
   @IsEnum(LogType)
@@ -58,6 +63,14 @@ class FindLogsQueryDto {
   @IsOptional()
   @IsEnum(LogStatus)
   status?: LogStatus;
+
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
 }
 
 @Controller('logs')
@@ -72,7 +85,14 @@ export class LogsController {
 
   @Get()
   findAll(@CurrentUser() user: any, @Query() query: FindLogsQueryDto) {
-    return this.logsService.findAll(user.orgId, query.type, query.locationId, query.status);
+    return this.logsService.findAll(
+      user.orgId,
+      query.type,
+      query.locationId,
+      query.status,
+      query.dateFrom ? parseDateBoundary(query.dateFrom) : undefined,
+      query.dateTo ? parseDateBoundary(query.dateTo, true) : undefined,
+    );
   }
 
   @Get(':id')

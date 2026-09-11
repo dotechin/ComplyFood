@@ -14,8 +14,14 @@ export class ReminderRule {
   @Column({ name: 'cron_expression' })
   cronExpression: string;
 
-  @Column({ name: 'last_triggered_at', nullable: true })
-  lastTriggeredAt: Date;
+  @Column({ nullable: true })
+  message: string | null;
+
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
+
+  @Column({ name: 'last_triggered_at', type: 'timestamptz', nullable: true })
+  lastTriggeredAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

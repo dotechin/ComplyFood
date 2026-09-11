@@ -26,6 +26,12 @@ export class User {
   @Column({ name: 'org_id', nullable: true })
   orgId: string;
 
+  @Column({ name: 'password_reset_token_hash', nullable: true })
+  passwordResetTokenHash: string | null;
+
+  @Column({ name: 'password_reset_expires_at', type: 'timestamptz', nullable: true })
+  passwordResetExpiresAt: Date | null;
+
   @ManyToOne(() => Organization, { nullable: true })
   @JoinColumn({ name: 'org_id' })
   organization: Organization;

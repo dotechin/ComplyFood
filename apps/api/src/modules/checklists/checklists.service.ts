@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChecklistTemplate } from './entities/checklist-template.entity';
+import { LogsService } from '../logs/logs.service';
+import { LogType } from '../logs/entities/log-entry.entity';
 
 @Injectable()
 export class ChecklistsService {
   constructor(
     @InjectRepository(ChecklistTemplate)
     private readonly repo: Repository<ChecklistTemplate>,
+    private readonly logsService: LogsService,
   ) {}
 
   create(orgId: string, data: Partial<ChecklistTemplate>) {
@@ -33,5 +36,18 @@ export class ChecklistsService {
   async remove(id: string, orgId: string) {
     const t = await this.findOne(id, orgId);
     await this.repo.remove(t);
+  }
+
+  async generateLog(id: string, orgId: string, userId: string) {
+    const template = await this.findOne(id, orgId);
+    return this.logsService.create(orgId, userId, {
+      type: LogType.CHECKLIST,
+      fields: {
+        templateId: template.id,
+        templateName: template.name,
+        items: template.fieldsConfig?.items ?? [],
+        checklistType: template.type ?? 'general',
+      },
+    });
   }
 }
