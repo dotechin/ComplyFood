@@ -18,6 +18,7 @@ function parseJson<T>(value: string, fallback: T): T {
 
 export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [presets, setPresets] = useState<PresetRule[]>([]);
@@ -55,8 +56,13 @@ export default function SettingsPage() {
         setPresets(orgPresets);
         setReminders(orgReminders);
       })
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading…</p>;
+  }
 
   const updateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();

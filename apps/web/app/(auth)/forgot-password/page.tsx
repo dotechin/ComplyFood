@@ -63,9 +63,9 @@ export default function ForgotPasswordPage() {
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         {message && <p className="text-xs text-green-600">{message}</p>}
-        {resetUrl && (
+        {process.env.NODE_ENV !== 'production' && resetUrl && (
           <a href={resetUrl} className="block text-xs text-blue-600 hover:text-blue-700">
-            Open reset link
+            Open reset link (development only)
           </a>
         )}
         <button

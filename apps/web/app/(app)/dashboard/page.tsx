@@ -10,7 +10,6 @@ interface DashboardSnapshot {
   dueReminders: ReminderEvent[];
   generatedToday: number;
   activePresetCount: number;
-  activeReminderCount: number;
 }
 
 export default function DashboardPage() {
@@ -70,7 +69,7 @@ export default function DashboardPage() {
           <SummaryCard label="Pending tasks" value={snapshot.pendingLogs.length} />
           <SummaryCard label="Generated from presets" value={snapshot.generatedToday} />
           <SummaryCard label="Active presets" value={snapshot.activePresetCount} />
-          <SummaryCard label="Active reminders" value={snapshot.activeReminderCount} />
+          <SummaryCard label="Due reminders" value={snapshot.dueReminders.length} />
         </div>
       )}
       {snapshot && snapshot.dueReminders.length > 0 && (
