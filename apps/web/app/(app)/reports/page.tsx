@@ -48,6 +48,8 @@ export default function ReportsPage() {
     apiGet<User>('/users/me')
       .then(setUser)
       .catch((err: Error) => {
+        setSummary(null);
+        setAuditEvents([]);
         setError(err.message);
         setLoading(false);
       });
@@ -56,6 +58,9 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
+    setError('');
+    setSummary(null);
+    setAuditEvents([]);
     const load = async () => {
       try {
         const reportSummary = await apiGet<ReportSummary>(`/reports/summary${query}`);

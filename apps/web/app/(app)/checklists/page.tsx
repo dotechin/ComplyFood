@@ -106,13 +106,15 @@ export default function ChecklistsPage() {
               <pre className="mt-3 overflow-x-auto rounded-md bg-gray-50 p-3 text-xs text-gray-600">
                 {JSON.stringify(template.fieldsConfig, null, 2)}
               </pre>
-              <button
-                type="button"
-                onClick={() => void generateTask(template.id)}
-                className="mt-3 rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
-              >
-                Create daily task
-              </button>
+              {user?.role === UserRole.ADMIN && (
+                <button
+                  type="button"
+                  onClick={() => void generateTask(template.id)}
+                  className="mt-3 rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                >
+                  Create daily task
+                </button>
+              )}
             </div>
           ))}
           {templates.length === 0 && (

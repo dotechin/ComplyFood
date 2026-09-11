@@ -118,6 +118,7 @@ export default function SettingsPage() {
     e.preventDefault();
     try {
       setError('');
+      setMessage('');
       const reminder = await apiPost<ReminderRule>('/automation/reminders', {
         type: reminderType,
         cronExpression,
