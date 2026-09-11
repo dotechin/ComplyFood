@@ -16,6 +16,7 @@ import { Document } from './entities/document.entity';
 export class DocumentsService {
   private readonly storageDriver = process.env.STORAGE_DRIVER || 's3';
   private readonly bucket = process.env.S3_BUCKET || 'complyfood';
+  private bucketReadyPromise: Promise<void> | null = null;
   private readonly s3Client =
     this.storageDriver === 's3'
       ? new S3Client({
@@ -108,10 +109,49 @@ export class DocumentsService {
       return;
     }
 
+    if (!this.bucketReadyPromise) {
+      this.bucketReadyPromise = this.ensureBucketExistsOnce();
+    }
+
+    await this.bucketReadyPromise;
+  }
+
+  private async ensureBucketExistsOnce() {
+    if (!this.s3Client) {
+      return;
+    }
+
     try {
       await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-    } catch {
-      await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      return;
+    } catch (error) {
+      if (!this.isMissingBucketError(error)) {
+        throw error;
+      }
     }
+
+    try {
+      await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucket }));
+    } catch (error) {
+      if (!this.isBucketAlreadyCreatedError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  private isMissingBucketError(error: unknown) {
+    const errorName = this.getS3ErrorName(error);
+    return errorName === 'NotFound' || errorName === 'NoSuchBucket';
+  }
+
+  private isBucketAlreadyCreatedError(error: unknown) {
+    const errorName = this.getS3ErrorName(error);
+    return errorName === 'BucketAlreadyOwnedByYou' || errorName === 'BucketAlreadyExists';
+  }
+
+  private getS3ErrorName(error: unknown) {
+    return typeof error === 'object' && error !== null && 'name' in error
+      ? String((error as { name: unknown }).name)
+      : undefined;
   }
 }
