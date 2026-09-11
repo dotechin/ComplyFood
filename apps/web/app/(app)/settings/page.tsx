@@ -105,26 +105,38 @@ export default function SettingsPage() {
 
   const createReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    const reminder = await apiPost<ReminderRule>('/automation/reminders', {
-      type: reminderType,
-      cronExpression,
-      message: reminderMessage,
-      isActive: true,
-    });
-    setReminders((prev) => [reminder, ...prev]);
-    setMessage('Reminder saved.');
+    try {
+      setError('');
+      const reminder = await apiPost<ReminderRule>('/automation/reminders', {
+        type: reminderType,
+        cronExpression,
+        message: reminderMessage,
+        isActive: true,
+      });
+      setReminders((prev) => [reminder, ...prev]);
+      setMessage('Reminder saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save reminder');
+    }
   };
 
   const updateRole = async (userId: string, role: UserRole) => {
-    const updated = await apiPatch<User>(`/users/${userId}/role`, { role });
-    setUsers((prev) => prev.map((user) => (user.id === userId ? updated : user)));
-    setMessage('User role updated.');
+    try {
+      const updated = await apiPatch<User>(`/users/${userId}/role`, { role });
+      setUsers((prev) => prev.map((user) => (user.id === userId ? updated : user)));
+      setMessage('User role updated.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update role');
+    }
   };
 
   const generateDailyTasks = async () => {
-    await apiPost('/automation/generate', {});
-    setMessage('Daily tasks generated for active presets.');
+    try {
+      await apiPost('/automation/generate', {});
+      setMessage('Daily tasks generated for active presets.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate daily tasks');
+    }
   };
 
   if (currentUser && currentUser.role !== UserRole.ADMIN) {

@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
         return;
       }
       setMessage(data.message);
-      setResetUrl(data.resetUrl ?? '');
+      setResetUrl(getSafeResetUrl(data.resetUrl));
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -85,4 +85,24 @@ export default function ForgotPasswordPage() {
       </form>
     </div>
   );
+}
+
+function getSafeResetUrl(value: unknown) {
+  if (typeof value !== 'string' || !value) {
+    return '';
+  }
+
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname !== '/reset-password') {
+      return '';
+    }
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return '';
+  }
 }

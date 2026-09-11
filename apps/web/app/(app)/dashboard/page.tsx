@@ -16,35 +16,45 @@ interface DashboardSnapshot {
 export default function DashboardPage() {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     apiGet<DashboardSnapshot>('/automation/dashboard')
       .then(setSnapshot)
+      .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
   const handleConfirm = async (id: string) => {
-    const updated = await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
-    setSnapshot((prev) =>
-      prev
-        ? {
-            ...prev,
-            pendingLogs: prev.pendingLogs
-              .map((entry) => (entry.id === id ? updated : entry))
-              .filter((entry) => entry.id !== id),
-          }
-        : prev,
-    );
-    setMessage('Log entry confirmed.');
+    try {
+      const updated = await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
+      setSnapshot((prev) =>
+        prev
+          ? {
+              ...prev,
+              pendingLogs: prev.pendingLogs
+                .map((entry) => (entry.id === id ? updated : entry))
+                .filter((entry) => entry.id !== id),
+            }
+          : prev,
+      );
+      setMessage('Log entry confirmed.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
+    }
   };
 
   const acknowledgeReminder = async (id: string) => {
-    await apiPost(`/automation/reminders/${id}/acknowledge`, {});
-    setSnapshot((prev) =>
-      prev ? { ...prev, dueReminders: prev.dueReminders.filter((reminder) => reminder.id !== id) } : prev,
-    );
-    setMessage('Reminder acknowledged.');
+    try {
+      await apiPost(`/automation/reminders/${id}/acknowledge`, {});
+      setSnapshot((prev) =>
+        prev ? { ...prev, dueReminders: prev.dueReminders.filter((reminder) => reminder.id !== id) } : prev,
+      );
+      setMessage('Reminder acknowledged.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to acknowledge reminder');
+    }
   };
 
   return (
@@ -52,6 +62,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="mb-2 text-2xl font-bold text-gray-900">Today&apos;s Tasks</h1>
         <p className="text-sm text-gray-500">Track generated work, pending confirmations, and due reminders.</p>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
       </div>
       {snapshot && (
