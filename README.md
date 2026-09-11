@@ -49,7 +49,12 @@ ComplyFood/
 ```
 
 ### Roadmap
-1. **Phase 1 – Foundation:** auth, org setup, basic UI, DB schema
-2. **Phase 2 – Operations:** daily logs, checklists, override support, audit history
-3. **Phase 3 – Automation:** presets, reminders, recurring tasks, dashboard
-4. **Phase 4 – Reporting:** exports, filters, incident summaries, document attachments
+1. **Phase 1 – Rebaseline and Foundation Completion:** align docs with implementation, add CI, complete password recovery
+2. **Phase 2 – Core Operations Workflow:** daily logs UI, checklists in use, override flow wired end to end
+3. **Phase 3 – Automation Execution:** presets, generated daily forms, reminders, dashboard improvements
+4. **Phase 4 – Reporting and Storage Completion:** exports, filters, incident summaries, production-grade document storage
+
+### Current status
+- Monorepo, NestJS API, and Next.js web app are already in place
+- Core modules exist for auth, organizations, logs, overrides, reports, documents, audit, and automation
+- Current priorities are CI, password reset completion, and closing the gap between backend capability and operator-facing workflows

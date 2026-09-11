@@ -37,10 +37,10 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - Styling: **Tailwind CSS**
 - State: React Query / Zustand
 - Auth: session cookies or JWT stored securely
-- Key pages: Dashboard, Daily Logs, Reports, Settings, Override Center
+- Key pages in the current implementation: Dashboard, Reports, Settings, Checklists, Documents, Overrides, Login, Forgot Password
 
 #### Backend API — `apps/api`
-- Runtime: **Node.js with NestJS** (or Python FastAPI as alternative)
+- Runtime: **Node.js with NestJS**
 - REST API with JSON responses
 - JWT-based authentication with RBAC middleware
 - Modules: Auth, Users, Organizations, Logs, Checklists, Automation, Overrides, Reports, Documents
@@ -51,13 +51,13 @@ ComplyFood is a web-based HACCP compliance automation platform. The system follo
 - All write operations generate an `audit_event` record
 
 #### File storage
-- S3-compatible object storage (AWS S3, Cloudflare R2, or self-hosted MinIO)
-- Stores uploaded PDFs, images, and generated report files
-- File references stored in the database; files served via signed URLs
+- Current implementation stores uploaded files on local disk for development
+- Production target remains S3-compatible object storage (AWS S3, Cloudflare R2, or self-hosted MinIO)
+- File references are stored in the database; production delivery should move to signed URLs
 
 #### Reporting service
-- PDF generation: Puppeteer or WeasyPrint
-- CSV export: streaming generation for large datasets
+- Current implementation provides CSV export and a simple server-generated PDF
+- Production reporting can later move to a richer PDF generation strategy if needed
 - Triggered on-demand or via scheduled jobs
 
 ---
