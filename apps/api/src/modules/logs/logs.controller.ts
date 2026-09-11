@@ -1,39 +1,11 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-import {
-  IsDateString,
-  IsEnum,
-  IsObject,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { IsEnum, IsObject, IsOptional, IsUUID, Matches } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { LogStatus, LogType } from './entities/log-entry.entity';
+import { parseDateBoundary } from '../../common/utils/date-boundary';
 import { LogsService } from './logs.service';
-
-function parseDateBoundary(value: string, endOfDay = false) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new BadRequestException('Dates must use YYYY-MM-DD format');
-  }
-
-  const date = new Date(`${value}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`);
-  if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException('Invalid date value');
-  }
-
-  return date;
-}
 
 class CreateLogDto {
   @IsEnum(LogType)
@@ -75,11 +47,11 @@ class FindLogsQueryDto {
   status?: LogStatus;
 
   @IsOptional()
-  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateFrom must use YYYY-MM-DD format' })
   dateFrom?: string;
 
   @IsOptional()
-  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateTo must use YYYY-MM-DD format' })
   dateTo?: string;
 }
 
