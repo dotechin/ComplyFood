@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   UserRole,
+  sortUsersOldestFirst,
+  upsertUserOldestFirst,
   type Location,
   type Organization,
   type PresetRule,
@@ -10,10 +12,6 @@ import {
   type User,
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
-
-function sortUsersByCreatedAt(users: User[]) {
-  return [...users].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-}
 
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
@@ -63,7 +61,7 @@ export default function SettingsPage() {
         if (!data) return;
         const [org, orgUsers, orgPresets, orgReminders] = data;
         setOrganization(org);
-        setUsers(sortUsersByCreatedAt(orgUsers));
+        setUsers(sortUsersOldestFirst(orgUsers));
         setPresets(orgPresets);
         setReminders(orgReminders);
       })
@@ -159,10 +157,7 @@ export default function SettingsPage() {
         password: newUserPassword,
         role: newUserRole,
       });
-      setUsers((prev) => {
-        const next = prev.filter((user) => user.id !== created.id);
-        return sortUsersByCreatedAt([...next, created]);
-      });
+      setUsers((prev) => upsertUserOldestFirst(prev, created));
       setNewUserEmail('');
       setNewUserPassword('');
       setNewUserRole(UserRole.STAFF);

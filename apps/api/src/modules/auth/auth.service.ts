@@ -41,8 +41,8 @@ export class AuthService {
     }
 
     const user = await this.dataSource.transaction(async (manager) => {
-      await manager.query('LOCK TABLE organizations IN ACCESS EXCLUSIVE MODE');
-      await manager.query('LOCK TABLE users IN ACCESS EXCLUSIVE MODE');
+      await manager.query('LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE');
+      await manager.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
 
       const userRepo = manager.getRepository(User);
       const orgRepo = manager.getRepository(Organization);

@@ -59,8 +59,7 @@ export default function RegisterPage() {
       }
 
       setAuthToken(data.accessToken);
-      router.push('/dashboard');
-      router.refresh();
+      window.location.assign('/dashboard');
     } catch {
       setError('Network error. Please try again.');
     } finally {
