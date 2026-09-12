@@ -1,12 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { IsArray, IsEnum, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ManualService } from './manual.service';
+import { ALLOWED_MANUAL_SECTION_KEYS, ManualService } from './manual.service';
 import { ManualStatus } from './entities/haccp-manual-version.entity';
 
 class ManualSectionDto {
@@ -40,10 +40,6 @@ class CreateManualVersionDto {
   @IsArray()
   @IsUUID('4', { each: true })
   linkedDocumentIds?: string[];
-
-  @IsOptional()
-  @IsEnum(ManualStatus)
-  status?: ManualStatus;
 }
 
 class UpdateSectionDto {
@@ -65,11 +61,13 @@ export class ManualController {
   constructor(private readonly manualService: ManualService) {}
 
   @Get()
+  @Roles(UserRole.ADMIN)
   findAll(@CurrentUser() user: any) {
     return this.manualService.findAll(user.orgId);
   }
 
   @Get('current')
+  @Roles(UserRole.ADMIN)
   findCurrent(@CurrentUser() user: any) {
     return this.manualService.findCurrent(user.orgId);
   }
@@ -83,13 +81,21 @@ export class ManualController {
   @Post()
   @Roles(UserRole.ADMIN)
   createVersion(@CurrentUser() user: any, @Body() dto: CreateManualVersionDto) {
+    const hasInvalidSectionKey = dto.sections.some((section) => !ALLOWED_MANUAL_SECTION_KEYS.has(section.key));
+    if (hasInvalidSectionKey) {
+      throw new BadRequestException('Unsupported manual section key');
+    }
+    const sectionKeys = dto.sections.map((section) => section.key);
+    if (new Set(sectionKeys).size !== sectionKeys.length) {
+      throw new BadRequestException('Duplicate manual section keys are not allowed');
+    }
     return this.manualService.createVersion(
       user.orgId,
       user.id,
       dto.businessType,
       dto.sections,
       dto.linkedDocumentIds ?? [],
-      dto.status ?? ManualStatus.DRAFT,
+      ManualStatus.DRAFT,
     );
   }
 
@@ -113,6 +119,7 @@ export class ManualController {
   }
 
   @Get(':id/export/pdf')
+  @Roles(UserRole.ADMIN)
   async exportPdf(@CurrentUser() user: any, @Param('id') id: string, @Res() res: Response) {
     const pdf = await this.manualService.exportPdf(user.orgId, id);
     res.setHeader('Content-Type', 'application/pdf');
@@ -120,4 +127,3 @@ export class ManualController {
     res.send(pdf);
   }
 }
-

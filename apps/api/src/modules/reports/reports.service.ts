@@ -92,7 +92,7 @@ export class ReportsService {
           log.occurredAt?.toISOString?.() ?? '',
           log.measuredAt?.toISOString?.() ?? '',
           log.isException ? 'yes' : 'no',
-          log.exceptionReason ?? '',
+          (log.exceptionReason ?? '').replace(/"/g, '""'),
           JSON.stringify(log.fields).replace(/"/g, '""'),
         ]
           .map((value) => `"${String(value)}"`)

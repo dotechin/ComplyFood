@@ -185,6 +185,10 @@ export default function LogsPage() {
   };
 
   const scanTemperature = async () => {
+    if (!captureConsent) {
+      setError('You must confirm capture consent before processing.');
+      return;
+    }
     if (!captureFile) {
       setError('Choose a capture image first.');
       return;
@@ -232,14 +236,33 @@ export default function LogsPage() {
           ocrConfidence: captureSuggestion?.confidence ?? 0,
           ocrMethod: captureSuggestion?.source ?? 'none',
           confirmedByUser: true,
-          retentionPolicy: 'image-retained-with-linked-document',
+          retentionPolicy: 'pending-image-upload',
+          imageLinked: false,
         },
       });
 
-      const upload = new FormData();
-      upload.append('file', captureFile);
-      upload.append('linkedEntryId', created.id);
-      await apiUpload('/documents', upload);
+      try {
+        const upload = new FormData();
+        upload.append('file', captureFile);
+        upload.append('linkedEntryId', created.id);
+        await apiUpload('/documents', upload);
+        await apiPatch(`/logs/${created.id}`, {
+          fields: {
+            ...created.fields,
+            retentionPolicy: 'image-retained-with-linked-document',
+            imageLinked: true,
+          },
+        });
+      } catch {
+        await apiPatch(`/logs/${created.id}`, {
+          fields: {
+            ...created.fields,
+            retentionPolicy: 'image-upload-failed',
+            imageLinked: false,
+          },
+        });
+        throw new Error('Capture saved but image upload failed. Please retry document upload from Documents.');
+      }
 
       await refreshLogs();
       setCaptureFile(null);
@@ -326,39 +349,64 @@ export default function LogsPage() {
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Temperature from phone camera</h2>
         <p className="mb-3 text-sm text-gray-500">Capture image, review OCR suggestion, and confirm value before save.</p>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            value={captureItem}
-            onChange={(e) => setCaptureItem(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-            placeholder="Item (e.g. Fridge 1)"
-          />
-          <input
-            value={captureValue}
-            onChange={(e) => setCaptureValue(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-            placeholder="Confirmed temperature"
-          />
-          <button
-            type="button"
-            onClick={() => void scanTemperature()}
-            className="rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
-          >
-            Get suggestion
-          </button>
-          <button
-            type="button"
-            onClick={() => void createTemperatureFromCapture()}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Save capture log
-          </button>
+          <div>
+            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-gray-700">
+              Capture image
+            </label>
+            <input
+              id="captureFile"
+              aria-label="Capture temperature image"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-gray-700">
+              Item
+            </label>
+            <input
+              id="captureItem"
+              aria-label="Temperature item name"
+              value={captureItem}
+              onChange={(e) => setCaptureItem(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Item (e.g. Fridge 1)"
+            />
+          </div>
+          <div>
+            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-gray-700">
+              Confirmed temperature
+            </label>
+            <input
+              id="captureValue"
+              aria-label="Confirmed temperature value"
+              value={captureValue}
+              onChange={(e) => setCaptureValue(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Confirmed temperature"
+            />
+          </div>
+          <div className="md:self-end">
+            <button
+              type="button"
+              onClick={() => void scanTemperature()}
+              className="w-full rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+            >
+              Get suggestion
+            </button>
+          </div>
+          <div className="md:self-end">
+            <button
+              type="button"
+              onClick={() => void createTemperatureFromCapture()}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Save capture log
+            </button>
+          </div>
         </div>
         <label className="mt-3 flex items-center gap-2 text-sm text-gray-600">
           <input
@@ -560,12 +608,14 @@ export default function LogsPage() {
                   <h3 className="mb-2 text-sm font-semibold text-orange-900">Exception mode (Admin)</h3>
                   <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
                     <input
+                      aria-label={`Exception reason for log ${log.id}`}
                       value={exceptionReason[log.id] ?? ''}
                       onChange={(e) => setExceptionReason((prev) => ({ ...prev, [log.id]: e.target.value }))}
                       className="rounded-md border border-orange-200 px-3 py-2 text-sm"
                       placeholder="Mandatory reason"
                     />
                     <input
+                      aria-label={`Exception occurred at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionOccurredAt[log.id] ?? ''}
                       onChange={(e) =>
@@ -574,6 +624,7 @@ export default function LogsPage() {
                       className="rounded-md border border-orange-200 px-3 py-2 text-sm"
                     />
                     <input
+                      aria-label={`Exception measured at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionMeasuredAt[log.id] ?? ''}
                       onChange={(e) =>
@@ -582,6 +633,7 @@ export default function LogsPage() {
                       className="rounded-md border border-orange-200 px-3 py-2 text-sm"
                     />
                     <select
+                      aria-label={`Exception unlock status for log ${log.id}`}
                       value={exceptionStatus[log.id] ?? ''}
                       onChange={(e) => setExceptionStatus((prev) => ({ ...prev, [log.id]: e.target.value }))}
                       className="rounded-md border border-orange-200 px-3 py-2 text-sm"

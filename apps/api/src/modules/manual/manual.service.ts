@@ -1,9 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HaccpManualVersion, ManualStatus } from './entities/haccp-manual-version.entity';
 
 type ManualSection = { key: string; title: string; content: string };
+export const ALLOWED_MANUAL_SECTION_KEYS = new Set([
+  'business_profile',
+  'hazard_analysis',
+  'ccp_limits',
+  'monitoring',
+  'corrective_actions',
+  'verification',
+  'sanitation',
+  'allergens',
+  'training',
+  'records',
+]);
 
 @Injectable()
 export class ManualService {
@@ -33,10 +45,14 @@ export class ManualService {
     linkedDocumentIds: string[],
     status: ManualStatus = ManualStatus.DRAFT,
   ) {
-    const latest = await this.findCurrent(orgId);
-    const nextVersion = (latest?.versionNumber ?? 0) + 1;
-    return this.repo.save(
-      this.repo.create({
+    return this.repo.manager.transaction(async (manager) => {
+      await manager.query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [orgId]);
+      const rows = await manager.query(
+        'SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM haccp_manual_versions WHERE org_id = $1',
+        [orgId],
+      );
+      const nextVersion = Number(rows[0]?.next_version ?? 1);
+      const entity = manager.create(HaccpManualVersion, {
         orgId,
         businessType,
         status,
@@ -46,8 +62,9 @@ export class ManualService {
         createdBy: userId,
         approvedBy: status === ManualStatus.APPROVED ? userId : null,
         approvedAt: status === ManualStatus.APPROVED ? new Date() : null,
-      }),
-    );
+      });
+      return manager.save(entity);
+    });
   }
 
   async updateSection(
@@ -59,6 +76,9 @@ export class ManualService {
     linkedDocumentIds?: string[],
   ) {
     const existing = await this.getById(orgId, id);
+    if (!existing.sections.some((section) => section.key === sectionKey)) {
+      throw new BadRequestException('Manual section not found');
+    }
     const sections = existing.sections.map((section) =>
       section.key === sectionKey ? { ...section, content } : section,
     );
@@ -74,6 +94,14 @@ export class ManualService {
 
   async approve(orgId: string, id: string, userId: string) {
     const version = await this.getById(orgId, id);
+    await this.repo
+      .createQueryBuilder()
+      .update(HaccpManualVersion)
+      .set({ status: ManualStatus.DRAFT, approvedBy: null, approvedAt: null })
+      .where('org_id = :orgId', { orgId })
+      .andWhere('id != :id', { id })
+      .andWhere('status = :approved', { approved: ManualStatus.APPROVED })
+      .execute();
     version.status = ManualStatus.APPROVED;
     version.approvedBy = userId;
     version.approvedAt = new Date();
@@ -122,17 +150,57 @@ export class ManualService {
   }
 
   private buildPdf(lines: string[]): Buffer {
-    const textCommands = lines
-      .map((line, index) => `1 0 0 1 50 ${770 - index * 18} Tm (${this.escapePdfText(line)}) Tj`)
-      .join('\n');
-    const stream = `BT\n/F1 12 Tf\n${textCommands}\nET`;
-    const objects = [
-      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj',
-      '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj',
-      '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj',
-      '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj',
-      `5 0 obj\n<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream\nendobj`,
-    ];
+    const linesPerPage = 38;
+    const chunks = lines.reduce<string[][]>((acc, line) => {
+      const current = acc[acc.length - 1];
+      if (!current || current.length >= linesPerPage) {
+        acc.push([line]);
+      } else {
+        current.push(line);
+      }
+      return acc;
+    }, []);
+    if (chunks.length === 0) {
+      chunks.push(['ComplyFood HACCP Manual']);
+    }
+
+    const objects: string[] = [];
+    objects.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj');
+
+    const pageObjectIds: number[] = [];
+    const contentObjectIds: number[] = [];
+    const fontObjectId = 3;
+    let nextObjectId = 4;
+
+    chunks.forEach(() => {
+      const pageObjectId = nextObjectId;
+      const contentObjectId = nextObjectId + 1;
+      pageObjectIds.push(pageObjectId);
+      contentObjectIds.push(contentObjectId);
+      nextObjectId += 2;
+    });
+
+    objects.push(
+      `2 0 obj\n<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>\nendobj`,
+    );
+    objects.push(
+      `${fontObjectId} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj`,
+    );
+
+    chunks.forEach((pageLines, index) => {
+      const textCommands = pageLines
+        .map((line, lineIndex) => `1 0 0 1 50 ${770 - lineIndex * 18} Tm (${this.escapePdfText(line)}) Tj`)
+        .join('\n');
+      const stream = `BT\n/F1 12 Tf\n${textCommands}\nET`;
+      const pageObjectId = pageObjectIds[index];
+      const contentObjectId = contentObjectIds[index];
+      objects.push(
+        `${pageObjectId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>\nendobj`,
+      );
+      objects.push(
+        `${contentObjectId} 0 obj\n<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream\nendobj`,
+      );
+    });
 
     let pdf = '%PDF-1.4\n';
     const offsets = [0];
@@ -151,7 +219,12 @@ export class ManualService {
   }
 
   private escapePdfText(value: string) {
-    return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    return value
+      .replace(/\r\n/g, ' ')
+      .replace(/\n/g, ' ')
+      .replace(/\r/g, ' ')
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)');
   }
 }
-

@@ -5,7 +5,13 @@ export class ManualAndExceptionMode1000000000002 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TYPE IF NOT EXISTS manual_status_enum AS ENUM ('draft', 'approved');
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'manual_status_enum') THEN
+          CREATE TYPE manual_status_enum AS ENUM ('draft', 'approved');
+        END IF;
+      END
+      $$;
 
       ALTER TABLE log_entries
       ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ,
@@ -31,12 +37,16 @@ export class ManualAndExceptionMode1000000000002 implements MigrationInterface {
 
       CREATE INDEX IF NOT EXISTS haccp_manual_versions_org_version_idx
       ON haccp_manual_versions(org_id, version_number DESC);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS haccp_manual_versions_org_version_unique_idx
+      ON haccp_manual_versions(org_id, version_number);
     `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DROP INDEX IF EXISTS haccp_manual_versions_org_version_idx;
+      DROP INDEX IF EXISTS haccp_manual_versions_org_version_unique_idx;
       DROP TABLE IF EXISTS haccp_manual_versions;
 
       ALTER TABLE log_entries
@@ -51,4 +61,3 @@ export class ManualAndExceptionMode1000000000002 implements MigrationInterface {
     `);
   }
 }
-

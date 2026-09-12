@@ -21,6 +21,7 @@ export default function ManualPage() {
   const [businessType, setBusinessType] = useState(BUSINESS_TYPES[0]);
   const [selectedSection, setSelectedSection] = useState('');
   const [sectionContent, setSectionContent] = useState('');
+  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
   const [linkedDocumentIds, setLinkedDocumentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,19 +59,27 @@ export default function ManualPage() {
 
   useEffect(() => {
     if (!selectedVersion) return;
-    const section = selectedVersion.sections.find((item) => item.key === selectedSection) ?? selectedVersion.sections[0];
+    const drafts = selectedVersion.sections.reduce<Record<string, string>>((acc, section) => {
+      acc[section.key] = section.content;
+      return acc;
+    }, {});
+    const section = selectedVersion.sections[0];
+    setSectionDrafts(drafts);
     setSelectedSection(section?.key ?? '');
-    setSectionContent(section?.content ?? '');
+    setSectionContent(section ? drafts[section.key] ?? '' : '');
     setLinkedDocumentIds(selectedVersion.linkedDocumentIds ?? []);
     setBusinessType(selectedVersion.businessType);
-  }, [selectedSection, selectedVersion]);
+  }, [selectedVersion]);
 
-  const reload = async () => {
+  const reload = async (preferredVersionId?: string) => {
     const loadedVersions = await apiGet<HaccpManualVersion[]>('/manual');
     setVersions(loadedVersions);
-    if (loadedVersions[0]) {
-      setSelectedVersionId(loadedVersions[0].id);
+    if (!loadedVersions[0]) return;
+    if (preferredVersionId && loadedVersions.some((version) => version.id === preferredVersionId)) {
+      setSelectedVersionId(preferredVersionId);
+      return;
     }
+    setSelectedVersionId(loadedVersions[0].id);
   };
 
   const createTemplate = async () => {
@@ -82,6 +91,12 @@ export default function ManualPage() {
       setSelectedVersionId(created.id);
       setSelectedSection(created.sections[0]?.key ?? '');
       setSectionContent(created.sections[0]?.content ?? '');
+      setSectionDrafts(
+        created.sections.reduce<Record<string, string>>((acc, section) => {
+          acc[section.key] = section.content;
+          return acc;
+        }, {}),
+      );
       setLinkedDocumentIds(created.linkedDocumentIds ?? []);
       setMessage('Template generated. Complete each section and save revisions.');
     } catch (err) {
@@ -99,8 +114,7 @@ export default function ManualPage() {
         content: sectionContent,
         linkedDocumentIds,
       });
-      setVersions((prev) => [updated, ...prev]);
-      setSelectedVersionId(updated.id);
+      await reload(updated.id);
       setMessage('New manual version saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save section');
@@ -114,6 +128,15 @@ export default function ManualPage() {
       setMessage('');
       const approved = await apiPatch<HaccpManualVersion>(`/manual/${selectedVersion.id}/approve`, {});
       setVersions((prev) => prev.map((item) => (item.id === approved.id ? approved : item)));
+      setSelectedVersionId(approved.id);
+      setSelectedSection(approved.sections[0]?.key ?? '');
+      setSectionContent(approved.sections[0]?.content ?? '');
+      setSectionDrafts(
+        approved.sections.reduce<Record<string, string>>((acc, section) => {
+          acc[section.key] = section.content;
+          return acc;
+        }, {}),
+      );
       setMessage('Manual version approved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to approve manual');
@@ -128,18 +151,20 @@ export default function ManualPage() {
   const saveFullVersion = async () => {
     if (!selectedVersion) return;
     const updatedSections: ManualSection[] = selectedVersion.sections.map((section) =>
-      section.key === selectedSection ? { ...section, content: sectionContent } : section,
+      section.key === selectedSection
+        ? { ...section, content: sectionContent }
+        : { ...section, content: sectionDrafts[section.key] ?? section.content },
     );
 
     try {
       setError('');
       setMessage('');
-      await apiPost<HaccpManualVersion>('/manual', {
+      const created = await apiPost<HaccpManualVersion>('/manual', {
         businessType,
         sections: updatedSections,
         linkedDocumentIds,
       });
-      await reload();
+      await reload(created.id);
       setMessage('Manual revision stored.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to store manual revision');
@@ -148,9 +173,12 @@ export default function ManualPage() {
 
   const completeness = useMemo(() => {
     if (!selectedVersion) return { done: 0, total: 0 };
-    const done = selectedVersion.sections.filter((section) => section.content.trim().length > 0).length;
+    const done = selectedVersion.sections.filter((section) => {
+      const value = section.key === selectedSection ? sectionContent : sectionDrafts[section.key] ?? section.content;
+      return value.trim().length > 0;
+    }).length;
     return { done, total: selectedVersion.sections.length };
-  }, [selectedVersion]);
+  }, [sectionContent, sectionDrafts, selectedSection, selectedVersion]);
 
   if (loading) {
     return <p className="text-sm text-gray-500">Loading…</p>;
@@ -221,7 +249,12 @@ export default function ManualPage() {
               <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
                 <select
                   value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
+                  onChange={(e) => {
+                    const nextKey = e.target.value;
+                    setSectionDrafts((prev) => ({ ...prev, [selectedSection]: sectionContent }));
+                    setSelectedSection(nextKey);
+                    setSectionContent(sectionDrafts[nextKey] ?? selectedVersion.sections.find((s) => s.key === nextKey)?.content ?? '');
+                  }}
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm"
                 >
                   {selectedVersion.sections.map((section) => (
@@ -251,9 +284,17 @@ export default function ManualPage() {
                 </button>
               </div>
 
+              <label htmlFor="manualSectionEditor" className="block text-sm font-medium text-gray-700">
+                Section content ({selectedVersion.sections.find((section) => section.key === selectedSection)?.title ?? selectedSection})
+              </label>
               <textarea
+                id="manualSectionEditor"
+                aria-label="Manual section content editor"
                 value={sectionContent}
-                onChange={(e) => setSectionContent(e.target.value)}
+                onChange={(e) => {
+                  setSectionContent(e.target.value);
+                  setSectionDrafts((prev) => ({ ...prev, [selectedSection]: e.target.value }));
+                }}
                 className="h-64 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
 

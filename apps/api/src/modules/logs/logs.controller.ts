@@ -115,8 +115,8 @@ export class LogsController {
     return this.logsService.update(id, user.orgId, {
       fields: dto.fields,
       locationId: dto.locationId,
-      occurredAt: dto.occurredDate ? parseDateBoundary(dto.occurredDate) : undefined,
-      measuredAt: dto.measuredDate ? parseDateBoundary(dto.measuredDate) : undefined,
+      occurredAt: dto.occurredDate ? new Date(`${dto.occurredDate}T00:00:00.000Z`) : undefined,
+      measuredAt: dto.measuredDate ? new Date(`${dto.measuredDate}T00:00:00.000Z`) : undefined,
     });
   }
 
@@ -126,6 +126,7 @@ export class LogsController {
   }
 
   @Post('temperature/ocr-suggestion')
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
   @UseInterceptors(FileInterceptor('file'))
   getTemperatureSuggestion(@UploadedFile() file: any) {
     if (!file) {
