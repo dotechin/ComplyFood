@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { passwordResetConfirmSchema } from '@complyfood/shared';
+import { getApiUrl } from '../../../lib/api';
 
 export function ResetPasswordForm({ initialToken }: { initialToken: string }) {
   const router = useRouter();
@@ -29,7 +30,7 @@ export function ResetPasswordForm({ initialToken }: { initialToken: string }) {
 
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/password-reset/confirm`, {
+      const res = await fetch(getApiUrl('/auth/password-reset/confirm'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.data),

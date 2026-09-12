@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginSchema } from '@complyfood/shared';
-import { setAuthToken } from '../../../lib/api';
+import { getApiUrl, setAuthToken } from '../../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
+      const res = await fetch(getApiUrl('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -80,6 +80,13 @@ export default function LoginPage() {
             Forgot password?
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => router.push('/register')}
+          className="w-full text-sm text-gray-500 hover:text-gray-700"
+        >
+          Create organization account
+        </button>
         <button
           type="submit"
           disabled={loading}

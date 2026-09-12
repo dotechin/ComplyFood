@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   UserRole,
+  sortUsersOldestFirst,
+  upsertUserOldestFirst,
   type Location,
   type Organization,
   type PresetRule,
@@ -35,6 +37,9 @@ export default function SettingsPage() {
   const [reminderType, setReminderType] = useState('temperature');
   const [reminderMessage, setReminderMessage] = useState('Complete temperature tasks');
   const [cronExpression, setCronExpression] = useState('0 6 * * *');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.STAFF);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -56,7 +61,7 @@ export default function SettingsPage() {
         if (!data) return;
         const [org, orgUsers, orgPresets, orgReminders] = data;
         setOrganization(org);
-        setUsers(orgUsers);
+        setUsers(sortUsersOldestFirst(orgUsers));
         setPresets(orgPresets);
         setReminders(orgReminders);
       })
@@ -139,6 +144,26 @@ export default function SettingsPage() {
       setMessage('User role updated.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update role');
+    }
+  };
+
+  const createUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError('');
+      setMessage('');
+      const created = await apiPost<User>('/users', {
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+      });
+      setUsers((prev) => upsertUserOldestFirst(prev, created));
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole(UserRole.STAFF);
+      setMessage('User created.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create user');
     }
   };
 
@@ -239,6 +264,57 @@ export default function SettingsPage() {
               Generate today&apos;s tasks
             </button>
           </div>
+          <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
+            <div className="space-y-1">
+              <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
+                User email
+              </label>
+              <input
+                id="newUserEmail"
+                type="email"
+                required
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="User email"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="newUserPassword" className="block text-sm font-medium text-gray-700">
+                Temporary password
+              </label>
+              <input
+                id="newUserPassword"
+                type="password"
+                required
+                minLength={8}
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Temporary password"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="newUserRole" className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                id="newUserRole"
+                value={newUserRole}
+                onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                {Object.values(UserRole).map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Add user
+            </button>
+          </form>
           <div className="space-y-3">
             {users.map((user) => (
               <div key={user.id} className="flex items-center justify-between rounded-md bg-gray-50 p-3">

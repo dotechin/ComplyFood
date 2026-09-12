@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { passwordResetRequestSchema } from '@complyfood/shared';
+import { getApiUrl } from '../../../lib/api';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/password-reset/request`, {
+      const res = await fetch(getApiUrl('/auth/password-reset/request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.data),

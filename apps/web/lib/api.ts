@@ -4,6 +4,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL
 
 const AUTH_COOKIE = 'auth_token';
 
+export function getApiUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
+
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
   const token = document.cookie

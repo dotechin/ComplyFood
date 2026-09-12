@@ -1,9 +1,13 @@
-import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Transform } from 'class-transformer';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../../common/decorators/roles.decorator';
 
 class RegisterDto {
@@ -22,13 +26,49 @@ class PasswordResetConfirmDto {
   @IsString() @MinLength(8) password: string;
 }
 
+class BootstrapDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2, { message: 'Organization name must be at least 2 characters' })
+  organizationName: string;
+
+  @IsOptional()
+  @IsString()
+  organizationAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  organizationCategory?: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto.email, dto.password, dto.role, dto.orgId);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  register(@CurrentUser() user: any, @Body() dto: RegisterDto, @Req() request: Request) {
+    request.body.password = '[REDACTED]';
+    return this.authService.register(dto.email, dto.password, dto.role, user.orgId);
+  }
+
+  @Post('bootstrap')
+  bootstrap(@Body() dto: BootstrapDto) {
+    return this.authService.bootstrapOrganization(
+      dto.organizationName,
+      dto.email,
+      dto.password,
+      dto.organizationAddress,
+      dto.organizationCategory,
+    );
   }
 
   @Post('login')

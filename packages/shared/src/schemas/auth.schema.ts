@@ -22,7 +22,16 @@ export const passwordResetConfirmSchema = z.object({
   password: z.string().min(8),
 });
 
+export const bootstrapSchema = z.object({
+  organizationName: z.string().trim().min(2, 'Organization name must be at least 2 characters'),
+  organizationAddress: z.string().optional(),
+  organizationCategory: z.string().optional(),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PasswordResetRequestInput = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirmInput = z.infer<typeof passwordResetConfirmSchema>;
+export type BootstrapInput = z.infer<typeof bootstrapSchema>;
