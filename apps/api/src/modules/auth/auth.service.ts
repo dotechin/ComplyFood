@@ -40,17 +40,16 @@ export class AuthService {
       throw new BadRequestException('Organization name is required');
     }
 
-    const [userCount, organizationCount] = await Promise.all([
-      this.dataSource.getRepository(User).count(),
-      this.dataSource.getRepository(Organization).count(),
-    ]);
-    if (userCount > 0 || organizationCount > 0) {
-      throw new BadRequestException('Organization bootstrap is no longer available');
-    }
-
     const user = await this.dataSource.transaction(async (manager) => {
+      await manager.query('LOCK TABLE organizations IN ACCESS EXCLUSIVE MODE');
+      await manager.query('LOCK TABLE users IN ACCESS EXCLUSIVE MODE');
+
       const userRepo = manager.getRepository(User);
       const orgRepo = manager.getRepository(Organization);
+      const [userCount, organizationCount] = await Promise.all([userRepo.count(), orgRepo.count()]);
+      if (userCount > 0 || organizationCount > 0) {
+        throw new BadRequestException('Organization bootstrap is no longer available');
+      }
       const existing = await userRepo.findOne({ where: { email } });
       if (existing) {
         throw new BadRequestException('Email already registered');

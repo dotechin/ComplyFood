@@ -14,7 +14,6 @@ describe('AuthService', () => {
     sign: jest.fn(() => 'signed-token'),
   };
   const dataSource = {
-    getRepository: jest.fn(),
     transaction: jest.fn(),
   };
 
@@ -83,15 +82,13 @@ describe('AuthService', () => {
   });
 
   it('bootstraps the first organization and admin user', async () => {
-    dataSource.getRepository
-      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) })
-      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) });
-
     const orgRepo = {
+      count: jest.fn().mockResolvedValue(0),
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => ({ id: 'org-1', ...value })),
     };
     const userRepo = {
+      count: jest.fn().mockResolvedValue(0),
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => ({ id: 'user-1', ...value })),
@@ -99,6 +96,7 @@ describe('AuthService', () => {
 
     dataSource.transaction.mockImplementation(async (callback: any) =>
       callback({
+        query: jest.fn(),
         getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
       }),
     );
@@ -128,13 +126,49 @@ describe('AuthService', () => {
   });
 
   it('rejects bootstrap after setup is complete', async () => {
-    dataSource.getRepository
-      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(1) })
-      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) });
+    const orgRepo = {
+      count: jest.fn().mockResolvedValue(0),
+    };
+    const userRepo = {
+      count: jest.fn().mockResolvedValue(1),
+      findOne: jest.fn(),
+    };
+
+    dataSource.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        query: jest.fn(),
+        getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
+      }),
+    );
 
     await expect(
       service.bootstrapOrganization('Demo Restaurant', 'owner@demo.com', 'password123'),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects bootstrap when the email already exists inside the transaction', async () => {
+    const orgRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    const userRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      findOne: jest.fn().mockResolvedValue({ id: 'existing-user' }),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    dataSource.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        query: jest.fn(),
+        getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
+      }),
+    );
+
+    await expect(
+      service.bootstrapOrganization('Demo Restaurant', 'owner@demo.com', 'password123'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(orgRepo.save).not.toHaveBeenCalled();
   });
 });

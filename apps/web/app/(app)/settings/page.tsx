@@ -11,11 +11,6 @@ import {
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
 
-interface RegisterResponse {
-  accessToken: string;
-  user: User;
-}
-
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
   try {
@@ -155,14 +150,14 @@ export default function SettingsPage() {
     try {
       setError('');
       setMessage('');
-      const created = await apiPost<RegisterResponse>('/auth/register', {
+      const created = await apiPost<User>('/users', {
         email: newUserEmail,
         password: newUserPassword,
         role: newUserRole,
       });
       setUsers((prev) => {
-        const next = prev.filter((user) => user.id !== created.user.id);
-        return [...next, created.user];
+        const next = prev.filter((user) => user.id !== created.id);
+        return [...next, created];
       });
       setNewUserEmail('');
       setNewUserPassword('');
