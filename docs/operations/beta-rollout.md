@@ -9,9 +9,10 @@ Validate the MVP with a small number of food businesses before production rollou
 - Core authorization rules are verified for admin, staff, and auditor access
 
 ## Pilot group
-- 2–3 food businesses in the initial target segment
+- 2–3 food businesses in the initial target segment (independent restaurants/trattorie)
 - At least 1 admin user and 2 staff users per business
 - One auditor or consultant account for read-only verification where applicable
+- Target-sector definition and HACCP form mapping are documented in `docs/product/target-sector-definition.md`
 
 ## Test scenarios
 - Sign in and recover password

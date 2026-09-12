@@ -242,11 +242,11 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 
 ## Immediate Next Steps
 
-1. Define the first target business profile and map its required HACCP forms
-2. Expand test coverage from unit tests to integration and end-to-end scenarios
-3. Validate reminder timing and document storage against a real staging environment
-4. Prepare pilot data and onboard the first beta businesses
-5. Profile performance of report generation, dashboard loading, and document transfer
+1. [x] Define the first target business profile and map its required HACCP forms (`docs/product/target-sector-definition.md`)
+2. [ ] Validate reminder timing and document storage against a real staging environment
+3. [ ] Expand test coverage from unit tests to integration and end-to-end scenarios
+4. [ ] Prepare pilot data and onboard the first beta businesses
+5. [ ] Profile performance of report generation, dashboard loading, and document transfer
 
 ---
 
