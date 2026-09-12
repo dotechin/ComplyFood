@@ -40,6 +40,14 @@ export class AuthService {
       throw new BadRequestException('Organization name is required');
     }
 
+    const [userCount, organizationCount] = await Promise.all([
+      this.dataSource.getRepository(User).count(),
+      this.dataSource.getRepository(Organization).count(),
+    ]);
+    if (userCount > 0 || organizationCount > 0) {
+      throw new BadRequestException('Organization bootstrap is no longer available');
+    }
+
     const user = await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
       const orgRepo = manager.getRepository(Organization);

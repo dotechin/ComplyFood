@@ -160,7 +160,10 @@ export default function SettingsPage() {
         password: newUserPassword,
         role: newUserRole,
       });
-      setUsers((prev) => [...prev, created.user]);
+      setUsers((prev) => {
+        const next = prev.filter((user) => user.id !== created.user.id);
+        return [...next, created.user];
+      });
       setNewUserEmail('');
       setNewUserPassword('');
       setNewUserRole(UserRole.STAFF);

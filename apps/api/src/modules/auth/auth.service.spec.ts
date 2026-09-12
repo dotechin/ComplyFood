@@ -14,6 +14,7 @@ describe('AuthService', () => {
     sign: jest.fn(() => 'signed-token'),
   };
   const dataSource = {
+    getRepository: jest.fn(),
     transaction: jest.fn(),
   };
 
@@ -70,7 +71,70 @@ describe('AuthService', () => {
 
     const result = await service.register('admin@demo.com', 'password123', UserRole.ADMIN, 'org-1');
 
+    expect(usersService.create).toHaveBeenCalledWith('admin@demo.com', 'password123', UserRole.ADMIN, 'org-1');
     expect(jwtService.sign).toHaveBeenCalled();
     expect(result.accessToken).toBe('signed-token');
+    expect(result.user).toEqual({
+      id: 'user-1',
+      email: 'admin@demo.com',
+      role: UserRole.ADMIN,
+      orgId: 'org-1',
+    });
+  });
+
+  it('bootstraps the first organization and admin user', async () => {
+    dataSource.getRepository
+      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) })
+      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) });
+
+    const orgRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'org-1', ...value })),
+    };
+    const userRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'user-1', ...value })),
+    };
+
+    dataSource.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
+      }),
+    );
+
+    const result = await service.bootstrapOrganization(
+      'Demo Restaurant',
+      'owner@demo.com',
+      'password123',
+      'Via Roma 1',
+      'restaurant',
+    );
+
+    expect(result.accessToken).toBe('signed-token');
+    expect(result.user).toEqual({
+      id: 'user-1',
+      email: 'owner@demo.com',
+      role: UserRole.ADMIN,
+      orgId: 'org-1',
+    });
+    expect(userRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'owner@demo.com',
+        role: UserRole.ADMIN,
+        orgId: 'org-1',
+      }),
+    );
+  });
+
+  it('rejects bootstrap after setup is complete', async () => {
+    dataSource.getRepository
+      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(1) })
+      .mockReturnValueOnce({ count: jest.fn().mockResolvedValue(0) });
+
+    await expect(
+      service.bootstrapOrganization('Demo Restaurant', 'owner@demo.com', 'password123'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });
