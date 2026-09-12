@@ -13,12 +13,15 @@ describe('AuthService', () => {
   const jwtService = {
     sign: jest.fn(() => 'signed-token'),
   };
+  const dataSource = {
+    transaction: jest.fn(),
+  };
 
   let service: AuthService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AuthService(usersService as any, jwtService as any);
+    service = new AuthService(usersService as any, jwtService as any, dataSource as any);
     process.env.WEB_URL = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
   });
