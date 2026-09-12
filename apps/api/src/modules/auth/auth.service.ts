@@ -1,15 +1,19 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../../common/decorators/roles.decorator';
+import { Organization } from '../organizations/entities/organization.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -27,6 +31,42 @@ export class AuthService {
 
   async register(email: string, password: string, role: UserRole = UserRole.STAFF, orgId?: string) {
     const user = await this.usersService.create(email, password, role, orgId);
+    return this.login(user);
+  }
+
+  async bootstrapOrganization(name: string, email: string, password: string, address?: string, category?: string) {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('Organization name is required');
+    }
+
+    const user = await this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const orgRepo = manager.getRepository(Organization);
+      const existing = await userRepo.findOne({ where: { email } });
+      if (existing) {
+        throw new BadRequestException('Email already registered');
+      }
+
+      const organization = await orgRepo.save(
+        orgRepo.create({
+          name: normalizedName,
+          address: address?.trim() || null,
+          category: category?.trim() || null,
+        }),
+      );
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      return userRepo.save(
+        userRepo.create({
+          email,
+          passwordHash,
+          role: UserRole.ADMIN,
+          orgId: organization.id,
+        }),
+      );
+    });
+
     return this.login(user);
   }
 

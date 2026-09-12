@@ -33,6 +33,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const error = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error(error.message || 'API request failed');
   }
+
+  export function getApiUrl(path: string) {
+    return `${API_BASE}${path}`;
+  }
   if (res.status === 204) return undefined as T;
   return res.json();
 }

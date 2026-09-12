@@ -11,6 +11,11 @@ import {
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
 
+interface RegisterResponse {
+  accessToken: string;
+  user: User;
+}
+
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
   try {
@@ -35,6 +40,9 @@ export default function SettingsPage() {
   const [reminderType, setReminderType] = useState('temperature');
   const [reminderMessage, setReminderMessage] = useState('Complete temperature tasks');
   const [cronExpression, setCronExpression] = useState('0 6 * * *');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.STAFF);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -142,6 +150,26 @@ export default function SettingsPage() {
     }
   };
 
+  const createUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError('');
+      setMessage('');
+      const created = await apiPost<RegisterResponse>('/auth/register', {
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+      });
+      setUsers((prev) => [...prev, created.user]);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole(UserRole.STAFF);
+      setMessage('User created.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create user');
+    }
+  };
+
   const generateDailyTasks = async () => {
     try {
       await apiPost('/automation/generate', {});
@@ -239,6 +267,39 @@ export default function SettingsPage() {
               Generate today&apos;s tasks
             </button>
           </div>
+          <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
+            <input
+              type="email"
+              required
+              value={newUserEmail}
+              onChange={(e) => setNewUserEmail(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="User email"
+            />
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={newUserPassword}
+              onChange={(e) => setNewUserPassword(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Temporary password"
+            />
+            <select
+              value={newUserRole}
+              onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              {Object.values(UserRole).map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Add user
+            </button>
+          </form>
           <div className="space-y-3">
             {users.map((user) => (
               <div key={user.id} className="flex items-center justify-between rounded-md bg-gray-50 p-3">
