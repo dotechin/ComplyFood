@@ -23,7 +23,7 @@ export const passwordResetConfirmSchema = z.object({
 });
 
 export const bootstrapSchema = z.object({
-  organizationName: z.string().min(2),
+  organizationName: z.string().trim().min(2),
   organizationAddress: z.string().optional(),
   organizationCategory: z.string().optional(),
   email: z.string().email(),

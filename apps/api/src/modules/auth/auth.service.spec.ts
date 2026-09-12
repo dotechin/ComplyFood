@@ -82,6 +82,7 @@ describe('AuthService', () => {
   });
 
   it('bootstraps the first organization and admin user', async () => {
+    const query = jest.fn();
     const orgRepo = {
       count: jest.fn().mockResolvedValue(0),
       create: jest.fn((value) => value),
@@ -96,7 +97,7 @@ describe('AuthService', () => {
 
     dataSource.transaction.mockImplementation(async (callback: any) =>
       callback({
-        query: jest.fn(),
+        query,
         getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
       }),
     );
@@ -123,6 +124,8 @@ describe('AuthService', () => {
         orgId: 'org-1',
       }),
     );
+    expect(query).toHaveBeenNthCalledWith(1, 'LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE');
+    expect(query).toHaveBeenNthCalledWith(2, 'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
   });
 
   it('normalizes bootstrap organization fields before saving', async () => {

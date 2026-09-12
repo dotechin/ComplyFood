@@ -303,34 +303,52 @@ export default function LogsPage() {
               </dl>
 
               <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
-                <input
-                  value={overrideFieldName[log.id] ?? ''}
-                  onChange={(e) =>
-                    setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
-                  }
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="Field name"
-                />
-                <input
-                  value={overrideNewValue[log.id] ?? ''}
-                  onChange={(e) =>
-                    setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
-                  }
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="New value or JSON"
-                />
-                <input
-                  value={overrideReason[log.id] ?? ''}
-                  onChange={(e) =>
-                    setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
-                  }
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  placeholder="Override reason"
-                />
+                <div className="space-y-1">
+                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-gray-700">
+                    Field name
+                  </label>
+                  <input
+                    id={`overrideFieldName-${log.id}`}
+                    value={overrideFieldName[log.id] ?? ''}
+                    onChange={(e) =>
+                      setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Field name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-gray-700">
+                    New value
+                  </label>
+                  <input
+                    id={`overrideNewValue-${log.id}`}
+                    value={overrideNewValue[log.id] ?? ''}
+                    onChange={(e) =>
+                      setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="New value or JSON"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-gray-700">
+                    Override reason
+                  </label>
+                  <input
+                    id={`overrideReason-${log.id}`}
+                    value={overrideReason[log.id] ?? ''}
+                    onChange={(e) =>
+                      setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Override reason"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => void submitOverride(log)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
+                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black md:self-end"
                 >
                   Override
                 </button>
