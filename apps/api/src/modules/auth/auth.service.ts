@@ -36,8 +36,8 @@ export class AuthService {
 
   async bootstrapOrganization(name: string, email: string, password: string, address?: string, category?: string) {
     const normalizedName = name.trim();
-    if (!normalizedName) {
-      throw new BadRequestException('Organization name is required');
+    if (normalizedName.length < 2) {
+      throw new BadRequestException('Organization name must be at least 2 characters');
     }
 
     const user = await this.dataSource.transaction(async (manager) => {

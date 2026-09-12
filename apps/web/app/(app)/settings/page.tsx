@@ -265,34 +265,52 @@ export default function SettingsPage() {
             </button>
           </div>
           <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
-            <input
-              type="email"
-              required
-              value={newUserEmail}
-              onChange={(e) => setNewUserEmail(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="User email"
-            />
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={newUserPassword}
-              onChange={(e) => setNewUserPassword(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Temporary password"
-            />
-            <select
-              value={newUserRole}
-              onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {Object.values(UserRole).map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1">
+              <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
+                User email
+              </label>
+              <input
+                id="newUserEmail"
+                type="email"
+                required
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="User email"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="newUserPassword" className="block text-sm font-medium text-gray-700">
+                Temporary password
+              </label>
+              <input
+                id="newUserPassword"
+                type="password"
+                required
+                minLength={8}
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Temporary password"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="newUserRole" className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                id="newUserRole"
+                value={newUserRole}
+                onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                {Object.values(UserRole).map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
               Add user
             </button>

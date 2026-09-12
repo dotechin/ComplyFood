@@ -1,5 +1,6 @@
-import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -52,7 +53,8 @@ export class AuthController {
   @Post('register')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  register(@CurrentUser() user: any, @Body() dto: RegisterDto) {
+  register(@CurrentUser() user: any, @Body() dto: RegisterDto, @Req() request: Request) {
+    request.body.password = '[REDACTED]';
     return this.authService.register(dto.email, dto.password, dto.role, user.orgId);
   }
 

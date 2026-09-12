@@ -154,6 +154,13 @@ describe('AuthService', () => {
     });
   });
 
+  it('rejects bootstrap when the trimmed organization name is shorter than 2 characters', async () => {
+    await expect(
+      service.bootstrapOrganization(' a ', 'owner@demo.com', 'password123'),
+    ).rejects.toThrow('Organization name must be at least 2 characters');
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects bootstrap after setup is complete', async () => {
     const orgRepo = {
       count: jest.fn().mockResolvedValue(0),

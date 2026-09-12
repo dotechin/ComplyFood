@@ -76,8 +76,11 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Organization name</label>
+            <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
+              Organization name
+            </label>
             <input
+              id="organizationName"
               required
               value={organizationName}
               onChange={(e) => setOrganizationName(e.target.value)}
@@ -85,24 +88,33 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Business category</label>
+            <label htmlFor="organizationCategory" className="block text-sm font-medium text-gray-700">
+              Business category
+            </label>
             <input
+              id="organizationCategory"
               value={organizationCategory}
               onChange={(e) => setOrganizationCategory(e.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
+            <label htmlFor="organizationAddress" className="block text-sm font-medium text-gray-700">
+              Address
+            </label>
             <input
+              id="organizationAddress"
               value={organizationAddress}
               onChange={(e) => setOrganizationAddress(e.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Admin email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Admin email
+            </label>
             <input
+              id="email"
               type="email"
               required
               value={email}
@@ -111,8 +123,11 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
             <input
+              id="password"
               type="password"
               required
               minLength={8}
@@ -122,8 +137,11 @@ export default function RegisterPage() {
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Confirm password</label>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              Confirm password
+            </label>
             <input
+              id="confirmPassword"
               type="password"
               required
               minLength={8}
