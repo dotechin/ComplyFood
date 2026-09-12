@@ -46,9 +46,15 @@ export default function RegisterPage() {
         body: JSON.stringify(result.data),
       });
 
-      const data = await res.json();
+      const data = await res
+        .json()
+        .catch(() => null as { accessToken?: string; message?: string } | null);
       if (!res.ok) {
-        setError(data.message || 'Unable to create account');
+        setError(data?.message || 'Unable to create account');
+        return;
+      }
+      if (!data?.accessToken) {
+        setError('Unable to create account');
         return;
       }
 

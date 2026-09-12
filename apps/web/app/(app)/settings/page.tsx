@@ -11,6 +11,10 @@ import {
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
 
+function sortUsersByCreatedAt(users: User[]) {
+  return [...users].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
   try {
@@ -59,7 +63,7 @@ export default function SettingsPage() {
         if (!data) return;
         const [org, orgUsers, orgPresets, orgReminders] = data;
         setOrganization(org);
-        setUsers(orgUsers);
+        setUsers(sortUsersByCreatedAt(orgUsers));
         setPresets(orgPresets);
         setReminders(orgReminders);
       })
@@ -157,7 +161,7 @@ export default function SettingsPage() {
       });
       setUsers((prev) => {
         const next = prev.filter((user) => user.id !== created.id);
-        return [...next, created];
+        return sortUsersByCreatedAt([...next, created]);
       });
       setNewUserEmail('');
       setNewUserPassword('');

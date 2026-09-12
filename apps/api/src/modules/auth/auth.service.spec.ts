@@ -125,6 +125,35 @@ describe('AuthService', () => {
     );
   });
 
+  it('normalizes bootstrap organization fields before saving', async () => {
+    const orgRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'org-1', ...value })),
+    };
+    const userRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'user-1', ...value })),
+    };
+
+    dataSource.transaction.mockImplementation(async (callback: any) =>
+      callback({
+        query: jest.fn(),
+        getRepository: (entity: any) => (entity?.name === 'User' ? userRepo : orgRepo),
+      }),
+    );
+
+    await service.bootstrapOrganization('  Demo Restaurant  ', 'owner@demo.com', 'password123', '  Via Roma 1  ', '  restaurant  ');
+
+    expect(orgRepo.create).toHaveBeenCalledWith({
+      name: 'Demo Restaurant',
+      address: 'Via Roma 1',
+      category: 'restaurant',
+    });
+  });
+
   it('rejects bootstrap after setup is complete', async () => {
     const orgRepo = {
       count: jest.fn().mockResolvedValue(0),
