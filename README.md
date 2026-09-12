@@ -61,5 +61,3 @@ ComplyFood/
 - Current priorities are staging validation (S3/reminders), integration and e2e coverage, beta onboarding, and performance profiling
 
 ### TODO
-- Resume prompt for next session:
-  `Continue work on /home/runner/work/ComplyFood/ComplyFood from the latest roadmap implementation state. Review /home/runner/work/ComplyFood/ComplyFood/README.md, /home/runner/work/ComplyFood/ComplyFood/docs/product/project-plan.md, /home/runner/work/ComplyFood/ComplyFood/docs/operations/beta-rollout.md, /home/runner/work/ComplyFood/ComplyFood/docs/operations/deployment.md, and /home/runner/work/ComplyFood/ComplyFood/docs/operations/user-guide.md, then proceed with the highest-priority remaining work: target-sector definition, staging validation for S3/reminders, integration/e2e coverage, beta onboarding prep, or performance profiling.`
