@@ -22,7 +22,19 @@ export interface LogEntry {
   submittedBy: string | null;
   submittedAt: string | null;
   presetId: string | null;
+  occurredAt: string | null;
+  measuredAt: string | null;
+  isException: boolean;
+  exceptionReason: string | null;
+  exceptionBy: string | null;
+  exceptionAt: string | null;
   createdAt: string;
+}
+
+export interface TemperatureCaptureSuggestion {
+  extractedValue: string | null;
+  confidence: number;
+  source: 'filename' | 'metadata' | 'none';
 }
 
 export interface OverrideRecord {
@@ -56,6 +68,10 @@ export interface ReportSummary {
     total: number;
     pending: number;
     overridden: number;
+  };
+  exceptionSummary: {
+    total: number;
+    byType: Record<string, number>;
   };
   overridesByField: Record<string, number>;
   overridesByType: Record<string, number>;

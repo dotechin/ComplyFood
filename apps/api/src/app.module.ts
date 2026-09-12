@@ -13,6 +13,7 @@ import { AutomationModule } from './modules/automation/automation.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { ManualModule } from './modules/manual/manual.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -40,6 +41,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     ReportsModule,
     DocumentsModule,
     AuditModule,
+    ManualModule,
   ],
   providers: [
     {

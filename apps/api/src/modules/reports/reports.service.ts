@@ -23,6 +23,7 @@ export class ReportsService {
     const logIds = new Set(logs.map((log) => log.id));
     const logById = new Map(logs.map((log) => [log.id, log]));
     const filteredOverrides = overrides.filter((override) => logIds.has(override.logEntryId));
+    const exceptionLogs = logs.filter((log) => log.isException);
     const byStatus = {
       pending: logs.filter((log) => log.status === LogStatus.PENDING).length,
       confirmed: logs.filter((log) => log.status === LogStatus.CONFIRMED).length,
@@ -53,6 +54,13 @@ export class ReportsService {
         pending: incidentLogs.filter((log) => log.status === LogStatus.PENDING).length,
         overridden: incidentLogs.filter((log) => log.status === LogStatus.OVERRIDDEN).length,
       },
+      exceptionSummary: {
+        total: exceptionLogs.length,
+        byType: exceptionLogs.reduce<Record<string, number>>((acc, log) => {
+          acc[log.type] = (acc[log.type] ?? 0) + 1;
+          return acc;
+        }, {}),
+      },
       overridesByField,
       overridesByType,
       recentLogs: logs.slice(0, 10),
@@ -69,7 +77,8 @@ export class ReportsService {
     dateTo?: Date,
   ) {
     const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
-    const header = 'id,type,status,locationId,submittedBy,submittedAt,createdAt,fields\n';
+    const header =
+      'id,type,status,locationId,submittedBy,submittedAt,createdAt,occurredAt,measuredAt,isException,exceptionReason,fields\n';
     const rows = logs
       .map((log) =>
         [
@@ -80,6 +89,10 @@ export class ReportsService {
           log.submittedBy ?? '',
           log.submittedAt?.toISOString?.() ?? '',
           log.createdAt.toISOString?.() ?? '',
+          log.occurredAt?.toISOString?.() ?? '',
+          log.measuredAt?.toISOString?.() ?? '',
+          log.isException ? 'yes' : 'no',
+          log.exceptionReason ?? '',
           JSON.stringify(log.fields).replace(/"/g, '""'),
         ]
           .map((value) => `"${String(value)}"`)
@@ -107,6 +120,7 @@ export class ReportsService {
       `Confirmed: ${summary.byStatus.confirmed}`,
       `Overridden: ${summary.byStatus.overridden}`,
       `Incidents: ${summary.incidentSummary.total}`,
+      `Exception logs: ${summary.exceptionSummary.total}`,
       '',
       'Logs by type:',
       ...Object.entries(summary.byType).map(([key, value]) => `- ${key}: ${value}`),

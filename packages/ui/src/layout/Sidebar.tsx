@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: '/overrides', label: 'Overrides', icon: '🔄' },
   { href: '/reports', label: 'Reports', icon: '📊' },
   { href: '/documents', label: 'Documents', icon: '📁' },
+  { href: '/manual', label: 'HACCP Manual', icon: '📘' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 
