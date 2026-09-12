@@ -1,5 +1,6 @@
 import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Transform } from 'class-transformer';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,8 +27,9 @@ class PasswordResetConfirmDto {
 }
 
 class BootstrapDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @MinLength(2)
+  @MinLength(2, { message: 'Organization name must be at least 2 characters' })
   organizationName: string;
 
   @IsOptional()

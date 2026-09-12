@@ -9,13 +9,12 @@ function formatValue(value: unknown) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-function parseValue(value: string) {
-  if (!value.trim()) return '';
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
+function parseFields(value: string) {
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Fields JSON must be an object.');
   }
+  return parsed as Record<string, unknown>;
 }
 
 function buildLogsPath(filters: {
@@ -94,11 +93,12 @@ export default function LogsPage() {
       setSaving(true);
       setError('');
       setMessage('');
-      const created = await apiPost<LogEntry>('/logs', {
+      await apiPost<LogEntry>('/logs', {
         type: createType,
-        fields: parseValue(createFields),
+        fields: parseFields(createFields),
       });
-      setLogs((prev) => [created, ...prev]);
+      const refreshed = await apiGet<LogEntry[]>(buildLogsPath(filters));
+      setLogs(refreshed);
       setMessage('Log entry created.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create log entry');
@@ -111,8 +111,9 @@ export default function LogsPage() {
     try {
       setError('');
       setMessage('');
-      const confirmed = await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
-      setLogs((prev) => prev.map((entry) => (entry.id === id ? confirmed : entry)));
+      await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
+      const refreshed = await apiGet<LogEntry[]>(buildLogsPath(filters));
+      setLogs(refreshed);
       setMessage('Log entry confirmed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
@@ -126,11 +127,15 @@ export default function LogsPage() {
       setError('Override field and reason are required.');
       return;
     }
+    if (!(fieldName in (log.fields ?? {}))) {
+      setError('Choose an existing field name to override.');
+      return;
+    }
 
     try {
       setError('');
       setMessage('');
-      const nextValue = parseValue(overrideNewValue[log.id] ?? '');
+      const nextValue = overrideNewValue[log.id] ?? '';
       await apiPost('/overrides', {
         logEntryId: log.id,
         fieldName,
@@ -138,17 +143,8 @@ export default function LogsPage() {
         newValue: nextValue,
         reason,
       });
-      setLogs((prev) =>
-        prev.map((entry) =>
-          entry.id === log.id
-            ? {
-                ...entry,
-                status: LogStatus.OVERRIDDEN,
-                fields: { ...entry.fields, [fieldName]: nextValue },
-              }
-            : entry,
-        ),
-      );
+      const refreshed = await apiGet<LogEntry[]>(buildLogsPath(filters));
+      setLogs(refreshed);
       setOverrideFieldName((prev) => ({ ...prev, [log.id]: '' }));
       setOverrideNewValue((prev) => ({ ...prev, [log.id]: '' }));
       setOverrideReason((prev) => ({ ...prev, [log.id]: '' }));
