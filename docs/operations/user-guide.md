@@ -6,6 +6,8 @@
 - Configure presets and reminder schedules
 - Generate daily tasks when needed
 - Review reports, documents, and audit history
+- Use Exception Mode for controlled backdating/unlock actions with mandatory reason
+- Generate and maintain the HACCP Manual with version history and PDF export
 
 ## Staff
 - Review daily logs from the dashboard or the logs page
@@ -13,6 +15,7 @@
 - Create manual log entries when needed
 - Submit overrides with a mandatory reason
 - Upload supporting documents
+- Use phone camera temperature capture with explicit consent and manual confirmation
 
 ## Daily workflow
 1. Check the dashboard for pending tasks and reminders
@@ -20,3 +23,4 @@
 3. Use **Checklists** to create checklist-based daily tasks
 4. Review **Reports** for compliance summaries and exports
 5. Store supporting files in **Documents**
+6. Admins maintain **HACCP Manual** templates, sections, approvals, and exports

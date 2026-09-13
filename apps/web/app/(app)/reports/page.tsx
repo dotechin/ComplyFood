@@ -150,6 +150,7 @@ export default function ReportsPage() {
           <StatCard label="Total Overrides" value={summary.totalOverrides} tone="text-orange-600" />
           <StatCard label="Pending" value={summary.byStatus.pending ?? 0} tone="text-yellow-600" />
           <StatCard label="Confirmed" value={summary.byStatus.confirmed ?? 0} tone="text-green-600" />
+          <StatCard label="Exception Logs" value={summary.exceptionSummary.total ?? 0} tone="text-orange-600" />
         </div>
       )}
       {summary && (
@@ -180,6 +181,11 @@ export default function ReportsPage() {
         <div className="mb-6 grid gap-4 lg:grid-cols-2">
           <SummaryListCard title="Overrides by field" values={summary.overridesByField} />
           <SummaryListCard title="Overrides by log type" values={summary.overridesByType} />
+        </div>
+      )}
+      {summary && (
+        <div className="mb-6">
+          <SummaryListCard title="Exceptions by log type" values={summary.exceptionSummary.byType} />
         </div>
       )}
       {loading ? (

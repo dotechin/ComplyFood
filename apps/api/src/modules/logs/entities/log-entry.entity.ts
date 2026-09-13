@@ -43,6 +43,24 @@ export class LogEntry {
   @Column({ name: 'preset_id', nullable: true })
   presetId: string | null;
 
+  @Column({ name: 'occurred_at', type: 'timestamptz', nullable: true })
+  occurredAt: Date | null;
+
+  @Column({ name: 'measured_at', type: 'timestamptz', nullable: true })
+  measuredAt: Date | null;
+
+  @Column({ name: 'is_exception', type: 'boolean', default: false })
+  isException: boolean;
+
+  @Column({ name: 'exception_reason', type: 'text', nullable: true })
+  exceptionReason: string | null;
+
+  @Column({ name: 'exception_by', nullable: true })
+  exceptionBy: string | null;
+
+  @Column({ name: 'exception_at', type: 'timestamptz', nullable: true })
+  exceptionAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

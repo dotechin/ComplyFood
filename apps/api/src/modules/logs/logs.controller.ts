@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsEnum, IsObject, IsOptional, IsUUID, Matches } from 'class-validator';
+import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { IsEnum, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles, UserRole } from '../../common/decorators/roles.decorator';
 import { LogStatus, LogType } from './entities/log-entry.entity';
 import { parseDateBoundary } from '../../common/utils/date-boundary';
 import { LogsService } from './logs.service';
@@ -31,6 +33,14 @@ class UpdateLogDto {
   @IsOptional()
   @IsUUID()
   locationId?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'occurredDate must use YYYY-MM-DD format' })
+  occurredDate?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'measuredDate must use YYYY-MM-DD format' })
+  measuredDate?: string;
 }
 
 class FindLogsQueryDto {
@@ -53,6 +63,24 @@ class FindLogsQueryDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateTo must use YYYY-MM-DD format' })
   dateTo?: string;
+}
+
+class ApplyExceptionDto {
+  @IsString()
+  @MinLength(3)
+  reason: string;
+
+  @IsOptional()
+  @IsISO8601()
+  occurredAt?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  measuredAt?: string;
+
+  @IsOptional()
+  @IsEnum(LogStatus)
+  unlockToStatus?: LogStatus;
 }
 
 @Controller('logs')
@@ -84,11 +112,36 @@ export class LogsController {
 
   @Patch(':id')
   update(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateLogDto) {
-    return this.logsService.update(id, user.orgId, dto);
+    return this.logsService.update(id, user.orgId, {
+      fields: dto.fields,
+      locationId: dto.locationId,
+      occurredAt: dto.occurredDate ? new Date(`${dto.occurredDate}T00:00:00.000Z`) : undefined,
+      measuredAt: dto.measuredDate ? new Date(`${dto.measuredDate}T00:00:00.000Z`) : undefined,
+    });
   }
 
   @Patch(':id/confirm')
   confirm(@CurrentUser() user: any, @Param('id') id: string) {
     return this.logsService.confirm(id, user.orgId, user.id);
+  }
+
+  @Post('temperature/ocr-suggestion')
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @UseInterceptors(FileInterceptor('file'))
+  getTemperatureSuggestion(@UploadedFile() file: any) {
+    if (!file) {
+      return { extractedValue: null, confidence: 0, source: 'none' };
+    }
+    return this.logsService.suggestTemperatureFromCapture(String(file.originalname || 'capture'));
+  }
+
+  @Patch(':id/exception')
+  @Roles(UserRole.ADMIN)
+  applyException(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: ApplyExceptionDto) {
+    return this.logsService.applyException(id, user.orgId, user.id, dto.reason, {
+      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
+      measuredAt: dto.measuredAt ? new Date(dto.measuredAt) : undefined,
+      unlockToStatus: dto.unlockToStatus,
+    });
   }
 }

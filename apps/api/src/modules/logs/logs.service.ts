@@ -14,6 +14,12 @@ interface UpdateLogInput {
   fields?: Record<string, any>;
   locationId?: string | null;
   status?: LogStatus;
+  occurredAt?: Date | null;
+  measuredAt?: Date | null;
+  isException?: boolean;
+  exceptionReason?: string | null;
+  exceptionBy?: string | null;
+  exceptionAt?: Date | null;
 }
 
 @Injectable()
@@ -34,6 +40,12 @@ export class LogsService {
         submittedBy: null,
         submittedAt: null,
         status: LogStatus.PENDING,
+        occurredAt: null,
+        measuredAt: null,
+        isException: false,
+        exceptionReason: null,
+        exceptionBy: null,
+        exceptionAt: null,
       }),
     );
   }
@@ -72,6 +84,24 @@ export class LogsService {
       entry.locationId = data.locationId ?? null;
     }
     if (data.status) entry.status = data.status;
+    if (Object.prototype.hasOwnProperty.call(data, 'occurredAt')) {
+      entry.occurredAt = data.occurredAt ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'measuredAt')) {
+      entry.measuredAt = data.measuredAt ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'isException')) {
+      entry.isException = Boolean(data.isException);
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'exceptionReason')) {
+      entry.exceptionReason = data.exceptionReason ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'exceptionBy')) {
+      entry.exceptionBy = data.exceptionBy ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'exceptionAt')) {
+      entry.exceptionAt = data.exceptionAt ?? null;
+    }
     return this.repo.save(entry);
   }
 
@@ -81,6 +111,41 @@ export class LogsService {
     entry.submittedBy = userId;
     entry.submittedAt = new Date();
     return this.repo.save(entry);
+  }
+
+  async applyException(
+    id: string,
+    orgId: string,
+    userId: string,
+    reason: string,
+    data: { occurredAt?: Date; measuredAt?: Date; unlockToStatus?: LogStatus },
+  ) {
+    const entry = await this.findOne(id, orgId);
+    entry.isException = true;
+    entry.exceptionReason = reason;
+    entry.exceptionBy = userId;
+    entry.exceptionAt = new Date();
+    entry.occurredAt = data.occurredAt ?? entry.occurredAt;
+    entry.measuredAt = data.measuredAt ?? entry.measuredAt;
+    if (data.unlockToStatus) {
+      entry.status = data.unlockToStatus;
+    }
+    return this.repo.save(entry);
+  }
+
+  suggestTemperatureFromCapture(fileName: string) {
+    const normalized = fileName.toLowerCase();
+    const match = normalized.match(/(-?\d+(?:[.,]\d+)?)\s?(?:°?\s?[cf])?/);
+    if (!match) {
+      return { extractedValue: null, confidence: 0.05, source: 'none' as const };
+    }
+
+    const rawValue = match[1].replace(',', '.');
+    return {
+      extractedValue: `${rawValue}°C`,
+      confidence: normalized.includes('temp') || normalized.includes('fridge') ? 0.72 : 0.52,
+      source: 'filename' as const,
+    };
   }
 
   async hasPresetEntryForDate(orgId: string, presetId: string, date: Date): Promise<boolean> {
