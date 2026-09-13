@@ -59,5 +59,3 @@ ComplyFood/
 - Core modules now include password reset, daily logs, checklists, overrides, reports, documents, audit, reminders, and automation
 - CI now runs lint, build, and tests through GitHub Actions
 - Current priorities are staging validation (S3/reminders), integration and e2e coverage, beta onboarding, and performance profiling
-
-### TODO
