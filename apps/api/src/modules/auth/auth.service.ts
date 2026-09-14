@@ -117,7 +117,10 @@ export class AuthService {
   }
 
   private hashToken(token: string) {
-    const salt = process.env.PASSWORD_RESET_TOKEN_SALT || process.env.JWT_SECRET || 'dev-reset-token-salt';
+    const salt = process.env.PASSWORD_RESET_TOKEN_SALT;
+    if (!salt) {
+      throw new Error('PASSWORD_RESET_TOKEN_SALT is required');
+    }
     return scryptSync(token, salt, 64).toString('hex');
   }
 }
