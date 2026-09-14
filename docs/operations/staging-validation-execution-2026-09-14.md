@@ -11,7 +11,7 @@ Execute the staging validation cycle defined in `docs/operations/staging-validat
 ## Preconditions check
 | Precondition | Status | Evidence / note |
 |---|---|---|
-| Deployment completed with `/home/runner/work/ComplyFood/ComplyFood/docs/operations/deployment.md` variables | Blocked | Deployment target and runtime values not available in this session |
+| Deployment completed with `docs/operations/deployment.md` variables | Blocked | Deployment target and runtime values not available in this session |
 | Database migrations applied from `apps/api` | Blocked | Staging database access not available in this session |
 | S3-compatible storage reachable | Blocked | Staging storage endpoint/credentials not available in this session |
 | Pilot-like organization available for test | Blocked | Staging org data and access not available in this session |
