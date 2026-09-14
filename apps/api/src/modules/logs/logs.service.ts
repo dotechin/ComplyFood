@@ -173,7 +173,7 @@ export class LogsService {
         }
 
         if (value[cursor] === '-' && this.isDigit(value[cursor + 1])) {
-          return this.readSignedNumberToken(value, sawWhitespace ? cursor : cursor + 1);
+          return this.readSignedNumberToken(value, sawWhitespace || labelIndex === 0 ? cursor : cursor + 1);
         }
 
         const token = this.readSignedNumberToken(value, cursor);
