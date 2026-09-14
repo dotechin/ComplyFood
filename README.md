@@ -3,7 +3,7 @@
 ## English
 
 ### What it is
-**ComplyFood** is a web-based HACCP compliance automation platform for small and medium food businesses in Italy. It helps operators digitise daily checks, maintain compliance logs, generate audit-ready reports, and track manual overrides of automated entries.
+**ComplyFood** is a web-based HACCP compliance automation platform for small and medium food businesses. It helps operators digitise daily checks, maintain compliance logs, generate audit-ready reports, and track manual overrides of automated entries.
 
 ### Why it exists
 Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. ComplyFood reduces that burden by pre-filling routine entries, sending reminders, and keeping a full traceable history of every record — including corrections.
