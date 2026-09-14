@@ -135,21 +135,120 @@ export class LogsService {
 
   suggestTemperatureFromCapture(fileName: string) {
     const normalized = fileName.toLowerCase();
-    const positiveTemperatureLabelMatch = normalized.match(
-      /(?:temp|temperature)[-_ ]+(\d+(?:[.,]\d+)?)(?:°?\s?[cf])?/,
-    );
-    const unitQualifiedMatch = normalized.match(/(-?\d+(?:[.,]\d+)?)\s*(?:°?\s*[cf])/);
+    const labeledValue = this.extractTemperatureAfterLabel(normalized);
+    const unitQualifiedValue = this.extractUnitQualifiedTemperature(normalized);
 
-    if (!positiveTemperatureLabelMatch && !unitQualifiedMatch) {
+    if (!labeledValue && !unitQualifiedValue) {
       return { extractedValue: null, confidence: 0.05, source: 'none' as const };
     }
 
-    const rawValue = (positiveTemperatureLabelMatch?.[1] ?? unitQualifiedMatch?.[1] ?? '').replace(',', '.');
+    const rawValue = (labeledValue ?? unitQualifiedValue ?? '').replace(',', '.');
     return {
       extractedValue: `${rawValue}°C`,
       confidence: normalized.includes('temp') || normalized.includes('fridge') ? 0.72 : 0.52,
       source: 'filename' as const,
     };
+  }
+
+  private extractTemperatureAfterLabel(value: string) {
+    for (const label of ['temperature', 'temp']) {
+      let startIndex = 0;
+      while (startIndex < value.length) {
+        const labelIndex = value.indexOf(label, startIndex);
+        if (labelIndex === -1) {
+          break;
+        }
+
+        let cursor = labelIndex + label.length;
+        let sawWhitespace = false;
+        while (cursor < value.length && this.isSoftSeparator(value[cursor])) {
+          if (value[cursor] === ' ') {
+            sawWhitespace = true;
+          }
+          cursor += 1;
+        }
+
+        if (value[cursor] === '-' && value[cursor + 1] === '-' && this.isDigit(value[cursor + 2])) {
+          return this.readSignedNumberToken(value, cursor + 1);
+        }
+
+        if (value[cursor] === '-' && this.isDigit(value[cursor + 1])) {
+          return this.readSignedNumberToken(value, sawWhitespace ? cursor : cursor + 1);
+        }
+
+        const token = this.readSignedNumberToken(value, cursor);
+        if (token) {
+          return token;
+        }
+
+        startIndex = labelIndex + label.length;
+      }
+    }
+
+    return null;
+  }
+
+  private extractUnitQualifiedTemperature(value: string) {
+    for (let index = 0; index < value.length; index += 1) {
+      const token = this.readSignedNumberToken(value, index);
+      if (!token) {
+        continue;
+      }
+
+      let cursor = index + token.length;
+      while (cursor < value.length && value[cursor] === ' ') {
+        cursor += 1;
+      }
+      if (value[cursor] === '°') {
+        cursor += 1;
+      }
+      while (cursor < value.length && value[cursor] === ' ') {
+        cursor += 1;
+      }
+
+      if (value[cursor] === 'c' || value[cursor] === 'f') {
+        return token;
+      }
+    }
+
+    return null;
+  }
+
+  private readSignedNumberToken(value: string, start: number) {
+    if (start >= value.length) {
+      return null;
+    }
+
+    let cursor = start;
+    if (value[cursor] === '-') {
+      if (!this.isDigit(value[cursor + 1])) {
+        return null;
+      }
+      cursor += 1;
+    } else if (!this.isDigit(value[cursor])) {
+      return null;
+    }
+
+    while (cursor < value.length && this.isDigit(value[cursor])) {
+      cursor += 1;
+    }
+
+    if ((value[cursor] === '.' || value[cursor] === ',') && this.isDigit(value[cursor + 1])) {
+      cursor += 1;
+      while (cursor < value.length && this.isDigit(value[cursor])) {
+        cursor += 1;
+      }
+    }
+
+    return value.slice(start, cursor);
+  }
+
+  private isDigit(value: string | undefined) {
+    return Boolean(value && value >= '0' && value <= '9');
+  }
+
+  private isSoftSeparator(value: string | undefined) {
+    return value === ' ' || value === '_';
   }
 
   async hasPresetEntryForDate(orgId: string, presetId: string, date: Date): Promise<boolean> {

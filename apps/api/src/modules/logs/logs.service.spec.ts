@@ -117,6 +117,16 @@ describe('LogsService', () => {
       confidence: 0.72,
       source: 'filename',
     });
+    expect(service.suggestTemperatureFromCapture('temp -4.5C.jpg')).toEqual({
+      extractedValue: '-4.5°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('temperature--4C.jpg')).toEqual({
+      extractedValue: '-4°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
     expect(service.suggestTemperatureFromCapture('kitchen-photo.jpg')).toEqual({
       extractedValue: null,
       confidence: 0.05,
