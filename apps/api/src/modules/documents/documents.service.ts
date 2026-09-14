@@ -80,8 +80,9 @@ export class DocumentsService {
   }
 
   findByOrg(orgId: string, category?: DocumentCategory) {
+    const where = this.isValidCategory(category) ? { orgId, category } : { orgId };
     return this.repo.find({
-    where: category ? { orgId, category } : { orgId },
+    where,
     order: { createdAt: 'DESC' },
     });
   }
@@ -118,9 +119,11 @@ export class DocumentsService {
   }
 
   private normalizeCategory(category?: DocumentCategory) {
-    return Object.values(DocumentCategory).includes(category as DocumentCategory)
-      ? (category as DocumentCategory)
-      : DocumentCategory.GENERAL;
+    return this.isValidCategory(category) ? category : DocumentCategory.GENERAL;
+  }
+
+  private isValidCategory(category: unknown): category is DocumentCategory {
+    return Object.values(DocumentCategory).includes(category as DocumentCategory);
   }
 
   private async ensureBucketExists() {

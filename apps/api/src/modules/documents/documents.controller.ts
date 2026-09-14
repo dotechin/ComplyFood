@@ -16,14 +16,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { DocumentCategory } from '@complyfood/shared';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { DocumentsService } from './documents.service';
 
 class UploadDocumentDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   linkedEntryId?: string;
 
   @IsOptional()

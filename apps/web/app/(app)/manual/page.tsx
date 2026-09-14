@@ -242,15 +242,18 @@ export default function ManualPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]">
-          <select
-            value={businessType}
-            onChange={(e) => setBusinessType(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            {BUSINESS_TYPES.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
+          <label className="space-y-1 text-sm text-gray-700">
+            <span className="font-medium">Business type</span>
+            <select
+              value={businessType}
+              onChange={(e) => setBusinessType(e.target.value)}
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              {BUSINESS_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => void createTemplate()}
