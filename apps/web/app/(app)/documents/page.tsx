@@ -32,7 +32,7 @@ export default function DocumentsPage() {
   const [linkedEntryId, setLinkedEntryId] = useState('');
   const [category, setCategory] = useState<DocumentCategory>(DocumentCategory.GENERAL);
   const [notes, setNotes] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
+  const [filterCategory, setFilterCategory] = useState<DocumentCategory | ''>('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -155,7 +155,7 @@ export default function DocumentsPage() {
           <span className="font-medium">Filter by category</span>
           <select
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
+            onChange={(e) => setFilterCategory(e.target.value as DocumentCategory | '')}
             className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option value="">All categories</option>
