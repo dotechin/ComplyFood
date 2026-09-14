@@ -46,6 +46,22 @@ describe('DocumentsService', () => {
     expect(result.category).toBe(DocumentCategory.HACCP_MANUAL);
   });
 
+  it('defaults missing categories to general on upload', async () => {
+    const result = await service.upload('org-1', 'user-1', {
+      originalname: 'layout.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from('pdf'),
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: DocumentCategory.GENERAL,
+        notes: null,
+      }),
+    );
+    expect(result.category).toBe(DocumentCategory.GENERAL);
+  });
+
   it('filters organization documents by category', async () => {
     repo.find.mockResolvedValue([]);
 

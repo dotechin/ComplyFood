@@ -260,17 +260,23 @@ export default function ManualPage() {
           </button>
         </div>
         <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
-          <input
-            type="file"
-            onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            value={manualNotes}
-            onChange={(e) => setManualNotes(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-            placeholder="Optional notes about the uploaded manual"
-          />
+          <label className="space-y-1 text-sm text-gray-700">
+            <span className="font-medium">Manual file</span>
+            <input
+              type="file"
+              onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-gray-700">
+            <span className="font-medium">Upload notes</span>
+            <input
+              value={manualNotes}
+              onChange={(e) => setManualNotes(e.target.value)}
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Optional notes about the uploaded manual"
+            />
+          </label>
           <button
             type="submit"
             className="rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"

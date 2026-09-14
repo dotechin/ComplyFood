@@ -73,11 +73,27 @@ export default function DocumentsPage() {
     [docs, filterCategory],
   );
 
-  const uploadedManuals = filteredDocs.filter((doc) => doc.category === DocumentCategory.HACCP_MANUAL);
-  const organizationDocs = filteredDocs.filter(
-    (doc) => doc.category !== DocumentCategory.HACCP_MANUAL && !doc.linkedEntryId,
+  const groupedDocs = useMemo(
+    () =>
+      filteredDocs.reduce(
+        (acc, doc) => {
+          if (doc.category === DocumentCategory.HACCP_MANUAL) {
+            acc.uploadedManuals.push(doc);
+          } else if (doc.linkedEntryId) {
+            acc.logLinkedDocs.push(doc);
+          } else {
+            acc.organizationDocs.push(doc);
+          }
+          return acc;
+        },
+        {
+          uploadedManuals: [] as Document[],
+          organizationDocs: [] as Document[],
+          logLinkedDocs: [] as Document[],
+        },
+      ),
+    [filteredDocs],
   );
-  const logLinkedDocs = filteredDocs.filter((doc) => Boolean(doc.linkedEntryId));
 
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
 
@@ -85,9 +101,9 @@ export default function DocumentsPage() {
     <div>
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Documents</h1>
       <div className="mb-4 grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Manual files" value={uploadedManuals.length} />
-        <SummaryCard label="Business compliance docs" value={organizationDocs.length} />
-        <SummaryCard label="Log-linked docs" value={logLinkedDocs.length} />
+        <SummaryCard label="Manual files" value={groupedDocs.uploadedManuals.length} />
+        <SummaryCard label="Business compliance docs" value={groupedDocs.organizationDocs.length} />
+        <SummaryCard label="Log-linked docs" value={groupedDocs.logLinkedDocs.length} />
       </div>
       <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
         <label className="space-y-1 text-sm text-gray-700">
@@ -174,15 +190,15 @@ export default function DocumentsPage() {
         <div className="space-y-6">
           <DocumentTable
             title="Uploaded manuals"
-            docs={uploadedManuals}
+            docs={groupedDocs.uploadedManuals}
             logsById={logsById}
           />
           <DocumentTable
             title="Business compliance documents"
-            docs={organizationDocs}
+            docs={groupedDocs.organizationDocs}
             logsById={logsById}
           />
-          <DocumentTable title="Log-linked documents" docs={logLinkedDocs} logsById={logsById} />
+          <DocumentTable title="Log-linked documents" docs={groupedDocs.logLinkedDocs} logsById={logsById} />
         </div>
       )}
     </div>
