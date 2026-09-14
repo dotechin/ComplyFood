@@ -3,7 +3,7 @@
 ## English
 
 ### What it is
-**ComplyFood** is a web-based HACCP compliance automation platform for small and medium food businesses. It helps operators digitise daily checks, maintain compliance logs, generate audit-ready reports, and track manual overrides of automated entries.
+**ComplyFood** is a web-based HACCP compliance automation platform focused on independent food businesses, with the current MVP beta centred on Italian restaurants and trattorie. It helps operators digitise daily checks, maintain compliance logs, generate audit-ready reports, and track manual overrides of automated entries.
 
 ### Why it exists
 Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. ComplyFood reduces that burden by pre-filling routine entries, sending reminders, and keeping a full traceable history of every record — including corrections.
@@ -12,7 +12,7 @@ Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. Comply
 - Business profile and location setup
 - Role-based access (Admin / Staff / Auditor)
 - Daily operational logs (temperature, cleaning, receiving, incidents)
-- Checklist templates by business type
+- Reusable checklist templates and daily task generation
 - Automation presets and reminders
 - Override system with mandatory reason and full audit trail
 - Compliance reporting: PDF / CSV export
@@ -22,7 +22,7 @@ Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. Comply
 | Layer | Technology |
 |-------|------------|
 | Frontend | Next.js + TypeScript + Tailwind CSS |
-| Backend | Node.js (NestJS) or Python (FastAPI) |
+| Backend | Node.js (NestJS) |
 | Database | PostgreSQL |
 | Auth | JWT / role-based |
 | Storage | S3-compatible |
@@ -56,8 +56,8 @@ ComplyFood/
 5. **Phase 5 – Release Readiness Proof:** execute staging validation, record performance evidence, and complete beta onboarding only after the proof gates pass
 
 ### Current status
-- Monorepo, NestJS API, and Next.js web app are already in place
-- Core modules now include password reset, daily logs, checklists, overrides, reports, documents, audit, reminders, and automation
+- Monorepo, NestJS API, and Next.js web app are implemented and wired together
+- Core modules include authentication/bootstrap, organization and user setup, daily logs, checklists, overrides, reports, documents, audit, reminders, automation, and HACCP manual workflows
 - CI runs install, lint, build, and test through GitHub Actions
-- Backend automated coverage now includes unit tests, pg-mem-backed integration tests, and API end-to-end smoke tests
-- Release readiness still depends on captured staging validation evidence, performance results, and live beta onboarding outcomes
+- Backend automated coverage includes unit tests, pg-mem-backed integration tests, and API end-to-end smoke coverage
+- The product is a working MVP foundation, but release readiness still depends on captured staging validation evidence, performance results, and live beta onboarding outcomes
