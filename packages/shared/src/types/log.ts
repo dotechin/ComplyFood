@@ -119,11 +119,23 @@ export interface ReminderEvent {
   createdAt: string;
 }
 
+export enum DocumentCategory {
+  GENERAL = 'general',
+  HACCP_MANUAL = 'haccp_manual',
+  STORE_LAYOUT = 'store_layout',
+  PERMIT = 'permit',
+  CERTIFICATE = 'certificate',
+  PROCEDURE = 'procedure',
+  INSPECTION_EVIDENCE = 'inspection_evidence',
+}
+
 export interface Document {
   id: string;
   orgId: string;
   name: string;
   s3Key: string;
+  category: DocumentCategory;
+  notes: string | null;
   linkedEntryId: string | null;
   uploadedBy: string;
   createdAt: string;

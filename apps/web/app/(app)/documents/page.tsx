@@ -1,8 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { Document, LogEntry } from '@complyfood/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { DocumentCategory, type Document, type LogEntry } from '@complyfood/shared';
 import { apiDownload, apiGet, apiUpload } from '../../../lib/api';
+
+const CATEGORY_OPTIONS = [
+  DocumentCategory.GENERAL,
+  DocumentCategory.HACCP_MANUAL,
+  DocumentCategory.STORE_LAYOUT,
+  DocumentCategory.PERMIT,
+  DocumentCategory.CERTIFICATE,
+  DocumentCategory.PROCEDURE,
+  DocumentCategory.INSPECTION_EVIDENCE,
+] as const;
+
+const CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  [DocumentCategory.GENERAL]: 'General compliance',
+  [DocumentCategory.HACCP_MANUAL]: 'HACCP manual',
+  [DocumentCategory.STORE_LAYOUT]: 'Store layout',
+  [DocumentCategory.PERMIT]: 'Permit',
+  [DocumentCategory.CERTIFICATE]: 'Certificate',
+  [DocumentCategory.PROCEDURE]: 'Procedure',
+  [DocumentCategory.INSPECTION_EVIDENCE]: 'Inspection evidence',
+};
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -10,6 +30,9 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [linkedEntryId, setLinkedEntryId] = useState('');
+  const [category, setCategory] = useState<DocumentCategory>(DocumentCategory.GENERAL);
+  const [notes, setNotes] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -30,6 +53,10 @@ export default function DocumentsPage() {
     setError('');
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('category', category);
+    if (notes.trim()) {
+      formData.append('notes', notes.trim());
+    }
     if (linkedEntryId) {
       formData.append('linkedEntryId', linkedEntryId);
     }
@@ -37,17 +64,48 @@ export default function DocumentsPage() {
     setDocs((prev) => [document, ...prev]);
     setFile(null);
     setLinkedEntryId('');
+    setCategory(DocumentCategory.GENERAL);
+    setNotes('');
   };
+
+  const filteredDocs = useMemo(
+    () => docs.filter((doc) => (filterCategory ? doc.category === filterCategory : true)),
+    [docs, filterCategory],
+  );
+
+  const uploadedManuals = filteredDocs.filter((doc) => doc.category === DocumentCategory.HACCP_MANUAL);
+  const organizationDocs = filteredDocs.filter(
+    (doc) => doc.category !== DocumentCategory.HACCP_MANUAL && !doc.linkedEntryId,
+  );
+  const logLinkedDocs = filteredDocs.filter((doc) => Boolean(doc.linkedEntryId));
+
+  const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
 
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Documents</h1>
+      <div className="mb-4 grid gap-4 md:grid-cols-3">
+        <SummaryCard label="Manual files" value={uploadedManuals.length} />
+        <SummaryCard label="Business compliance docs" value={organizationDocs.length} />
+        <SummaryCard label="Log-linked docs" value={logLinkedDocs.length} />
+      </div>
       <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
         <input
           type="file"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          {CATEGORY_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {CATEGORY_LABELS[option]}
+            </option>
+          ))}
+        </select>
         <select
           value={linkedEntryId}
           onChange={(e) => setLinkedEntryId(e.target.value)}
@@ -66,53 +124,114 @@ export default function DocumentsPage() {
         >
           Upload document
         </button>
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm md:col-span-2"
+          placeholder="Optional notes (e.g. fire permit 2026, signed layout)"
+        />
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">All categories</option>
+          {CATEGORY_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {CATEGORY_LABELS[option]}
+            </option>
+          ))}
+        </select>
         {error && <p className="text-sm text-red-600 md:col-span-3">{error}</p>}
       </form>
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : (
-        <div className="rounded-lg border bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Linked Entry</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Uploaded</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {docs.map((doc) => (
-                <tr key={doc.id}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{doc.name}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {doc.linkedEntryId ? doc.linkedEntryId.slice(0, 8) + '…' : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(doc.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
-                      className="text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      Download
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {docs.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                    No documents yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-6">
+          <DocumentTable
+            title="Uploaded manuals"
+            docs={uploadedManuals}
+            logsById={logsById}
+          />
+          <DocumentTable
+            title="Business compliance documents"
+            docs={organizationDocs}
+            logsById={logsById}
+          />
+          <DocumentTable title="Log-linked documents" docs={logLinkedDocs} logsById={logsById} />
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className="text-3xl font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function DocumentTable({
+  title,
+  docs,
+  logsById,
+}: {
+  title: string;
+  docs: Document[];
+  logsById: Map<string, LogEntry>;
+}) {
+  return (
+    <div className="rounded-lg border bg-white shadow-sm">
+      <div className="border-b px-4 py-3">
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      </div>
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Category</th>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Scope</th>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Notes</th>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Uploaded</th>
+            <th className="px-4 py-3 text-left font-medium text-gray-500">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 bg-white">
+          {docs.map((doc) => {
+            const linkedLog = doc.linkedEntryId ? logsById.get(doc.linkedEntryId) : null;
+            return (
+              <tr key={doc.id}>
+                <td className="px-4 py-3 font-medium text-gray-800">{doc.name}</td>
+                <td className="px-4 py-3 text-gray-500">{CATEGORY_LABELS[doc.category]}</td>
+                <td className="px-4 py-3 text-gray-500">
+                  {linkedLog ? `${linkedLog.type} log` : 'Organization'}
+                </td>
+                <td className="px-4 py-3 text-gray-500">{doc.notes || '—'}</td>
+                <td className="px-4 py-3 text-gray-500">{new Date(doc.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Download
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+          {docs.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                No documents in this section.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

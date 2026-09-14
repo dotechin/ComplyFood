@@ -1,3 +1,4 @@
+import { DocumentCategory } from '@complyfood/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -38,9 +39,16 @@ export class DocumentsService {
     private readonly repo: Repository<Document>,
   ) {}
 
-  async upload(orgId: string, userId: string, file: any, linkedEntryId?: string) {
+  async upload(
+    orgId: string,
+    userId: string,
+    file: any,
+    options?: { linkedEntryId?: string; category?: DocumentCategory; notes?: string },
+  ) {
     const safeName = this.sanitizeFileName(file.originalname ?? `document${extname(file.mimetype || '')}`);
     const relativePath = join(orgId, `${Date.now()}-${safeName}`);
+    const category = this.normalizeCategory(options?.category);
+    const notes = options?.notes?.trim() ? options.notes.trim() : null;
 
     if (this.storageDriver === 's3' && this.s3Client) {
       await this.ensureBucketExists();
@@ -63,14 +71,19 @@ export class DocumentsService {
         orgId,
         name: safeName,
         s3Key: relativePath,
-        linkedEntryId: linkedEntryId ?? null,
+        category,
+        notes,
+        linkedEntryId: options?.linkedEntryId ?? null,
         uploadedBy: userId,
       }),
     );
   }
 
-  findByOrg(orgId: string) {
-    return this.repo.find({ where: { orgId }, order: { createdAt: 'DESC' } });
+  findByOrg(orgId: string, category?: DocumentCategory) {
+    return this.repo.find({
+    where: category ? { orgId, category } : { orgId },
+    order: { createdAt: 'DESC' },
+    });
   }
 
   findByLogEntry(orgId: string, linkedEntryId: string) {
@@ -102,6 +115,12 @@ export class DocumentsService {
 
   private sanitizeFileName(fileName: string) {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  }
+
+  private normalizeCategory(category?: DocumentCategory) {
+    return Object.values(DocumentCategory).includes(category as DocumentCategory)
+      ? (category as DocumentCategory)
+      : DocumentCategory.GENERAL;
   }
 
   private async ensureBucketExists() {
