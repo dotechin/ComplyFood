@@ -7,16 +7,16 @@ Validate the MVP with a small number of food businesses before production rollou
 - CI passes on every change
 - Password reset, logs, overrides, checklists, reminders, reports, and document upload work end to end
 - Core authorization rules are verified for admin, staff, and auditor access
-- Staging validation is executed with `/home/runner/work/ComplyFood/ComplyFood/docs/operations/staging-validation.md`
-- Performance checks are executed with `/home/runner/work/ComplyFood/ComplyFood/docs/operations/performance-checks.md`
+- Staging validation is executed with `docs/operations/staging-validation.md`
+- Performance checks are executed with `docs/operations/performance-checks.md`
 
 ## Pilot group
 - 2–3 food businesses in the initial target segment (independent restaurants/trattorie)
 - At least 1 admin user and 2 staff users per business
 - One auditor or consultant account for read-only verification where applicable
 - Target-sector definition and HACCP form mapping are documented in `docs/product/target-sector-definition.md`
-- Sample pilot records are prepared in `/home/runner/work/ComplyFood/ComplyFood/docs/operations/pilot-sample-data.json`
-- The onboarding flow is captured in `/home/runner/work/ComplyFood/ComplyFood/docs/operations/pilot-onboarding.md`
+- Sample pilot records are prepared in `docs/operations/pilot-sample-data.json`
+- The onboarding flow is captured in `docs/operations/pilot-onboarding.md`
 
 ## Test scenarios
 - Sign in and recover password

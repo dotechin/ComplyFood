@@ -135,17 +135,16 @@ export class LogsService {
 
   suggestTemperatureFromCapture(fileName: string) {
     const normalized = fileName.toLowerCase();
-    const match = normalized.match(/-?\d+(?:[.,]\d+)?/);
-    if (!match) {
+    const positiveTemperatureLabelMatch = normalized.match(
+      /(?:temp|temperature)[-_ ]+(\d+(?:[.,]\d+)?)(?:°?\s?[cf])?/,
+    );
+    const genericMatch = normalized.match(/-?\d+(?:[.,]\d+)?/);
+
+    if (!positiveTemperatureLabelMatch && !genericMatch) {
       return { extractedValue: null, confidence: 0.05, source: 'none' as const };
     }
 
-    let rawValue = match[0];
-    if (rawValue.startsWith('-') && match.index && /[a-z0-9]/.test(normalized[match.index - 1])) {
-      rawValue = rawValue.slice(1);
-    }
-
-    rawValue = rawValue.replace(',', '.');
+    const rawValue = (positiveTemperatureLabelMatch?.[1] ?? genericMatch?.[0] ?? '').replace(',', '.');
     return {
       extractedValue: `${rawValue}°C`,
       confidence: normalized.includes('temp') || normalized.includes('fridge') ? 0.72 : 0.52,

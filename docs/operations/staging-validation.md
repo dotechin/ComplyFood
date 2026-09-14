@@ -4,8 +4,8 @@
 Verify the release candidate in a production-like environment before pilot onboarding.
 
 ## Preconditions
-- Deployment completed with the environment variables from `/home/runner/work/ComplyFood/ComplyFood/docs/operations/deployment.md`
-- Database migrations applied from `/home/runner/work/ComplyFood/ComplyFood/apps/api`
+- Deployment completed with the environment variables from `docs/operations/deployment.md`
+- Database migrations applied from `apps/api`
 - S3-compatible storage reachable
 - At least one pilot-like organization available for testing
 
