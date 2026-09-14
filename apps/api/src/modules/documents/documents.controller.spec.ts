@@ -31,6 +31,17 @@ describe('DocumentsController', () => {
     expect(documentsService.upload).not.toHaveBeenCalled();
   });
 
+  it('rejects uploads when the file is missing', () => {
+    expect(() =>
+      controller.upload(
+        { orgId: 'org-1', id: 'user-1', role: UserRole.ADMIN },
+        undefined,
+        {},
+      ),
+    ).toThrow(BadRequestException);
+    expect(documentsService.upload).not.toHaveBeenCalled();
+  });
+
   it('rejects HACCP manual files linked to log entries', () => {
     expect(() =>
       controller.upload(
@@ -54,5 +65,26 @@ describe('DocumentsController', () => {
         { type: 'query', metatype: FindDocumentsQueryDto, data: '' },
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('passes valid uploads through to the documents service', () => {
+    controller.upload(
+      { orgId: 'org-1', id: 'user-1', role: UserRole.ADMIN },
+      { originalname: 'permit.pdf', buffer: Buffer.from('pdf') },
+      {
+        category: DocumentCategory.PERMIT,
+        notes: 'Current permit',
+      },
+    );
+
+    expect(documentsService.upload).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      expect.objectContaining({ originalname: 'permit.pdf' }),
+      {
+        category: DocumentCategory.PERMIT,
+        notes: 'Current permit',
+      },
+    );
   });
 });

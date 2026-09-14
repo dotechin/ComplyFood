@@ -38,4 +38,23 @@ describe('ChecklistsService', () => {
     );
     expect(result.fields.templateName).toBe('Opening checklist');
   });
+
+  it('falls back to an empty item list and general checklist type', async () => {
+    repo.findOne.mockResolvedValue({
+      id: 'template-2',
+      orgId: 'org-1',
+      name: 'General hygiene',
+      type: null,
+      fieldsConfig: null,
+    });
+
+    const result = await service.generateLog('template-2', 'org-1', 'user-1');
+
+    expect(result.fields).toEqual({
+      templateId: 'template-2',
+      templateName: 'General hygiene',
+      items: [],
+      checklistType: 'general',
+    });
+  });
 });

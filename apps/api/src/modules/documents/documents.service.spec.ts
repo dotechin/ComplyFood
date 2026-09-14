@@ -6,6 +6,7 @@ describe('DocumentsService', () => {
     create: jest.fn((value) => value),
     save: jest.fn(async (value) => ({ id: 'doc-1', ...value })),
     find: jest.fn(),
+    findOne: jest.fn(),
   };
 
   let service: DocumentsService;
@@ -37,6 +38,7 @@ describe('DocumentsService', () => {
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: 'org-1',
+        name: 'Manual_2026.pdf',
         uploadedBy: 'user-1',
         category: DocumentCategory.HACCP_MANUAL,
         notes: 'Existing manual',
@@ -82,5 +84,21 @@ describe('DocumentsService', () => {
       where: { orgId: 'org-1' },
       order: { createdAt: 'DESC' },
     });
+  });
+
+  it('falls back to the general category for invalid input', async () => {
+    await service.upload('org-1', 'user-1', {
+      originalname: 'notes.txt',
+      mimetype: 'text/plain',
+      buffer: Buffer.from('notes'),
+    }, {
+      category: 'not-real' as any,
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: DocumentCategory.GENERAL,
+      }),
+    );
   });
 });

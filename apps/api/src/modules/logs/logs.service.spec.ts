@@ -63,4 +63,84 @@ describe('LogsService', () => {
 
     await expect(service.findOne('missing', 'org-1')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('applies exception metadata and can unlock the log status', async () => {
+    repo.findOne.mockResolvedValue({
+      id: 'log-1',
+      orgId: 'org-1',
+      status: LogStatus.CONFIRMED,
+      fields: { item: 'Fridge 1' },
+      isException: false,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      occurredAt: null,
+      measuredAt: null,
+    });
+
+    const result = await service.applyException(
+      'log-1',
+      'org-1',
+      'admin-1',
+      'Backdated supplier receipt',
+      {
+        occurredAt: new Date('2026-01-02T00:00:00Z'),
+        measuredAt: new Date('2026-01-02T01:00:00Z'),
+        unlockToStatus: LogStatus.PENDING,
+      },
+    );
+
+    expect(repo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-1',
+        status: LogStatus.PENDING,
+        isException: true,
+        exceptionReason: 'Backdated supplier receipt',
+        exceptionBy: 'admin-1',
+      }),
+    );
+    expect(result.isException).toBe(true);
+    expect(result.exceptionAt).toBeInstanceOf(Date);
+  });
+
+  it('extracts temperature hints from capture file names', () => {
+    expect(service.suggestTemperatureFromCapture('fridge-temp-4.5C.jpg')).toEqual({
+      extractedValue: '4.5°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('temp-4C.jpg')).toEqual({
+      extractedValue: '-4°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('freezer_-18C.jpg')).toEqual({
+      extractedValue: '-18°C',
+      confidence: 0.52,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('tempA-4C.jpg')).toEqual({
+      extractedValue: '-4°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('temp -4.5C.jpg')).toEqual({
+      extractedValue: '-4.5°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('temperature--4C.jpg')).toEqual({
+      extractedValue: '-4°C',
+      confidence: 0.72,
+      source: 'filename',
+    });
+    expect(service.suggestTemperatureFromCapture('kitchen-photo.jpg')).toEqual({
+      extractedValue: null,
+      confidence: 0.05,
+      source: 'none',
+    });
+    expect(service.suggestTemperatureFromCapture('invoice-2026.jpg')).toEqual({
+      extractedValue: null,
+      confidence: 0.05,
+      source: 'none',
+    });
+  });
 });
