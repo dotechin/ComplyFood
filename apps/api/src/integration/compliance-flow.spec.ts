@@ -11,7 +11,7 @@ import { DocumentsService } from '../modules/documents/documents.service';
 import { ReportsService } from '../modules/reports/reports.service';
 import { AuditService } from '../modules/audit/audit.service';
 import { UserRole } from '../common/decorators/roles.decorator';
-import { LogStatus, LogType } from '../modules/logs/entities/log-entry.entity';
+import { LogEntry, LogStatus, LogType } from '../modules/logs/entities/log-entry.entity';
 import { User } from '../modules/users/entities/user.entity';
 import { Organization } from '../modules/organizations/entities/organization.entity';
 import { Location } from '../modules/organizations/entities/location.entity';
@@ -66,7 +66,9 @@ describe('Compliance integration flow', () => {
 
   afterEach(async () => {
     await cleanupTestStorage();
-    await dataSource.destroy();
+    if (dataSource?.isInitialized) {
+      await dataSource.destroy();
+    }
   });
 
   it('covers bootstrap, organization/user setup, and password reset flows', async () => {

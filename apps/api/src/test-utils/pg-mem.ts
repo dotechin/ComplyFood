@@ -5,9 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { rm } from 'fs/promises';
 import { join } from 'path';
-import { newDb } from 'pg-mem';
+import { DataType, newDb } from 'pg-mem';
 import { AuditInterceptor } from '../common/interceptors/audit.interceptor';
 import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
@@ -59,6 +60,12 @@ export async function createTestDataSource() {
   const db = newDb({ autoCreateForeignKeyIndices: true });
   db.public.registerFunction({ name: 'current_database', implementation: () => 'complyfood_test' });
   db.public.registerFunction({ name: 'version', implementation: () => 'PostgreSQL 16.0' });
+  db.public.registerFunction({
+    name: 'uuid_generate_v4',
+    impure: true,
+    returns: DataType.uuid,
+    implementation: () => randomUUID(),
+  });
   db.public.interceptQueries((sql) => {
     if (/^LOCK TABLE /i.test(sql)) {
       return [];
@@ -126,9 +133,14 @@ export async function createTestApp() {
   return { app, dataSource };
 }
 
-export async function destroyTestApp(app: INestApplication, dataSource: { destroy(): Promise<void> }) {
+export async function destroyTestApp(
+  app: INestApplication,
+  dataSource: { destroy(): Promise<void>; isInitialized?: boolean },
+) {
   await app.close();
-  await dataSource.destroy();
+  if (dataSource.isInitialized !== false) {
+    await dataSource.destroy();
+  }
 }
 
 export async function cleanupTestStorage() {
