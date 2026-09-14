@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { DocumentCategory, type Document, type LogEntry } from '@complyfood/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { DocumentCategory, UserRole, type Document, type LogEntry, type User } from '@complyfood/shared';
 import { apiDownload, apiGet, apiUpload } from '../../../lib/api';
 
 const CATEGORY_OPTIONS = [
@@ -25,6 +25,7 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
 };
 
 export default function DocumentsPage() {
+  const [user, setUser] = useState<User | null>(null);
   const [docs, setDocs] = useState<Document[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,10 +35,12 @@ export default function DocumentsPage() {
   const [notes, setNotes] = useState('');
   const [filterCategory, setFilterCategory] = useState<DocumentCategory | ''>('');
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
-      .then(([documents, entries]) => {
+    Promise.all([apiGet<User>('/users/me'), apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
+      .then(([me, documents, entries]) => {
+        setUser(me);
         setDocs(documents);
         setLogs(entries);
       })
@@ -63,6 +66,9 @@ export default function DocumentsPage() {
     const document = await apiUpload<Document>('/documents', formData);
     setDocs((prev) => [document, ...prev]);
     setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setLinkedEntryId('');
     setCategory(DocumentCategory.GENERAL);
     setNotes('');
@@ -96,6 +102,13 @@ export default function DocumentsPage() {
   );
 
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
+  const uploadCategoryOptions = useMemo(
+    () =>
+      user?.role === UserRole.ADMIN
+        ? CATEGORY_OPTIONS
+        : CATEGORY_OPTIONS.filter((option) => option !== DocumentCategory.HACCP_MANUAL),
+    [user],
+  );
 
   return (
     <div>
@@ -109,6 +122,7 @@ export default function DocumentsPage() {
         <label className="space-y-1 text-sm text-gray-700">
           <span className="font-medium">File</span>
           <input
+            ref={fileInputRef}
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -127,7 +141,7 @@ export default function DocumentsPage() {
             }}
             className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
-            {CATEGORY_OPTIONS.map((option) => (
+            {uploadCategoryOptions.map((option) => (
               <option key={option} value={option}>
                 {CATEGORY_LABELS[option]}
               </option>
