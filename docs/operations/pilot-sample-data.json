@@ -1,0 +1,121 @@
+{
+  "generatedFor": "restaurant-trattoria-beta",
+  "businesses": [
+    {
+      "organizationName": "Trattoria Aurora",
+      "organizationCategory": "restaurant",
+      "organizationAddress": "Via Roma 12, Florence",
+      "admin": {
+        "email": "owner+aurora@example.com",
+        "temporaryPassword": "<set-in-staging>"
+      },
+      "users": [
+        {
+          "email": "chef+aurora@example.com",
+          "role": "staff",
+          "temporaryPassword": "<set-in-staging>"
+        },
+        {
+          "email": "service+aurora@example.com",
+          "role": "staff",
+          "temporaryPassword": "<set-in-staging>"
+        }
+      ],
+      "location": {
+        "name": "Main kitchen",
+        "address": "Via Roma 12, Florence"
+      },
+      "presets": [
+        {
+          "type": "temperature",
+          "defaults": {
+            "item": "Fridge 1",
+            "temperature": "4"
+          },
+          "schedule": {
+            "active": true,
+            "weekdays": [0, 1, 2, 3, 4, 5, 6]
+          }
+        },
+        {
+          "type": "cleaning",
+          "defaults": {
+            "task": "Opening sanitation"
+          },
+          "schedule": {
+            "active": true,
+            "weekdays": [0, 1, 2, 3, 4, 5, 6]
+          }
+        }
+      ],
+      "reminders": [
+        {
+          "type": "temperature",
+          "cronExpression": "0 6 * * *",
+          "message": "Complete opening temperature checks"
+        },
+        {
+          "type": "cleaning",
+          "cronExpression": "0 22 * * *",
+          "message": "Complete end-of-day sanitation checks"
+        }
+      ],
+      "documents": ["haccp_manual", "permit", "certificate", "procedure", "store_layout"]
+    },
+    {
+      "organizationName": "Osteria del Mercato",
+      "organizationCategory": "trattoria",
+      "organizationAddress": "Piazza del Mercato 4, Bologna",
+      "admin": {
+        "email": "owner+mercato@example.com",
+        "temporaryPassword": "<set-in-staging>"
+      },
+      "users": [
+        {
+          "email": "prep+mercato@example.com",
+          "role": "staff",
+          "temporaryPassword": "<set-in-staging>"
+        },
+        {
+          "email": "closing+mercato@example.com",
+          "role": "staff",
+          "temporaryPassword": "<set-in-staging>"
+        }
+      ],
+      "location": {
+        "name": "Primary site",
+        "address": "Piazza del Mercato 4, Bologna"
+      },
+      "presets": [
+        {
+          "type": "receiving",
+          "defaults": {
+            "supplier": "Daily produce delivery"
+          },
+          "schedule": {
+            "active": true,
+            "weekdays": [1, 2, 3, 4, 5, 6]
+          }
+        },
+        {
+          "type": "checklist",
+          "defaults": {
+            "name": "Opening checklist"
+          },
+          "schedule": {
+            "active": true,
+            "weekdays": [0, 1, 2, 3, 4, 5, 6]
+          }
+        }
+      ],
+      "reminders": [
+        {
+          "type": "receiving",
+          "cronExpression": "0 8 * * *",
+          "message": "Confirm delivery intake checks"
+        }
+      ],
+      "documents": ["haccp_manual", "permit", "inspection_evidence"]
+    }
+  ]
+}
