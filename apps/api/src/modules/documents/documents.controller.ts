@@ -55,6 +55,9 @@ export class DocumentsController {
     @Body() body: UploadDocumentDto,
   ) {
     if (!file) throw new BadRequestException('File is required');
+    if (body.category === DocumentCategory.HACCP_MANUAL && body.linkedEntryId) {
+      throw new BadRequestException('HACCP manual files cannot be linked to log entries');
+    }
     return this.documentsService.upload(user.orgId, user.id, file, body);
   }
 

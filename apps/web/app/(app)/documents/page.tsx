@@ -90,67 +90,82 @@ export default function DocumentsPage() {
         <SummaryCard label="Log-linked docs" value={logLinkedDocs.length} />
       </div>
       <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
-        <input
-          type="file"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
-        <select
-          value={category}
-          onChange={(e) => {
-            const nextCategory = e.target.value as DocumentCategory;
-            setCategory(nextCategory);
-            if (nextCategory === DocumentCategory.HACCP_MANUAL) {
-              setLinkedEntryId('');
-            }
-          }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {CATEGORY_LABELS[option]}
+        <label className="space-y-1 text-sm text-gray-700">
+          <span className="font-medium">File</span>
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="space-y-1 text-sm text-gray-700">
+          <span className="font-medium">Category</span>
+          <select
+            value={category}
+            onChange={(e) => {
+              const nextCategory = e.target.value as DocumentCategory;
+              setCategory(nextCategory);
+              if (nextCategory === DocumentCategory.HACCP_MANUAL) {
+                setLinkedEntryId('');
+              }
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {CATEGORY_LABELS[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm text-gray-700">
+          <span className="font-medium">Linked log entry</span>
+          <select
+            value={linkedEntryId}
+            onChange={(e) => setLinkedEntryId(e.target.value)}
+            disabled={category === DocumentCategory.HACCP_MANUAL}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">
+              {category === DocumentCategory.HACCP_MANUAL ? 'Manual files are organization-level only' : 'No linked log entry'}
             </option>
-          ))}
-        </select>
-        <select
-          value={linkedEntryId}
-          onChange={(e) => setLinkedEntryId(e.target.value)}
-          disabled={category === DocumentCategory.HACCP_MANUAL}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="">
-            {category === DocumentCategory.HACCP_MANUAL ? 'Manual files are organization-level only' : 'No linked log entry'}
-          </option>
-          {logs.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.type} · {new Date(entry.createdAt).toLocaleDateString()}
-            </option>
-          ))}
-        </select>
+            {logs.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.type} · {new Date(entry.createdAt).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="submit"
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Upload document
         </button>
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm md:col-span-2"
-          placeholder="Optional notes (e.g. fire permit 2026, signed layout)"
-        />
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="">All categories</option>
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {CATEGORY_LABELS[option]}
-            </option>
-          ))}
-        </select>
+        <label className="space-y-1 text-sm text-gray-700 md:col-span-2">
+          <span className="font-medium">Notes</span>
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Optional notes (e.g. fire permit 2026, signed layout)"
+          />
+        </label>
+        <label className="space-y-1 text-sm text-gray-700">
+          <span className="font-medium">Filter by category</span>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">All categories</option>
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {CATEGORY_LABELS[option]}
+              </option>
+            ))}
+          </select>
+        </label>
         {error && <p className="text-sm text-red-600 md:col-span-3">{error}</p>}
       </form>
       {loading ? (
