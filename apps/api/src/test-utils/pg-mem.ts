@@ -49,6 +49,7 @@ export const TEST_ENTITIES = [
 export const TEST_CONFIG = {
   jwtSecret: 'test-secret',
   jwtExpiresIn: '1d',
+  passwordResetTokenSalt: 'test-reset-token-salt',
   webUrl: 'http://localhost:3000',
   nodeEnv: 'test',
   storageDriver: 'local',
@@ -58,6 +59,7 @@ function applyRuntimeTestEnv() {
   process.env.WEB_URL ??= TEST_CONFIG.webUrl;
   process.env.NODE_ENV ??= TEST_CONFIG.nodeEnv;
   process.env.STORAGE_DRIVER ??= TEST_CONFIG.storageDriver;
+  process.env.PASSWORD_RESET_TOKEN_SALT ??= TEST_CONFIG.passwordResetTokenSalt;
 }
 
 export async function createTestDataSource() {

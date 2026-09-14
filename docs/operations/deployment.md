@@ -10,6 +10,7 @@
 ## Required environment variables
 - `DATABASE_URL`
 - `JWT_SECRET`
+- `PASSWORD_RESET_TOKEN_SALT`
 - `JWT_EXPIRES_IN`
 - `WEB_URL`
 - `NEXT_PUBLIC_API_URL`

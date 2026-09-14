@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes, scryptSync } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../../common/decorators/roles.decorator';
 import { Organization } from '../organizations/entities/organization.entity';
@@ -117,6 +117,7 @@ export class AuthService {
   }
 
   private hashToken(token: string) {
-    return createHash('sha256').update(token).digest('hex');
+    const salt = process.env.PASSWORD_RESET_TOKEN_SALT || process.env.JWT_SECRET || 'dev-reset-token-salt';
+    return scryptSync(token, salt, 64).toString('hex');
   }
 }

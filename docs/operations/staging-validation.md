@@ -12,6 +12,7 @@ Verify the release candidate in a production-like environment before pilot onboa
 ## Environment checklist
 - `DATABASE_URL`
 - `JWT_SECRET`
+- `PASSWORD_RESET_TOKEN_SALT`
 - `JWT_EXPIRES_IN`
 - `WEB_URL`
 - `NEXT_PUBLIC_API_URL`
