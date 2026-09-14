@@ -1,14 +1,14 @@
 ---
 title: "ComplyFood — Project Plan"
 subtitle: "HACCP Compliance Automation Platform"
-date: "2026-08-25"
-version: "1.1"
+date: "2026-09-14"
+version: "1.2"
 status: "Active working plan"
 ---
 
 # ComplyFood — Project Plan
 
-**Version:** 1.1 | **Date:** 2026-08-25 | **Status:** Active working plan
+**Version:** 1.2 | **Date:** 2026-09-14 | **Status:** Active working plan
 
 ---
 
@@ -136,6 +136,12 @@ The exact calibration of preset values (temperature thresholds, task frequencies
 
 The repository is no longer at the concept-only stage. The monorepo, NestJS API, Next.js web app, shared packages, database migration, and initial domain modules are already implemented. The current project need is to rebaseline delivery status, close the highest-value workflow gaps, and start using this plan as a live execution document instead of a draft.
 
+### Evidence-based RAG summary
+
+- **Green** — Core product foundation is implemented in-repo: monorepo/workspace, auth/bootstrap, organization and user setup, logs, checklists, overrides, automation, dashboard, reports, documents, manual flows, and CI.
+- **Amber** — Automated proof is stronger than before because backend unit, integration, and API end-to-end smoke coverage now exist, but release readiness is still only partially demonstrated without staging and performance evidence.
+- **Red** — There is still no recorded in-repo evidence of successful live staging validation, performance measurements, or completed pilot onboarding results.
+
 ### Current status summary
 
 | Area | Status | Notes |
@@ -145,10 +151,11 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 | Frontend shell and navigation | In place | Main authenticated app pages and auth pages exist |
 | Core schema and modules | In place | Organizations, users, logs, overrides, documents, audit, reports, automation |
 | CI/CD | Implemented | GitHub Actions runs lint, build, and tests |
+| Automated regression coverage | Implemented foundation | Backend unit tests, pg-mem-backed integration tests, and API end-to-end smoke tests now cover the core admin/staff flows |
 | Password recovery | Implemented foundation | Request and confirm reset flows exist; production delivery details still need operational verification |
 | Daily operations workflow | Implemented foundation | Daily logs UI, checklist task generation, and override submission are available |
 | Reporting and storage | Implemented foundation | Summary, filtered exports, incident/override summaries, and S3-compatible storage are in place |
-| Hardening and release readiness | In progress | Automated tests and delivery docs exist, but staging verification and beta execution are still pending |
+| Hardening and release readiness | In progress | Automated tests and delivery docs exist, but staging verification evidence, performance measurements, and beta execution are still pending |
 
 ---
 
@@ -189,7 +196,9 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
 
 ### Phase 5 — Hardening and Release
 - [x] Security review and authorization hardening
-- [ ] Performance optimisation
+- [x] Automated regression coverage for critical backend workflows
+- [ ] Staging validation with captured evidence
+- [ ] Performance optimisation based on measured bottlenecks
 - [ ] Beta testing with real business users
 - [x] Deployment preparation documentation
 - [x] User documentation
@@ -236,17 +245,18 @@ The repository is no longer at the concept-only stage. The monorepo, NestJS API,
    - Replace local document persistence with the planned S3-compatible storage model
 
 5. **Phase 5 — Hardening and release**
-   - Add integration and end-to-end tests for critical flows
-   - Run security and authorization review
-   - Prepare beta rollout, production deployment, and user documentation
+   - Keep integration and API end-to-end tests green for critical flows
+   - Run staging validation and capture evidence for auth, reminders, storage, and exports
+   - Measure dashboard, reports, and document-transfer performance in staging
+   - Prepare beta rollout only after the release-readiness proof gates are green
 
 ## Immediate Next Steps
 
 1. [x] Define the first target business profile and map its required HACCP forms (`docs/product/target-sector-definition.md`)
-2. [ ] Validate reminder timing and document storage against a real staging environment
-3. [ ] Expand test coverage from unit tests to integration and end-to-end scenarios
-4. [ ] Prepare pilot data and onboard the first beta businesses
-5. [ ] Profile performance of report generation, dashboard loading, and document transfer
+2. [x] Expand automated coverage from unit tests to integration and API end-to-end smoke scenarios
+3. [ ] Validate reminder timing and document storage against a real staging environment and record evidence
+4. [ ] Profile report generation, dashboard loading, and document transfer in staging and record the timings
+5. [ ] Prepare pilot data and onboard the first beta businesses only after staging and performance checks pass
 
 ---
 

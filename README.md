@@ -49,13 +49,15 @@ ComplyFood/
 ```
 
 ### Roadmap
-1. **Phase 1 – Rebaseline and Foundation Completion:** align docs with implementation, add CI, complete password recovery
-2. **Phase 2 – Core Operations Workflow:** daily logs UI, checklists in use, override flow wired end to end
-3. **Phase 3 – Automation Execution:** presets, generated daily forms, reminders, dashboard improvements
-4. **Phase 4 – Reporting and Storage Completion:** exports, filters, incident summaries, production-grade document storage
+1. **Phase 1 – Rebaseline and Foundation Completion:** align docs and status reporting with verified implementation evidence
+2. **Phase 2 – Core Operations Workflow:** keep daily logs, checklists, and override workflows covered by automated regression tests
+3. **Phase 3 – Automation Execution:** keep presets, generated daily forms, reminders, and dashboard flows covered by automated regression tests
+4. **Phase 4 – Reporting and Storage Completion:** keep exports, filters, incident summaries, and document storage covered by automated regression tests
+5. **Phase 5 – Release Readiness Proof:** execute staging validation, record performance evidence, and complete beta onboarding only after the proof gates pass
 
 ### Current status
 - Monorepo, NestJS API, and Next.js web app are already in place
 - Core modules now include password reset, daily logs, checklists, overrides, reports, documents, audit, reminders, and automation
-- CI now runs lint, build, and tests through GitHub Actions
-- Current priorities are staging validation (S3/reminders), integration and e2e coverage, beta onboarding, and performance profiling
+- CI runs install, lint, build, and test through GitHub Actions
+- Backend automated coverage now includes unit tests, pg-mem-backed integration tests, and API end-to-end smoke tests
+- Release readiness still depends on captured staging validation evidence, performance results, and live beta onboarding outcomes

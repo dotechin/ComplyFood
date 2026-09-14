@@ -24,6 +24,7 @@ describe('AuthService', () => {
     service = new AuthService(usersService as any, jwtService as any, dataSource as any);
     process.env.WEB_URL = 'http://localhost:3000';
     process.env.NODE_ENV = 'test';
+    process.env.PASSWORD_RESET_TOKEN_SALT = 'test-reset-token-salt';
   });
 
   it('returns a development reset link for an existing user', async () => {

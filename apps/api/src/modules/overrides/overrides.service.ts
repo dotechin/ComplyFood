@@ -1,15 +1,26 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Allow, IsString, IsUUID, MinLength } from 'class-validator';
 import { OverrideRecord } from './entities/override-record.entity';
 import { LogsService } from '../logs/logs.service';
 import { LogStatus } from '../logs/entities/log-entry.entity';
 
 export class CreateOverrideDto {
+  @IsUUID()
   logEntryId: string;
+
+  @IsString()
   fieldName: string;
+
+  @Allow()
   originalValue?: any;
+
+  @Allow()
   newValue: any;
+
+  @IsString()
+  @MinLength(3)
   reason: string;
 }
 
