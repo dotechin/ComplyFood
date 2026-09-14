@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Post,
@@ -17,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { DocumentCategory } from '@complyfood/shared';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { UserRole } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { DocumentsService } from './documents.service';
@@ -55,6 +57,9 @@ export class DocumentsController {
     @Body() body: UploadDocumentDto,
   ) {
     if (!file) throw new BadRequestException('File is required');
+    if (body.category === DocumentCategory.HACCP_MANUAL && user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only admins can upload HACCP manual files');
+    }
     if (body.category === DocumentCategory.HACCP_MANUAL && body.linkedEntryId) {
       throw new BadRequestException('HACCP manual files cannot be linked to log entries');
     }

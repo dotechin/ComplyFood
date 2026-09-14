@@ -1,5 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DocumentCategory } from '@complyfood/shared';
+import { UserRole } from '../../common/decorators/roles.decorator';
 import { DocumentsController } from './documents.controller';
 
 describe('DocumentsController', () => {
@@ -20,7 +21,7 @@ describe('DocumentsController', () => {
   it('rejects HACCP manual files linked to log entries', () => {
     expect(() =>
       controller.upload(
-        { orgId: 'org-1', id: 'user-1' },
+        { orgId: 'org-1', id: 'user-1', role: UserRole.ADMIN },
         { originalname: 'manual.pdf' },
         {
           category: DocumentCategory.HACCP_MANUAL,
@@ -28,6 +29,19 @@ describe('DocumentsController', () => {
         },
       ),
     ).toThrow(BadRequestException);
+    expect(documentsService.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects HACCP manual uploads from non-admin users', () => {
+    expect(() =>
+      controller.upload(
+        { orgId: 'org-1', id: 'user-1', role: UserRole.STAFF },
+        { originalname: 'manual.pdf' },
+        {
+          category: DocumentCategory.HACCP_MANUAL,
+        },
+      ),
+    ).toThrow(ForbiddenException);
     expect(documentsService.upload).not.toHaveBeenCalled();
   });
 });
