@@ -9,7 +9,6 @@ import { OverridesService } from '../modules/overrides/overrides.service';
 import { AutomationService } from '../modules/automation/automation.service';
 import { DocumentsService } from '../modules/documents/documents.service';
 import { ReportsService } from '../modules/reports/reports.service';
-import { AuditService } from '../modules/audit/audit.service';
 import { UserRole } from '../common/decorators/roles.decorator';
 import { LogEntry, LogStatus, LogType } from '../modules/logs/entities/log-entry.entity';
 import { User } from '../modules/users/entities/user.entity';
@@ -20,7 +19,6 @@ import { PresetRule } from '../modules/automation/entities/preset-rule.entity';
 import { ReminderRule } from '../modules/automation/entities/reminder-rule.entity';
 import { ReminderEvent } from '../modules/automation/entities/reminder-event.entity';
 import { Document } from '../modules/documents/entities/document.entity';
-import { AuditEvent } from '../modules/audit/entities/audit-event.entity';
 import { ChecklistTemplate } from '../modules/checklists/entities/checklist-template.entity';
 import { TEST_CONFIG, cleanupTestStorage, createTestDataSource } from '../test-utils/pg-mem';
 
@@ -34,7 +32,6 @@ describe('Compliance integration flow', () => {
   let automationService: AutomationService;
   let documentsService: DocumentsService;
   let reportsService: ReportsService;
-  let auditService: AuditService;
 
   beforeEach(async () => {
     ({ dataSource } = await createTestDataSource());
@@ -56,7 +53,6 @@ describe('Compliance integration flow', () => {
     );
     documentsService = new DocumentsService(dataSource.getRepository(Document));
     reportsService = new ReportsService(logsService, overridesService);
-    auditService = new AuditService(dataSource.getRepository(AuditEvent));
     authService = new AuthService(
       usersService,
       new JwtService({ secret: TEST_CONFIG.jwtSecret }),
@@ -190,20 +186,6 @@ describe('Compliance integration flow', () => {
 
     const pdf = await reportsService.generatePdf(orgId);
     expect(pdf.toString('utf8')).toContain('%PDF-1.4');
-
-    await dataSource.getRepository(AuditEvent).save(
-      dataSource.getRepository(AuditEvent).create({
-        orgId,
-        entityType: 'LogsController',
-        entityId: confirmed.id,
-        action: 'PATCH',
-        userId: bootstrap.user.id,
-        payload: { path: '/api/v1/logs' },
-      }),
-    );
-
-    const auditEvents = await auditService.findAll(orgId, 'LogsController', confirmed.id);
-    expect(auditEvents).toHaveLength(1);
 
     const checklistTemplateRepo = dataSource.getRepository(ChecklistTemplate);
     const template = await checklistTemplateRepo.save(

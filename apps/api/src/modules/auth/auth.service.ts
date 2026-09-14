@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -119,7 +119,7 @@ export class AuthService {
   private hashToken(token: string) {
     const salt = process.env.PASSWORD_RESET_TOKEN_SALT;
     if (!salt) {
-      throw new Error('PASSWORD_RESET_TOKEN_SALT is required');
+      throw new InternalServerErrorException('PASSWORD_RESET_TOKEN_SALT is not configured');
     }
     return scryptSync(token, salt, 64).toString('hex');
   }

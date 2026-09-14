@@ -50,6 +50,11 @@ describe('ComplyFood API workflows (e2e)', () => {
     );
     expect(staffUser.status).toBe(201);
 
+    const audit = await getJson('/audit', adminToken);
+    expect(audit.status).toBe(200);
+    const userCreateEvent = audit.body.find((event: any) => event.entityType === 'UsersController');
+    expect(userCreateEvent?.payload?.body?.password).toBe('[REDACTED]');
+
     const preset = await postJson(
       '/automation/presets',
       {
