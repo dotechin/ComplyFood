@@ -135,7 +135,7 @@ export class LogsService {
 
   suggestTemperatureFromCapture(fileName: string) {
     const normalized = fileName.toLowerCase();
-    const match = normalized.match(/(-?\d+(?:[.,]\d+)?)\s?(?:°?\s?[cf])?/);
+    const match = normalized.match(/(?:^|[^a-z0-9])(-?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s?(?:°?\s?[cf])?/);
     if (!match) {
       return { extractedValue: null, confidence: 0.05, source: 'none' as const };
     }
