@@ -10,6 +10,8 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -46,6 +48,7 @@ export class DocumentsController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   upload(
     @CurrentUser() user: any,
     @UploadedFile() file: any,
@@ -56,6 +59,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   findAll(@CurrentUser() user: any, @Query() query: FindDocumentsQueryDto) {
     return this.documentsService.findByOrg(user.orgId, query.category);
   }
