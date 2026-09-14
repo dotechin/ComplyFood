@@ -110,6 +110,13 @@ export default function DocumentsPage() {
     [user],
   );
 
+  useEffect(() => {
+    if (!uploadCategoryOptions.includes(category)) {
+      setCategory(uploadCategoryOptions[0] ?? DocumentCategory.GENERAL);
+      setLinkedEntryId('');
+    }
+  }, [category, uploadCategoryOptions]);
+
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Documents</h1>
