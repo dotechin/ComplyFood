@@ -1,7 +1,7 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { DocumentCategory } from '@complyfood/shared';
 import { UserRole } from '../../common/decorators/roles.decorator';
-import { DocumentsController } from './documents.controller';
+import { DocumentsController, FindDocumentsQueryDto } from './documents.controller';
 
 describe('DocumentsController', () => {
   const documentsService = {
@@ -43,5 +43,16 @@ describe('DocumentsController', () => {
       ),
     ).toThrow(BadRequestException);
     expect(documentsService.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid category query values', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true });
+
+    await expect(
+      pipe.transform(
+        { category: 'invalid-category' },
+        { type: 'query', metatype: FindDocumentsQueryDto, data: '' },
+      ),
+    ).rejects.toThrow(BadRequestException);
   });
 });

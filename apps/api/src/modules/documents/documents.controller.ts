@@ -37,7 +37,7 @@ class UploadDocumentDto {
   notes?: string;
 }
 
-class FindDocumentsQueryDto {
+export class FindDocumentsQueryDto {
   @IsOptional()
   @IsEnum(DocumentCategory)
   category?: DocumentCategory;

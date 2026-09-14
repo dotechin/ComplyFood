@@ -80,10 +80,10 @@ export class DocumentsService {
   }
 
   findByOrg(orgId: string, category?: DocumentCategory) {
-    const where = this.isValidCategory(category) ? { orgId, category } : { orgId };
+    const where = category ? { orgId, category } : { orgId };
     return this.repo.find({
-    where,
-    order: { createdAt: 'DESC' },
+      where,
+      order: { createdAt: 'DESC' },
     });
   }
 

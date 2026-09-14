@@ -83,15 +83,4 @@ describe('DocumentsService', () => {
       order: { createdAt: 'DESC' },
     });
   });
-
-  it('ignores invalid category filters and lists all organization documents', async () => {
-    repo.find.mockResolvedValue([]);
-
-    await service.findByOrg('org-1', 'invalid-category' as DocumentCategory);
-
-    expect(repo.find).toHaveBeenCalledWith({
-      where: { orgId: 'org-1' },
-      order: { createdAt: 'DESC' },
-    });
-  });
 });
