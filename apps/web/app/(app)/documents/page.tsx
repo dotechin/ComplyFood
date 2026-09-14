@@ -57,7 +57,7 @@ export default function DocumentsPage() {
     if (notes.trim()) {
       formData.append('notes', notes.trim());
     }
-    if (linkedEntryId) {
+    if (linkedEntryId && category !== DocumentCategory.HACCP_MANUAL) {
       formData.append('linkedEntryId', linkedEntryId);
     }
     const document = await apiUpload<Document>('/documents', formData);
@@ -97,7 +97,13 @@ export default function DocumentsPage() {
         />
         <select
           value={category}
-          onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+          onChange={(e) => {
+            const nextCategory = e.target.value as DocumentCategory;
+            setCategory(nextCategory);
+            if (nextCategory === DocumentCategory.HACCP_MANUAL) {
+              setLinkedEntryId('');
+            }
+          }}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
           {CATEGORY_OPTIONS.map((option) => (
@@ -109,9 +115,12 @@ export default function DocumentsPage() {
         <select
           value={linkedEntryId}
           onChange={(e) => setLinkedEntryId(e.target.value)}
+          disabled={category === DocumentCategory.HACCP_MANUAL}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="">No linked log entry</option>
+          <option value="">
+            {category === DocumentCategory.HACCP_MANUAL ? 'Manual files are organization-level only' : 'No linked log entry'}
+          </option>
           {logs.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.type} · {new Date(entry.createdAt).toLocaleDateString()}
@@ -207,7 +216,7 @@ function DocumentTable({
                 <td className="px-4 py-3 font-medium text-gray-800">{doc.name}</td>
                 <td className="px-4 py-3 text-gray-500">{CATEGORY_LABELS[doc.category]}</td>
                 <td className="px-4 py-3 text-gray-500">
-                  {linkedLog ? `${linkedLog.type} log` : 'Organization'}
+                  {linkedLog ? `${linkedLog.type} log` : doc.linkedEntryId ? 'Linked log' : 'Organization'}
                 </td>
                 <td className="px-4 py-3 text-gray-500">{doc.notes || '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{new Date(doc.createdAt).toLocaleDateString()}</td>

@@ -56,4 +56,15 @@ describe('DocumentsService', () => {
       order: { createdAt: 'DESC' },
     });
   });
+
+  it('lists all organization documents when no category filter is provided', async () => {
+    repo.find.mockResolvedValue([]);
+
+    await service.findByOrg('org-1');
+
+    expect(repo.find).toHaveBeenCalledWith({
+      where: { orgId: 'org-1' },
+      order: { createdAt: 'DESC' },
+    });
+  });
 });
