@@ -167,6 +167,7 @@ export default function ManualPage() {
 
   const uploadExistingManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    const form = e.currentTarget;
     if (!manualFile) {
       setError('Choose a HACCP manual file to upload.');
       return;
@@ -183,6 +184,7 @@ export default function ManualPage() {
       }
       const uploaded = await apiUpload<Document>('/documents', formData);
       setDocuments((prev) => [uploaded, ...prev]);
+      form.reset();
       setManualFile(null);
       setManualNotes('');
       setMessage('Existing HACCP manual uploaded.');
