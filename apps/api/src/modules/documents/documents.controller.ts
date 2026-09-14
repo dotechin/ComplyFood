@@ -21,7 +21,6 @@ import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { UserRole } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UserRole } from '../../common/decorators/roles.decorator';
 import { DocumentsService } from './documents.service';
 
 class UploadDocumentDto {

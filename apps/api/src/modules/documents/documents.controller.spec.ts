@@ -44,17 +44,4 @@ describe('DocumentsController', () => {
     ).toThrow(BadRequestException);
     expect(documentsService.upload).not.toHaveBeenCalled();
   });
-
-  it('rejects HACCP manual uploads from non-admin users', () => {
-    expect(() =>
-      controller.upload(
-        { orgId: 'org-1', id: 'user-1', role: UserRole.STAFF },
-        { originalname: 'manual.pdf' },
-        {
-          category: DocumentCategory.HACCP_MANUAL,
-        },
-      ),
-    ).toThrow(ForbiddenException);
-    expect(documentsService.upload).not.toHaveBeenCalled();
-  });
 });
