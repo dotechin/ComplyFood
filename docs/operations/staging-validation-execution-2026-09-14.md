@@ -1,7 +1,7 @@
 # Staging Validation Execution — 2026-09-14
 
 ## Objective
-Execute the staging validation cycle defined in `/home/runner/work/ComplyFood/ComplyFood/docs/operations/staging-validation.md` and capture release-readiness evidence before performance profiling or pilot onboarding.
+Execute the staging validation cycle defined in `docs/operations/staging-validation.md` and capture release-readiness evidence before performance profiling or pilot onboarding.
 
 ## Execution status
 - **State:** Blocked
@@ -79,4 +79,4 @@ This staging validation step is complete only when:
 3. Evidence for login, password reset, reminders, documents, CSV export, PDF export, and deployment parity is captured.
 4. Any failures are fixed and re-validated.
 
-Only after these conditions are met can the next step begin: `/home/runner/work/ComplyFood/ComplyFood/docs/operations/performance-checks.md`.
+Only after these conditions are met can the next step begin: `docs/operations/performance-checks.md`.

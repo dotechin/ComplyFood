@@ -9,7 +9,7 @@ Capture the real execution evidence that is still missing from the repository be
 - **Red:** there is no recorded evidence yet for successful staging validation, measured performance, or completed pilot onboarding
 
 ## Active execution record
-- Current staging validation record: `/home/runner/work/ComplyFood/ComplyFood/docs/operations/staging-validation-execution-2026-09-14.md`
+- Current staging validation record: `docs/operations/staging-validation-execution-2026-09-14.md`
 - Current state: **Blocked** (staging runtime access and deployment evidence not yet available in this session)
 - Rule: do not start performance checks or pilot onboarding until the staging validation execution record is fully passed.
 
