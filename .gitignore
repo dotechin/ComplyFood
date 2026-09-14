@@ -132,6 +132,9 @@ dist
 # pnpm
 .pnpm-store
 
+# Turborepo local cache
+.turbo/cache/
+
 # yarn v3
 .pnp.*
 .yarn/*
