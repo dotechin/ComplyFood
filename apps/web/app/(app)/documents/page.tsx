@@ -102,7 +102,7 @@ export default function DocumentsPage() {
   );
 
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
-  const uploadCategoryOptions = useMemo(
+  const uploadCategoryOptions = useMemo<readonly DocumentCategory[]>(
     () =>
       user?.role === UserRole.ADMIN
         ? CATEGORY_OPTIONS
