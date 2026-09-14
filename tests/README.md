@@ -1,18 +1,19 @@
-# ComplyFood Integration & E2E Tests
+# ComplyFood Automated Test Coverage
 
-This directory contains integration and end-to-end test suites.
+This repository currently has unit, integration, and API end-to-end coverage for the backend.
 
 ## Structure
 
-- `integration/` — Supertest API integration tests (runs against a real DB)
-- `e2e/` — Playwright browser end-to-end tests
+- `apps/api/src/**/*.spec.ts` — Jest unit and pg-mem-backed integration tests
+- `apps/api/test/*.e2e-spec.ts` — Jest API end-to-end smoke tests against a Nest app backed by pg-mem
+- `tests/` — shared test documentation and future cross-app test assets
 
 ## Running
 
 ```bash
-# Integration tests (from repo root)
+# Unit + integration tests (from repo root)
 pnpm test
 
-# E2E tests (requires the app to be running)
+# API E2E smoke tests
 pnpm test:e2e
 ```
