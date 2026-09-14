@@ -1,8 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { UserRole, type Document, type HaccpManualVersion, type ManualSection, type User } from '@complyfood/shared';
-import { apiDownload, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DocumentCategory,
+  UserRole,
+  type Document,
+  type HaccpManualVersion,
+  type ManualSection,
+  type User,
+} from '@complyfood/shared';
+import { apiDownload, apiGet, apiPatch, apiPost, apiUpload } from '../../../lib/api';
 
 const BUSINESS_TYPES = [
   'Independent Restaurant / Trattoria',
@@ -23,13 +30,24 @@ export default function ManualPage() {
   const [sectionContent, setSectionContent] = useState('');
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
   const [linkedDocumentIds, setLinkedDocumentIds] = useState<string[]>([]);
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualNotes, setManualNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const manualFileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedVersion = useMemo(
     () => versions.find((version) => version.id === selectedVersionId) ?? versions[0] ?? null,
     [selectedVersionId, versions],
+  );
+  const uploadedManuals = useMemo(
+    () => documents.filter((doc) => doc.category === DocumentCategory.HACCP_MANUAL),
+    [documents],
+  );
+  const supportingDocuments = useMemo(
+    () => documents.filter((doc) => doc.category !== DocumentCategory.HACCP_MANUAL),
+    [documents],
   );
 
   useEffect(() => {
@@ -148,6 +166,35 @@ export default function ManualPage() {
     await apiDownload(`/manual/${selectedVersion.id}/export/pdf`, `haccp-manual-v${selectedVersion.versionNumber}.pdf`);
   };
 
+  const uploadExistingManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualFile) {
+      setError('Choose a HACCP manual file to upload.');
+      return;
+    }
+
+    try {
+      setError('');
+      setMessage('');
+      const formData = new FormData();
+      formData.append('file', manualFile);
+      formData.append('category', DocumentCategory.HACCP_MANUAL);
+      if (manualNotes.trim()) {
+        formData.append('notes', manualNotes.trim());
+      }
+      const uploaded = await apiUpload<Document>('/documents', formData);
+      setDocuments((prev) => [uploaded, ...prev]);
+      setManualFile(null);
+      if (manualFileInputRef.current) {
+        manualFileInputRef.current.value = '';
+      }
+      setManualNotes('');
+      setMessage('Existing HACCP manual uploaded.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to upload manual');
+    }
+  };
+
   const saveFullVersion = async () => {
     if (!selectedVersion) return;
     const updatedSections: ManualSection[] = selectedVersion.sections.map((section) =>
@@ -184,7 +231,9 @@ export default function ManualPage() {
     return <p className="text-sm text-gray-500">Loading…</p>;
   }
 
-  if (user?.role !== UserRole.ADMIN) {
+  const isAdmin = user?.role === UserRole.ADMIN;
+
+  if (!isAdmin) {
     return <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">HACCP manual management is admin-only.</div>;
   }
 
@@ -197,23 +246,102 @@ export default function ManualPage() {
         {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
       </div>
 
-      <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]">
-        <select
-          value={businessType}
-          onChange={(e) => setBusinessType(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          {BUSINESS_TYPES.map((type) => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => void createTemplate()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Generate tailored template
-        </button>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]">
+          <label className="space-y-1 text-sm text-gray-700">
+            <span className="font-medium">Business type</span>
+            <select
+              value={businessType}
+              onChange={(e) => setBusinessType(e.target.value)}
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              {BUSINESS_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => void createTemplate()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Generate tailored template
+          </button>
+        </div>
+        {isAdmin && (
+          <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="font-medium">Manual file</span>
+              <input
+                ref={manualFileInputRef}
+                type="file"
+                onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="font-medium">Upload notes</span>
+              <input
+                value={manualNotes}
+                onChange={(e) => setManualNotes(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Optional notes about the uploaded manual"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+            >
+              Upload existing manual
+            </button>
+          </form>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-lg font-semibold text-gray-900">Uploaded manual files</h2>
+          <div className="space-y-2">
+            {uploadedManuals.length === 0 ? (
+              <p className="text-sm text-gray-500">No external manual uploaded yet.</p>
+            ) : (
+              uploadedManuals.map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {doc.notes || 'Uploaded manual file'} · {new Date(doc.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Download
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-lg font-semibold text-gray-900">Supporting compliance documents</h2>
+          <div className="space-y-2">
+            {supportingDocuments.length === 0 ? (
+              <p className="text-sm text-gray-500">Upload layouts, permits, certificates, and procedures in Documents.</p>
+            ) : (
+              supportingDocuments.slice(0, 5).map((doc) => (
+                <div key={doc.id} className="rounded-md border border-gray-200 px-3 py-2">
+                  <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {doc.category.replace(/_/g, ' ')}{doc.notes ? ` · ${doc.notes}` : ''}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -301,7 +429,7 @@ export default function ManualPage() {
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-gray-800">Link supporting documents</h3>
                 <div className="grid gap-2 md:grid-cols-2">
-                  {documents.map((doc) => {
+                  {supportingDocuments.map((doc) => {
                     const checked = linkedDocumentIds.includes(doc.id);
                     return (
                       <label key={doc.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">

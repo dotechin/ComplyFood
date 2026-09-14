@@ -8,6 +8,8 @@
 - Review reports, documents, and audit history
 - Use Exception Mode for controlled backdating/unlock actions with mandatory reason
 - Generate and maintain the HACCP Manual with version history and PDF export
+- Upload an existing HACCP manual file when the business already has one
+- Store organization-level compliance documents such as layouts, permits, certificates, procedures, and inspection evidence
 
 ## Staff
 - Review daily logs from the dashboard or the logs page
