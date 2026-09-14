@@ -122,5 +122,10 @@ describe('LogsService', () => {
       confidence: 0.05,
       source: 'none',
     });
+    expect(service.suggestTemperatureFromCapture('invoice-2026.jpg')).toEqual({
+      extractedValue: null,
+      confidence: 0.05,
+      source: 'none',
+    });
   });
 });

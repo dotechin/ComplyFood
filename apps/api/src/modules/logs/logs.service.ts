@@ -138,13 +138,13 @@ export class LogsService {
     const positiveTemperatureLabelMatch = normalized.match(
       /(?:temp|temperature)[-_ ]+(\d+(?:[.,]\d+)?)(?:°?\s?[cf])?/,
     );
-    const genericMatch = normalized.match(/-?\d+(?:[.,]\d+)?/);
+    const unitQualifiedMatch = normalized.match(/(-?\d+(?:[.,]\d+)?)\s*(?:°?\s*[cf])/);
 
-    if (!positiveTemperatureLabelMatch && !genericMatch) {
+    if (!positiveTemperatureLabelMatch && !unitQualifiedMatch) {
       return { extractedValue: null, confidence: 0.05, source: 'none' as const };
     }
 
-    const rawValue = (positiveTemperatureLabelMatch?.[1] ?? genericMatch?.[0] ?? '').replace(',', '.');
+    const rawValue = (positiveTemperatureLabelMatch?.[1] ?? unitQualifiedMatch?.[1] ?? '').replace(',', '.');
     return {
       extractedValue: `${rawValue}°C`,
       confidence: normalized.includes('temp') || normalized.includes('fridge') ? 0.72 : 0.52,
