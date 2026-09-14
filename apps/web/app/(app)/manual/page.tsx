@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DocumentCategory,
   UserRole,
@@ -35,6 +35,7 @@ export default function ManualPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const manualFileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedVersion = useMemo(
     () => versions.find((version) => version.id === selectedVersionId) ?? versions[0] ?? null,
@@ -167,7 +168,6 @@ export default function ManualPage() {
 
   const uploadExistingManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    const form = e.currentTarget;
     if (!manualFile) {
       setError('Choose a HACCP manual file to upload.');
       return;
@@ -184,8 +184,10 @@ export default function ManualPage() {
       }
       const uploaded = await apiUpload<Document>('/documents', formData);
       setDocuments((prev) => [uploaded, ...prev]);
-      form.reset();
       setManualFile(null);
+      if (manualFileInputRef.current) {
+        manualFileInputRef.current.value = '';
+      }
       setManualNotes('');
       setMessage('Existing HACCP manual uploaded.');
     } catch (err) {
@@ -229,7 +231,9 @@ export default function ManualPage() {
     return <p className="text-sm text-gray-500">Loading…</p>;
   }
 
-  if (user?.role !== UserRole.ADMIN) {
+  const isAdmin = user?.role === UserRole.ADMIN;
+
+  if (!isAdmin) {
     return <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">HACCP manual management is admin-only.</div>;
   }
 
@@ -264,31 +268,34 @@ export default function ManualPage() {
             Generate tailored template
           </button>
         </div>
-        <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
-          <label className="space-y-1 text-sm text-gray-700">
-            <span className="font-medium">Manual file</span>
-            <input
-              type="file"
-              onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="space-y-1 text-sm text-gray-700">
-            <span className="font-medium">Upload notes</span>
-            <input
-              value={manualNotes}
-              onChange={(e) => setManualNotes(e.target.value)}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Optional notes about the uploaded manual"
-            />
-          </label>
-          <button
-            type="submit"
-            className="rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
-          >
-            Upload existing manual
-          </button>
-        </form>
+        {isAdmin && (
+          <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="font-medium">Manual file</span>
+              <input
+                ref={manualFileInputRef}
+                type="file"
+                onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="font-medium">Upload notes</span>
+              <input
+                value={manualNotes}
+                onChange={(e) => setManualNotes(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Optional notes about the uploaded manual"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+            >
+              Upload existing manual
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
