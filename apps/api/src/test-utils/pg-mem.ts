@@ -46,16 +46,22 @@ export const TEST_ENTITIES = [
   AuditEvent,
 ];
 
-function applyTestEnv() {
-  process.env.JWT_SECRET = 'test-secret';
-  process.env.JWT_EXPIRES_IN = '1d';
-  process.env.WEB_URL = 'http://localhost:3000';
-  process.env.NODE_ENV = 'test';
-  process.env.STORAGE_DRIVER = 'local';
+export const TEST_CONFIG = {
+  jwtSecret: 'test-secret',
+  jwtExpiresIn: '1d',
+  webUrl: 'http://localhost:3000',
+  nodeEnv: 'test',
+  storageDriver: 'local',
+} as const;
+
+function applyRuntimeTestEnv() {
+  process.env.WEB_URL ??= TEST_CONFIG.webUrl;
+  process.env.NODE_ENV ??= TEST_CONFIG.nodeEnv;
+  process.env.STORAGE_DRIVER ??= TEST_CONFIG.storageDriver;
 }
 
 export async function createTestDataSource() {
-  applyTestEnv();
+  applyRuntimeTestEnv();
 
   const db = newDb({ autoCreateForeignKeyIndices: true });
   db.public.registerFunction({ name: 'current_database', implementation: () => 'complyfood_test' });
@@ -85,12 +91,19 @@ export async function createTestDataSource() {
 }
 
 export async function createTestApp() {
-  applyTestEnv();
   const { dataSource } = await createTestDataSource();
 
   const moduleRef = await Test.createTestingModule({
     imports: [
-      ConfigModule.forRoot({ isGlobal: true }),
+      ConfigModule.forRoot({
+        ignoreEnvFile: true,
+        load: [
+          () => ({
+            JWT_SECRET: TEST_CONFIG.jwtSecret,
+            JWT_EXPIRES_IN: TEST_CONFIG.jwtExpiresIn,
+          }),
+        ],
+      }),
       TypeOrmModule.forRootAsync({
         useFactory: async () => ({
           type: 'postgres',
@@ -134,11 +147,13 @@ export async function createTestApp() {
 }
 
 export async function destroyTestApp(
-  app: INestApplication,
-  dataSource: { destroy(): Promise<void>; isInitialized?: boolean },
+  app: INestApplication | undefined,
+  dataSource: { destroy(): Promise<void>; isInitialized?: boolean } | undefined,
 ) {
-  await app.close();
-  if (dataSource.isInitialized !== false) {
+  if (app) {
+    await app.close();
+  }
+  if (dataSource && dataSource.isInitialized !== false) {
     await dataSource.destroy();
   }
 }

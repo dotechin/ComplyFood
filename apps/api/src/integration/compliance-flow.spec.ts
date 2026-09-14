@@ -22,7 +22,7 @@ import { ReminderEvent } from '../modules/automation/entities/reminder-event.ent
 import { Document } from '../modules/documents/entities/document.entity';
 import { AuditEvent } from '../modules/audit/entities/audit-event.entity';
 import { ChecklistTemplate } from '../modules/checklists/entities/checklist-template.entity';
-import { cleanupTestStorage, createTestDataSource } from '../test-utils/pg-mem';
+import { TEST_CONFIG, cleanupTestStorage, createTestDataSource } from '../test-utils/pg-mem';
 
 describe('Compliance integration flow', () => {
   let dataSource: DataSource;
@@ -59,7 +59,7 @@ describe('Compliance integration flow', () => {
     auditService = new AuditService(dataSource.getRepository(AuditEvent));
     authService = new AuthService(
       usersService,
-      new JwtService({ secret: process.env.JWT_SECRET }),
+      new JwtService({ secret: TEST_CONFIG.jwtSecret }),
       dataSource,
     );
   });

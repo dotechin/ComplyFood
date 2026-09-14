@@ -221,7 +221,7 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     return {
       status: response.status,
-      body: await response.json(),
+      body: await readBody(response),
     };
   }
 
@@ -236,7 +236,7 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     return {
       status: response.status,
-      body: await response.json(),
+      body: await readBody(response),
     };
   }
 
@@ -251,7 +251,7 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     return {
       status: response.status,
-      body: await response.json(),
+      body: await readBody(response),
     };
   }
 
@@ -274,14 +274,31 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     return {
       status: response.status,
-      body: await response.json(),
+      body: await readBody(response),
     };
   }
 
   function withToken(token: string) {
-    const authScheme = Buffer.from([66, 101, 97, 114, 101, 114]).toString('utf8');
     return {
-      authorization: `${authScheme} ${token}`,
+      authorization: 'Bearer '.concat(token),
     };
+  }
+
+  async function readBody(response: Response) {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return text;
+    }
   }
 });
