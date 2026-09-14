@@ -32,7 +32,7 @@ Execute the staging validation cycle defined in `docs/operations/staging-validat
 |---|---|---|---|
 | Add one location | Admin | Blocked | Pending staging API/UI access |
 | Add at least two staff users | Admin | Blocked | Pending staging API/UI access |
-| Create one preset + one reminder rule | Admin | Blocked | Pending staging API/UI access |
+| Create one preset + one reminder rule for temperature tasks | Admin | Blocked | Pending staging API/UI access |
 | Generate today’s tasks | Admin | Blocked | Pending staging API/UI access |
 | Verify pending tasks + due reminders on dashboard | Admin/Staff | Blocked | Pending staging API/UI access |
 | Acknowledge one reminder and verify removal | Staff | Blocked | Pending staging API/UI access |
@@ -49,15 +49,15 @@ Execute the staging validation cycle defined in `docs/operations/staging-validat
 ### 4) Reporting
 | Step | Role | Result | Evidence |
 |---|---|---|---|
-| Open reports with and without filters | Admin | Blocked | Pending staging API/UI access |
+| Open reports with no filters and with date + status filters | Admin | Blocked | Pending staging API/UI access |
 | Export CSV and verify created entries | Admin | Blocked | Pending staging API/UI access |
 | Export PDF and verify summary alignment | Admin | Blocked | Pending staging API/UI access |
-| Verify incident/exception/override counts | Admin | Blocked | Pending staging API/UI access |
+| Verify incident/exception/override counts match seeded activity | Admin | Blocked | Pending staging API/UI access |
 
 ## Required evidence mapping
 | Release-readiness item | Status | Evidence location |
 |---|---|---|
-| Login evidence captured | Blocked | Add staging run output here |
+| Successful sign-in and `/auth/me` evidence captured | Blocked | Add sign-in response and `/auth/me` output locations here |
 | Password reset evidence captured | Blocked | Add staging run output here |
 | Reminder generation and acknowledgement evidence captured | Blocked | Add staging run output here |
 | General and HACCP manual document upload/download evidence captured | Blocked | Add staging run output here |
@@ -76,7 +76,10 @@ Use this table immediately when any step fails during the live run.
 This staging validation step is complete only when:
 1. All preconditions are satisfied in staging.
 2. All runbook scenarios pass end to end without manual DB intervention.
-3. Evidence for login, password reset, reminders, documents, CSV export, PDF export, and deployment parity is captured.
-4. Any failures are fixed and re-validated.
+3. Storage uses the intended driver and uploaded files persist correctly.
+4. CSV and PDF report exports complete successfully.
+5. Evidence for login, password reset, reminders, documents, CSV export, PDF export, and deployment parity is captured.
+6. No critical auth, authorization, or data-loss issue is found.
+7. Any failures are fixed and re-validated.
 
 Only after these conditions are met can the next step begin: `docs/operations/performance-checks.md`.
