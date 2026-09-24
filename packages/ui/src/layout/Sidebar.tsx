@@ -1,7 +1,4 @@
-'use client';
-
 import React from 'react';
-import { usePathname } from 'next/navigation';
 
 type IconProps = { className?: string };
 
@@ -44,9 +41,7 @@ const NAV_ITEMS: { href: string; label: string; icon: keyof typeof icons }[] = [
   { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
-export function Sidebar() {
-  const pathname = usePathname();
-
+export function Sidebar({ pathname }: { pathname?: string }) {
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col bg-sidebar">
       <div className="flex items-center gap-2.5 border-b border-sidebar-border px-5 py-5">
