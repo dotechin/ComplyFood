@@ -68,24 +68,15 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="w-full max-w-lg">
-      <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4Z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-        </span>
-        <span className="text-lg font-semibold tracking-tight text-foreground">ComplyFood</span>
-      </div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create your account</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">Set up an organization and its first admin user.</p>
+    <div className="w-full max-w-lg rounded-xl bg-white p-8 shadow-lg">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold text-blue-700">Create your ComplyFood account</h1>
+        <p className="mt-1 text-sm text-gray-500">Set up an organization and its first admin user.</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label htmlFor="organizationName" className="block text-sm font-medium text-foreground">
+            <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
               Organization name
             </label>
             <input
@@ -93,33 +84,33 @@ export default function RegisterPage() {
               required
               value={organizationName}
               onChange={(e) => setOrganizationName(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label htmlFor="organizationCategory" className="block text-sm font-medium text-foreground">
+            <label htmlFor="organizationCategory" className="block text-sm font-medium text-gray-700">
               Business category
             </label>
             <input
               id="organizationCategory"
               value={organizationCategory}
               onChange={(e) => setOrganizationCategory(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label htmlFor="organizationAddress" className="block text-sm font-medium text-foreground">
+            <label htmlFor="organizationAddress" className="block text-sm font-medium text-gray-700">
               Address
             </label>
             <input
               id="organizationAddress"
               value={organizationAddress}
               onChange={(e) => setOrganizationAddress(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-foreground">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Admin email
             </label>
             <input
@@ -128,11 +119,11 @@ export default function RegisterPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-foreground">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </label>
             <input
@@ -142,11 +133,11 @@ export default function RegisterPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div className="md:col-span-2">
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
               Confirm password
             </label>
             <input
@@ -156,30 +147,22 @@ export default function RegisterPage() {
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
-        {error && (
-          <div className="flex items-start gap-2 rounded-md border border-danger/20 bg-danger/5 px-3 py-2.5 text-sm text-danger">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
+        {error && <p className="text-xs text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? 'Creating account…' : 'Create account'}
         </button>
         <button
           type="button"
           onClick={() => router.push('/login')}
-          className="w-full text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          className="w-full text-sm text-gray-500 hover:text-gray-700"
         >
           Back to login
         </button>

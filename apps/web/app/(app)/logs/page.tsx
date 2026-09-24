@@ -301,22 +301,22 @@ export default function LogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
-        <p className="text-sm text-muted-foreground">Create, filter, review, confirm, and override daily log entries.</p>
-        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-        {message && <p className="mt-2 text-sm text-success">{message}</p>}
+        <h1 className="mb-2 text-2xl font-bold text-gray-900">Daily Logs</h1>
+        <p className="text-sm text-gray-500">Create, filter, review, confirm, and override daily log entries.</p>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
       </div>
 
-      <form onSubmit={createLog} className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[0.9fr_1.6fr_auto]">
+      <form onSubmit={createLog} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[0.9fr_1.6fr_auto]">
         <div>
-          <label htmlFor="createType" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="createType" className="mb-1 block text-sm font-medium text-gray-700">
             Log type
           </label>
           <select
             id="createType"
             value={createType}
             onChange={(e) => setCreateType(e.target.value as LogType)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             {Object.values(LogType).map((type) => (
               <option key={type} value={type}>
@@ -326,31 +326,31 @@ export default function LogsPage() {
           </select>
         </div>
         <div>
-          <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-gray-700">
             Fields JSON
           </label>
           <textarea
             id="createFields"
             value={createFields}
             onChange={(e) => setCreateFields(e.target.value)}
-            className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 md:self-end"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 md:self-end"
         >
           {saving ? 'Saving…' : 'Create log'}
         </button>
       </form>
 
-      <div className="rounded-lg border bg-card p-4 shadow-card">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Temperature from phone camera</h2>
-        <p className="mb-3 text-sm text-muted-foreground">Capture image, review OCR suggestion, and confirm value before save.</p>
+      <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Temperature from phone camera</h2>
+        <p className="mb-3 text-sm text-gray-500">Capture image, review OCR suggestion, and confirm value before save.</p>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
           <div>
-            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-foreground">
+            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-gray-700">
               Capture image
             </label>
             <input
@@ -360,11 +360,11 @@ export default function LogsPage() {
               accept="image/*"
               capture="environment"
               onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-foreground">
+            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-gray-700">
               Item
             </label>
             <input
@@ -372,12 +372,12 @@ export default function LogsPage() {
               aria-label="Temperature item name"
               value={captureItem}
               onChange={(e) => setCaptureItem(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               placeholder="Item (e.g. Fridge 1)"
             />
           </div>
           <div>
-            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-foreground">
+            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-gray-700">
               Confirmed temperature
             </label>
             <input
@@ -385,7 +385,7 @@ export default function LogsPage() {
               aria-label="Confirmed temperature value"
               value={captureValue}
               onChange={(e) => setCaptureValue(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               placeholder="Confirmed temperature"
             />
           </div>
@@ -393,7 +393,7 @@ export default function LogsPage() {
             <button
               type="button"
               onClick={() => void scanTemperature()}
-              className="w-full rounded-md border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-accent"
+              className="w-full rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
             >
               Get suggestion
             </button>
@@ -402,13 +402,13 @@ export default function LogsPage() {
             <button
               type="button"
               onClick={() => void createTemperatureFromCapture()}
-              className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
               Save capture log
             </button>
           </div>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <label className="mt-3 flex items-center gap-2 text-sm text-gray-600">
           <input
             type="checkbox"
             checked={captureConsent}
@@ -417,23 +417,23 @@ export default function LogsPage() {
           I confirm image capture consent and retention for audit traceability.
         </label>
         {captureSuggestion && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-gray-600">
             Suggested: <span className="font-semibold">{captureSuggestion.extractedValue ?? 'no value detected'}</span> ·
             confidence {(captureSuggestion.confidence * 100).toFixed(0)}% · source {captureSuggestion.source}
           </p>
         )}
       </div>
 
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-4">
+      <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-4">
         <div>
-          <label htmlFor="filterType" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="filterType" className="mb-1 block text-sm font-medium text-gray-700">
             Type
           </label>
           <select
             id="filterType"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option value="">All types</option>
             {Object.values(LogType).map((type) => (
@@ -444,14 +444,14 @@ export default function LogsPage() {
           </select>
         </div>
         <div>
-          <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-gray-700">
             Status
           </label>
           <select
             id="filterStatus"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option value="">All statuses</option>
             {Object.values(LogStatus).map((status) => (
@@ -462,7 +462,7 @@ export default function LogsPage() {
           </select>
         </div>
         <div>
-          <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-gray-700">
             From
           </label>
           <input
@@ -470,11 +470,11 @@ export default function LogsPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-gray-700">
             To
           </label>
           <input
@@ -482,28 +482,28 @@ export default function LogsPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-gray-500">Loading…</p>
       ) : (
         <div className="space-y-4">
           {logs.map((log) => (
-            <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
+            <div key={log.id} className="rounded-lg border bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold text-foreground">{log.type}</h2>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="font-semibold text-gray-900">{log.type}</h2>
+                  <p className="text-xs text-gray-500">
                     {new Date(log.createdAt).toLocaleString()} · {log.status}
                     {log.isException ? ' · exception mode' : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {log.isException && (
-                    <span className="rounded-full bg-warning/10 px-2 py-1 text-xs font-medium text-warning">
+                    <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700">
                       Exception
                     </span>
                   )}
@@ -511,7 +511,7 @@ export default function LogsPage() {
                     <button
                       type="button"
                       onClick={() => void confirmLog(log.id)}
-                      className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
+                      className="rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
                     >
                       Confirm
                     </button>
@@ -519,32 +519,32 @@ export default function LogsPage() {
                 </div>
               </div>
 
-              <dl className="mt-3 grid gap-2 rounded-md bg-muted p-3 text-sm">
+              <dl className="mt-3 grid gap-2 rounded-md bg-gray-50 p-3 text-sm">
                 {Object.entries(log.fields ?? {}).map(([key, value]) => (
                   <div key={key} className="grid gap-1 md:grid-cols-[180px_1fr]">
-                    <dt className="font-medium text-foreground">{key}</dt>
-                    <dd className="text-muted-foreground">{formatValue(value)}</dd>
+                    <dt className="font-medium text-gray-700">{key}</dt>
+                    <dd className="text-gray-600">{formatValue(value)}</dd>
                   </div>
                 ))}
-                {Object.keys(log.fields ?? {}).length === 0 && <p className="text-muted-foreground">No fields recorded.</p>}
+                {Object.keys(log.fields ?? {}).length === 0 && <p className="text-gray-400">No fields recorded.</p>}
                 {(log.occurredAt || log.measuredAt || log.exceptionReason) && (
                   <>
                     {log.occurredAt && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-foreground">Occurred at</dt>
-                        <dd className="text-muted-foreground">{new Date(log.occurredAt).toLocaleString()}</dd>
+                        <dt className="font-medium text-gray-700">Occurred at</dt>
+                        <dd className="text-gray-600">{new Date(log.occurredAt).toLocaleString()}</dd>
                       </div>
                     )}
                     {log.measuredAt && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-foreground">Measured at</dt>
-                        <dd className="text-muted-foreground">{new Date(log.measuredAt).toLocaleString()}</dd>
+                        <dt className="font-medium text-gray-700">Measured at</dt>
+                        <dd className="text-gray-600">{new Date(log.measuredAt).toLocaleString()}</dd>
                       </div>
                     )}
                     {log.exceptionReason && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-foreground">Exception reason</dt>
-                        <dd className="text-muted-foreground">{log.exceptionReason}</dd>
+                        <dt className="font-medium text-gray-700">Exception reason</dt>
+                        <dd className="text-gray-600">{log.exceptionReason}</dd>
                       </div>
                     )}
                   </>
@@ -553,7 +553,7 @@ export default function LogsPage() {
 
               <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
                 <div className="space-y-1">
-                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-foreground">
+                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-gray-700">
                     Field name
                   </label>
                   <input
@@ -562,12 +562,12 @@ export default function LogsPage() {
                     onChange={(e) =>
                       setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
                     }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     placeholder="Field name"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-foreground">
+                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-gray-700">
                     New value
                   </label>
                   <input
@@ -576,12 +576,12 @@ export default function LogsPage() {
                     onChange={(e) =>
                       setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
                     }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     placeholder="New value or JSON"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-foreground">
+                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-gray-700">
                     Override reason
                   </label>
                   <input
@@ -590,14 +590,14 @@ export default function LogsPage() {
                     onChange={(e) =>
                       setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
                     }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     placeholder="Override reason"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => void submitOverride(log)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-black md:self-end"
+                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black md:self-end"
                 >
                   Override
                 </button>
@@ -648,7 +648,7 @@ export default function LogsPage() {
                     <button
                       type="button"
                       onClick={() => void applyException(log.id)}
-                      className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-orange-700"
+                      className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
                     >
                       Apply
                     </button>
@@ -659,7 +659,7 @@ export default function LogsPage() {
           ))}
 
           {logs.length === 0 && (
-            <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
+            <div className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-400 shadow-sm">
               No log entries match the selected filters.
             </div>
           )}
