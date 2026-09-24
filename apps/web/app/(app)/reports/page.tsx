@@ -89,14 +89,14 @@ export default function ReportsPage() {
     <div>
       <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Compliance Reports</h1>
-          <p className="text-sm text-gray-500">Filter compliance data, incident trends, and override activity.</p>
+          <h1 className="text-2xl font-bold text-foreground">Compliance Reports</h1>
+          <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and override activity.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-md border border-input px-3 py-2 text-sm"
           >
             <option value="">All log types</option>
             {Object.values(LogType).map((type) => (
@@ -108,7 +108,7 @@ export default function ReportsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-md border border-input px-3 py-2 text-sm"
           >
             <option value="">All statuses</option>
             {Object.values(LogStatus).map((status) => (
@@ -121,32 +121,32 @@ export default function ReportsPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-md border border-input px-3 py-2 text-sm"
           />
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-md border border-input px-3 py-2 text-sm"
           />
           <button
             onClick={() => void apiDownload(`/reports/export/csv${query}`, 'compliance-report.csv')}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Export CSV
           </button>
           <button
             onClick={() => void apiDownload(`/reports/export/pdf${query}`, 'compliance-report.pdf')}
-            className="rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+            className="rounded-md border border-blue-200 bg-card px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
           >
             Export PDF
           </button>
         </div>
       </div>
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
       {summary && (
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Log Entries" value={summary.totalLogs} tone="text-gray-900" />
+          <StatCard label="Total Log Entries" value={summary.totalLogs} tone="text-foreground" />
           <StatCard label="Total Overrides" value={summary.totalOverrides} tone="text-orange-600" />
           <StatCard label="Pending" value={summary.byStatus.pending ?? 0} tone="text-yellow-600" />
           <StatCard label="Confirmed" value={summary.byStatus.confirmed ?? 0} tone="text-green-600" />
@@ -155,21 +155,21 @@ export default function ReportsPage() {
       )}
       {summary && (
         <div className="mb-6 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg border bg-white p-4 shadow-sm lg:col-span-2">
-            <h2 className="mb-3 text-lg font-semibold text-gray-900">Log types</h2>
+          <div className="rounded-lg border bg-card p-4 shadow-card lg:col-span-2">
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Log types</h2>
             <div className="grid gap-3 md:grid-cols-3">
               {Object.entries(summary.byType).map(([type, count]) => (
-                <div key={type} className="rounded-md bg-gray-50 p-3">
-                  <p className="text-sm capitalize text-gray-500">{type}</p>
-                  <p className="text-xl font-semibold text-gray-900">{count}</p>
+                <div key={type} className="rounded-md bg-muted p-3">
+                  <p className="text-sm capitalize text-muted-foreground">{type}</p>
+                  <p className="text-xl font-semibold text-foreground">{count}</p>
                 </div>
               ))}
               {Object.keys(summary.byType).length === 0 && <p className="text-sm text-gray-400">No data.</p>}
             </div>
           </div>
-          <div className="rounded-lg border bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-gray-900">Incident summary</h2>
-            <dl className="space-y-2 text-sm text-gray-600">
+          <div className="rounded-lg border bg-card p-4 shadow-card">
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Incident summary</h2>
+            <dl className="space-y-2 text-sm text-muted-foreground">
               <SummaryRow label="Total incidents" value={summary.incidentSummary.total} />
               <SummaryRow label="Pending incidents" value={summary.incidentSummary.pending} />
               <SummaryRow label="Overridden incidents" value={summary.incidentSummary.overridden} />
@@ -189,13 +189,13 @@ export default function ReportsPage() {
         </div>
       )}
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : canViewAudit ? (
-        <div className="rounded-lg border bg-white shadow-sm">
+        <div className="rounded-lg border bg-card shadow-card">
           <AuditTable events={auditEvents} />
         </div>
       ) : (
-        <div className="rounded-lg border bg-white p-4 text-sm text-gray-500 shadow-sm">
+        <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground shadow-card">
           Audit history is available to admins and auditors.
         </div>
       )}
@@ -205,8 +205,8 @@ export default function ReportsPage() {
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
-      <p className="text-sm text-gray-500">{label}</p>
+    <div className="rounded-lg border bg-card p-4 shadow-card">
+      <p className="text-sm text-muted-foreground">{label}</p>
       <p className={`text-3xl font-bold ${tone}`}>{value}</p>
     </div>
   );
@@ -214,9 +214,9 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 
 function SummaryRow({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
+    <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
       <dt>{label}</dt>
-      <dd className="font-semibold text-gray-900">{value}</dd>
+      <dd className="font-semibold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -224,9 +224,9 @@ function SummaryRow({ label, value }: { label: string; value: number }) {
 function SummaryListCard({ title, values }: { title: string; values: Record<string, number> }) {
   const entries = Object.entries(values);
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-semibold text-gray-900">{title}</h2>
-      <div className="space-y-2 text-sm text-gray-600">
+    <div className="rounded-lg border bg-card p-4 shadow-card">
+      <h2 className="mb-3 text-lg font-semibold text-foreground">{title}</h2>
+      <div className="space-y-2 text-sm text-muted-foreground">
         {entries.length === 0 ? (
           <p className="text-gray-400">No data.</p>
         ) : (

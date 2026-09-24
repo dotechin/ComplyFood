@@ -228,27 +228,27 @@ export default function ManualPage() {
   }, [sectionContent, sectionDrafts, selectedSection, selectedVersion]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
   if (!isAdmin) {
-    return <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">HACCP manual management is admin-only.</div>;
+    return <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground shadow-card">HACCP manual management is admin-only.</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">HACCP Manual</h1>
-        <p className="text-sm text-gray-500">Generate tailored manual templates, edit sections, track completeness, save versions, and export PDF.</p>
+        <h1 className="mb-2 text-2xl font-bold text-foreground">HACCP Manual</h1>
+        <p className="text-sm text-muted-foreground">Generate tailored manual templates, edit sections, track completeness, save versions, and export PDF.</p>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]">
-          <label className="space-y-1 text-sm text-gray-700">
+        <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[1fr_auto]">
+          <label className="space-y-1 text-sm text-foreground">
             <span className="font-medium">Business type</span>
             <select
               value={businessType}
@@ -269,8 +269,8 @@ export default function ManualPage() {
           </button>
         </div>
         {isAdmin && (
-          <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
-            <label className="space-y-1 text-sm text-gray-700">
+          <form onSubmit={uploadExistingManual} className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[1fr_1fr_auto]">
+            <label className="space-y-1 text-sm text-foreground">
               <span className="font-medium">Manual file</span>
               <input
                 ref={manualFileInputRef}
@@ -279,7 +279,7 @@ export default function ManualPage() {
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
             </label>
-            <label className="space-y-1 text-sm text-gray-700">
+            <label className="space-y-1 text-sm text-foreground">
               <span className="font-medium">Upload notes</span>
               <input
                 value={manualNotes}
@@ -299,24 +299,24 @@ export default function ManualPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Uploaded manual files</h2>
+        <div className="rounded-lg border bg-card p-4 shadow-card">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Uploaded manual files</h2>
           <div className="space-y-2">
             {uploadedManuals.length === 0 ? (
-              <p className="text-sm text-gray-500">No external manual uploaded yet.</p>
+              <p className="text-sm text-muted-foreground">No external manual uploaded yet.</p>
             ) : (
               uploadedManuals.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
+                <div key={doc.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-medium text-foreground">{doc.name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {doc.notes || 'Uploaded manual file'} · {new Date(doc.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
-                    className="text-sm text-blue-600 hover:text-blue-700"
+                    className="text-sm text-primary hover:text-blue-700"
                   >
                     Download
                   </button>
@@ -325,16 +325,16 @@ export default function ManualPage() {
             )}
           </div>
         </div>
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Supporting compliance documents</h2>
+        <div className="rounded-lg border bg-card p-4 shadow-card">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Supporting compliance documents</h2>
           <div className="space-y-2">
             {supportingDocuments.length === 0 ? (
-              <p className="text-sm text-gray-500">Upload layouts, permits, certificates, and procedures in Documents.</p>
+              <p className="text-sm text-muted-foreground">Upload layouts, permits, certificates, and procedures in Documents.</p>
             ) : (
               supportingDocuments.slice(0, 5).map((doc) => (
-                <div key={doc.id} className="rounded-md border border-gray-200 px-3 py-2">
-                  <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                  <p className="text-xs text-gray-500">
+                <div key={doc.id} className="rounded-md border border-border px-3 py-2">
+                  <p className="text-sm font-medium text-foreground">{doc.name}</p>
+                  <p className="text-xs text-muted-foreground">
                     {doc.category.replace(/_/g, ' ')}{doc.notes ? ` · ${doc.notes}` : ''}
                   </p>
                 </div>
@@ -345,8 +345,8 @@ export default function ManualPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Versions</h2>
+        <aside className="rounded-lg border bg-card p-4 shadow-card">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Versions</h2>
           <div className="space-y-2">
             {versions.map((version) => (
               <button
@@ -354,24 +354,24 @@ export default function ManualPage() {
                 type="button"
                 onClick={() => setSelectedVersionId(version.id)}
                 className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
-                  selectedVersion?.id === version.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
+                  selectedVersion?.id === version.id ? 'border-blue-300 bg-blue-50' : 'border-border'
                 }`}
               >
                 v{version.versionNumber} · {version.status}
-                <p className="text-xs text-gray-500">{new Date(version.createdAt).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{new Date(version.createdAt).toLocaleString()}</p>
               </button>
             ))}
           </div>
           {selectedVersion && (
-            <p className="mt-3 text-xs text-gray-600">
+            <p className="mt-3 text-xs text-muted-foreground">
               Completeness: {completeness.done}/{completeness.total}
             </p>
           )}
         </aside>
 
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <div className="rounded-lg border bg-card p-4 shadow-card">
           {!selectedVersion ? (
-            <p className="text-sm text-gray-500">No manual yet. Generate the first template.</p>
+            <p className="text-sm text-muted-foreground">No manual yet. Generate the first template.</p>
           ) : (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
@@ -399,7 +399,7 @@ export default function ManualPage() {
                 <button
                   type="button"
                   onClick={() => void saveFullVersion()}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-foreground hover:bg-muted"
                 >
                   Save full revision
                 </button>
@@ -412,7 +412,7 @@ export default function ManualPage() {
                 </button>
               </div>
 
-              <label htmlFor="manualSectionEditor" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="manualSectionEditor" className="block text-sm font-medium text-foreground">
                 Section content ({selectedVersion.sections.find((section) => section.key === selectedSection)?.title ?? selectedSection})
               </label>
               <textarea
@@ -432,7 +432,7 @@ export default function ManualPage() {
                   {supportingDocuments.map((doc) => {
                     const checked = linkedDocumentIds.includes(doc.id);
                     return (
-                      <label key={doc.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">
+                      <label key={doc.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                         <input
                           type="checkbox"
                           checked={checked}
