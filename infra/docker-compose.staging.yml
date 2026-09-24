@@ -67,7 +67,7 @@ services:
       postgres:
         condition: service_healthy
     working_dir: /app/apps/api
-    command: ['npx', 'typeorm', 'migration:run', '-d', 'src/database/data-source.ts']
+    command: ['npx', 'typeorm-ts-node-commonjs', 'migration:run', '-d', 'src/database/data-source.ts']
     restart: 'no'
 
   api:
