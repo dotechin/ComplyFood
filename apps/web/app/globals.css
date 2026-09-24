@@ -1,3 +1,58 @@
+/* ComplyFood design system — compiled by Tailwind via postcss.config.js */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 30% 98%;
+    --foreground: 160 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 25% 12%;
+
+    --muted: 150 16% 95%;
+    --muted-foreground: 155 8% 44%;
+
+    --border: 152 14% 89%;
+    --input: 152 14% 89%;
+
+    --primary: 158 64% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --accent: 152 44% 93%;
+    --accent-foreground: 158 64% 22%;
+
+    --ring: 158 64% 30%;
+
+    /* status */
+    --success: 152 58% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 100%;
+    --danger: 0 72% 48%;
+    --danger-foreground: 0 0% 100%;
+
+    /* dark sidebar (signature element) */
+    --sidebar: 164 44% 10%;
+    --sidebar-foreground: 150 18% 82%;
+    --sidebar-muted: 155 12% 58%;
+    --sidebar-hover: 162 38% 15%;
+    --sidebar-active: 152 52% 90%;
+    --sidebar-active-bg: 158 60% 22%;
+    --sidebar-border: 162 30% 18%;
+
+    --radius: 0.6rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}

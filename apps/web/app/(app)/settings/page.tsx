@@ -70,7 +70,7 @@ export default function SettingsPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
   const updateOrganization = async (e: React.FormEvent) => {
@@ -178,7 +178,7 @@ export default function SettingsPage() {
 
   if (currentUser && currentUser.role !== UserRole.ADMIN) {
     return (
-      <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">
+      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground shadow-card">
         Settings are available to organization admins.
       </div>
     );
@@ -187,8 +187,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">
           Organization profile, user management, locations, presets, and reminder rules.
         </p>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
@@ -196,55 +196,55 @@ export default function SettingsPage() {
       </div>
 
       {organization ? (
-        <form onSubmit={updateOrganization} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Organization profile</h2>
+        <form onSubmit={updateOrganization} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Organization profile</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <input
               value={organization.name}
               onChange={(e) => setOrganization({ ...organization, name: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Organization name"
             />
             <input
               value={organization.address ?? ''}
               onChange={(e) => setOrganization({ ...organization, address: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Address"
             />
             <input
               value={organization.category ?? ''}
               onChange={(e) => setOrganization({ ...organization, category: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Business category"
             />
           </div>
-          <button className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <button className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             Save organization
           </button>
         </form>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={addLocation} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Locations</h2>
+        <form onSubmit={addLocation} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Locations</h2>
           <div className="space-y-3">
             <input
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location name"
             />
             <input
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location address"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Add location
             </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {(organization?.locations ?? []).map((location) => (
               <li key={location.id}>
                 {location.name} {location.address ? `— ${location.address}` : ''}
@@ -253,9 +253,9 @@ export default function SettingsPage() {
           </ul>
         </form>
 
-        <div className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="rounded-lg border bg-card p-6 shadow-card">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">Users</h2>
+            <h2 className="text-lg font-semibold text-foreground">Users</h2>
             <button
               type="button"
               onClick={() => void generateDailyTasks()}
@@ -266,7 +266,7 @@ export default function SettingsPage() {
           </div>
           <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
             <div className="space-y-1">
-              <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="newUserEmail" className="block text-sm font-medium text-foreground">
                 User email
               </label>
               <input
@@ -275,12 +275,12 @@ export default function SettingsPage() {
                 required
                 value={newUserEmail}
                 onChange={(e) => setNewUserEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-input px-3 py-2 text-sm"
                 placeholder="User email"
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor="newUserPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="newUserPassword" className="block text-sm font-medium text-foreground">
                 Temporary password
               </label>
               <input
@@ -290,19 +290,19 @@ export default function SettingsPage() {
                 minLength={8}
                 value={newUserPassword}
                 onChange={(e) => setNewUserPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-input px-3 py-2 text-sm"
                 placeholder="Temporary password"
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor="newUserRole" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="newUserRole" className="block text-sm font-medium text-foreground">
                 Role
               </label>
               <select
                 id="newUserRole"
                 value={newUserRole}
                 onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-input px-3 py-2 text-sm"
               >
                 {Object.values(UserRole).map((role) => (
                   <option key={role} value={role}>
@@ -311,21 +311,21 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Add user
             </button>
           </form>
           <div className="space-y-3">
             {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between rounded-md bg-gray-50 p-3">
+              <div key={user.id} className="flex items-center justify-between rounded-md bg-muted p-3">
                 <div>
-                  <p className="font-medium text-gray-900">{user.email}</p>
-                  <p className="text-xs text-gray-500">{user.role}</p>
+                  <p className="font-medium text-foreground">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">{user.role}</p>
                 </div>
                 <select
                   value={user.role}
                   onChange={(e) => void updateRole(user.id, e.target.value as UserRole)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-input px-3 py-2 text-sm"
                 >
                   {Object.values(UserRole).map((role) => (
                     <option key={role} value={role}>
@@ -340,30 +340,30 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={createPreset} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Automation presets</h2>
+        <form onSubmit={createPreset} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Automation presets</h2>
           <div className="space-y-3">
             <input
               value={presetType}
               onChange={(e) => setPresetType(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Preset type"
             />
             <textarea
               value={presetDefaults}
               onChange={(e) => setPresetDefaults(e.target.value)}
-              className="h-28 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="h-28 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
             <textarea
               value={presetSchedule}
               onChange={(e) => setPresetSchedule(e.target.value)}
-              className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Save preset
             </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {presets.map((preset) => (
               <li key={preset.id}>
                 <span className="font-medium">{preset.type}</span>: {JSON.stringify(preset.defaults)} · schedule{' '}
@@ -373,32 +373,32 @@ export default function SettingsPage() {
           </ul>
         </form>
 
-        <form onSubmit={createReminder} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Reminders</h2>
+        <form onSubmit={createReminder} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Reminders</h2>
           <div className="space-y-3">
             <input
               value={reminderType}
               onChange={(e) => setReminderType(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Reminder type"
             />
             <input
               value={reminderMessage}
               onChange={(e) => setReminderMessage(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Reminder message"
             />
             <input
               value={cronExpression}
               onChange={(e) => setCronExpression(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Cron expression"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Save reminder
             </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {reminders.map((reminder) => (
               <li key={reminder.id}>
                 <span className="font-medium">{reminder.type}</span>: {reminder.cronExpression} ·{' '}
