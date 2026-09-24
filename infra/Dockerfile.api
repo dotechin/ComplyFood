@@ -14,6 +14,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
+# Build the shared package so `@complyfood/shared` resolves to dist/index.js.
+# Needed here because migrations run via ts-node against the .ts entities,
+# which import @complyfood/shared at runtime.
+RUN pnpm --filter @complyfood/shared build
 WORKDIR /app/apps/api
 CMD ["pnpm", "start:dev"]
 
