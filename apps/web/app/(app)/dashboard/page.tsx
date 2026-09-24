@@ -58,59 +58,144 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Today&apos;s Tasks</h1>
-        <p className="text-sm text-gray-500">Track generated work, pending confirmations, and due reminders.</p>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Today&apos;s Tasks</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Track generated work, pending confirmations, and due reminders.
+        </p>
+        {error && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+            </svg>
+            {error}
+          </div>
+        )}
+        {message && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border border-success/20 bg-success/5 px-3 py-2 text-sm text-success">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            {message}
+          </div>
+        )}
       </div>
+
       {snapshot && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Pending tasks" value={snapshot.pendingLogs.length} />
-          <SummaryCard label="Generated from presets" value={snapshot.generatedToday} />
-          <SummaryCard label="Active presets" value={snapshot.activePresetCount} />
-          <SummaryCard label="Due reminders" value={snapshot.dueReminders.length} />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard
+            label="Pending tasks"
+            value={snapshot.pendingLogs.length}
+            tone="warning"
+            icon={<><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>}
+          />
+          <SummaryCard
+            label="Generated from presets"
+            value={snapshot.generatedToday}
+            tone="primary"
+            icon={<><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></>}
+          />
+          <SummaryCard
+            label="Active presets"
+            value={snapshot.activePresetCount}
+            tone="primary"
+            icon={<><path d="M11 12H3M16 6H3M16 18H3M18 9l3 3-3 3" /></>}
+          />
+          <SummaryCard
+            label="Due reminders"
+            value={snapshot.dueReminders.length}
+            tone="danger"
+            icon={<><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>}
+          />
         </div>
       )}
+
       {snapshot && snapshot.dueReminders.length > 0 && (
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Due reminders</h2>
-          <div className="space-y-3">
+        <section className="rounded-lg border border-border bg-card p-5 shadow-card">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-danger/10 text-danger">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
+            </span>
+            Due reminders
+          </h2>
+          <div className="space-y-2.5">
             {snapshot.dueReminders.map((reminder) => (
-              <div key={reminder.id} className="flex items-center justify-between rounded-md bg-gray-50 p-3">
-                <div>
-                  <p className="font-medium text-gray-900">{reminder.message}</p>
-                  <p className="text-xs text-gray-500">
-                    {reminder.type} · {new Date(reminder.scheduledFor).toLocaleString()}
+              <div
+                key={reminder.id}
+                className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-3.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">{reminder.message}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="capitalize">{reminder.type}</span> · {new Date(reminder.scheduledFor).toLocaleString()}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void acknowledgeReminder(reminder.id)}
-                  className="rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                  className="shrink-0 rounded-md border border-primary/30 bg-card px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-accent"
                 >
                   Acknowledge
                 </button>
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      <section className="rounded-lg border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-base font-semibold text-foreground">Pending confirmations</h2>
+          {snapshot && (
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              {snapshot.pendingLogs.length} item{snapshot.pendingLogs.length === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
-      )}
-      {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
-      ) : (
-        <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} />
-      )}
+        {loading ? (
+          <div className="flex items-center gap-2 px-5 py-10 text-sm text-muted-foreground">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+            Loading…
+          </div>
+        ) : (
+          <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} />
+        )}
+      </section>
     </div>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+const toneStyles = {
+  primary: 'bg-accent text-accent-foreground',
+  warning: 'bg-warning/10 text-warning',
+  danger: 'bg-danger/10 text-danger',
+} as const;
+
+function SummaryCard({
+  label,
+  value,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: number;
+  tone: keyof typeof toneStyles;
+  icon: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-3xl font-bold text-gray-900">{value}</p>
+    <div className="rounded-lg border border-border bg-card p-5 shadow-card transition hover:shadow-card-hover">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${toneStyles[tone]}`}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {icon}
+          </svg>
+        </span>
+      </div>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{value}</p>
     </div>
   );
 }

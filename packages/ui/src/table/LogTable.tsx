@@ -9,47 +9,50 @@ interface LogTableProps {
   onConfirm?: (id: string) => void;
 }
 
-const statusColors: Record<LogStatus, string> = {
-  [LogStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-  [LogStatus.CONFIRMED]: 'bg-green-100 text-green-800',
-  [LogStatus.OVERRIDDEN]: 'bg-orange-100 text-orange-800',
+const statusStyles: Record<LogStatus, string> = {
+  [LogStatus.PENDING]: 'bg-warning/10 text-warning ring-1 ring-inset ring-warning/20',
+  [LogStatus.CONFIRMED]: 'bg-success/10 text-success ring-1 ring-inset ring-success/20',
+  [LogStatus.OVERRIDDEN]: 'bg-danger/10 text-danger ring-1 ring-inset ring-danger/20',
 };
 
 export function LogTable({ entries, onConfirm }: LogTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-gray-500">Type</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-500">Submitted</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
-            {onConfirm && <th className="px-4 py-3" />}
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left">
+            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Type</th>
+            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Submitted</th>
+            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
+            {onConfirm && <th className="px-5 py-3" />}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody className="divide-y divide-border">
           {entries.map((entry) => (
-            <tr key={entry.id}>
-              <td className="px-4 py-3 font-medium capitalize text-gray-800">{entry.type}</td>
-              <td className="px-4 py-3">
+            <tr key={entry.id} className="transition-colors hover:bg-muted/40">
+              <td className="px-5 py-3.5 font-medium capitalize text-foreground">{entry.type}</td>
+              <td className="px-5 py-3.5">
                 <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[entry.status]}`}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[entry.status]}`}
                 >
                   {entry.status}
                 </span>
               </td>
-              <td className="px-4 py-3 text-gray-600">{entry.submittedBy ?? '—'}</td>
-              <td className="px-4 py-3 text-gray-600">
+              <td className="px-5 py-3.5 text-muted-foreground">{entry.submittedBy ?? '—'}</td>
+              <td className="px-5 py-3.5 text-muted-foreground">
                 {new Date(entry.createdAt).toLocaleDateString()}
               </td>
               {onConfirm && (
-                <td className="px-4 py-3 text-right">
+                <td className="px-5 py-3.5 text-right">
                   {entry.status === LogStatus.PENDING && (
                     <button
                       onClick={() => onConfirm(entry.id)}
-                      className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                     >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
                       Confirm
                     </button>
                   )}
@@ -59,8 +62,15 @@ export function LogTable({ entries, onConfirm }: LogTableProps) {
           ))}
           {entries.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                No log entries found.
+              <td colSpan={5} className="px-5 py-12 text-center">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-success" aria-hidden="true">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <path d="m9 11 3 3L22 4" />
+                  </svg>
+                  <p className="text-sm font-medium text-foreground">All caught up</p>
+                  <p className="text-xs">No log entries need attention right now.</p>
+                </div>
               </td>
             </tr>
           )}
