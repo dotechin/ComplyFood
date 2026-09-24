@@ -1,15 +1,26 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  LogStatus,
-  LogType,
-  UserRole,
-  type LogEntry,
-  type TemperatureCaptureSuggestion,
-  type User,
-} from '@complyfood/shared';
-import { apiGet, apiPatch, apiPost, apiUpload } from '../../../lib/api';
+import { LogStatus, LogType, UserRole, type LogEntry, type User } from '@complyfood/shared';
+import { apiGet, apiPatch, apiPost } from '../../../lib/api';
+
+const TYPE_LABELS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Temperature',
+  [LogType.CLEANING]: 'Cleaning',
+  [LogType.RECEIVING]: 'Receiving',
+  [LogType.CHECKLIST]: 'Checklist',
+  [LogType.INCIDENT]: 'Incident',
+};
+
+const FIELD_TEMPLATES: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: '{\n  "item": "Refrigerator 1",\n  "value": "4°C"\n}',
+  [LogType.CLEANING]: '{\n  "area": "Prep station",\n  "task": "Sanitize surfaces",\n  "completed": true\n}',
+  [LogType.RECEIVING]: '{\n  "supplier": "",\n  "product": "",\n  "temperature": "",\n  "condition": "acceptable"\n}',
+  [LogType.CHECKLIST]: '{\n  "checklist": "Opening",\n  "completed": true\n}',
+  [LogType.INCIDENT]: '{\n  "description": "",\n  "action": "",\n  "severity": "low"\n}',
+};
+
+type InsertionMethod = 'manual' | 'camera';
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
@@ -24,12 +35,7 @@ function parseFields(value: string) {
   return parsed as Record<string, unknown>;
 }
 
-function buildLogsPath(filters: {
-  type: string;
-  status: string;
-  dateFrom: string;
-  dateTo: string;
-}) {
+function buildLogsPath(filters: { type: string; status: string; dateFrom: string; dateTo: string }) {
   const params = new URLSearchParams();
   if (filters.type) params.set('type', filters.type);
   if (filters.status) params.set('status', filters.status);
@@ -51,35 +57,22 @@ export default function LogsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [filterType, setFilterType] = useState('');
+  const [activeType, setActiveType] = useState<LogType>(LogType.TEMPERATURE);
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [createType, setCreateType] = useState<LogType>(LogType.TEMPERATURE);
-  const [createFields, setCreateFields] = useState('{"item":"Fridge 1","value":"4°C"}');
-  const [overrideFieldName, setOverrideFieldName] = useState<Record<string, string>>({});
-  const [overrideNewValue, setOverrideNewValue] = useState<Record<string, string>>({});
-  const [overrideReason, setOverrideReason] = useState<Record<string, string>>({});
+  const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
+  const [createFields, setCreateFields] = useState(FIELD_TEMPLATES[LogType.TEMPERATURE]);
   const [exceptionReason, setExceptionReason] = useState<Record<string, string>>({});
   const [exceptionOccurredAt, setExceptionOccurredAt] = useState<Record<string, string>>({});
   const [exceptionMeasuredAt, setExceptionMeasuredAt] = useState<Record<string, string>>({});
   const [exceptionStatus, setExceptionStatus] = useState<Record<string, string>>({});
-  const [captureConsent, setCaptureConsent] = useState(false);
-  const [captureFile, setCaptureFile] = useState<File | null>(null);
-  const [captureItem, setCaptureItem] = useState('Fridge 1');
-  const [captureSuggestion, setCaptureSuggestion] = useState<TemperatureCaptureSuggestion | null>(null);
-  const [captureValue, setCaptureValue] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   const filters = useMemo(
-    () => ({
-      type: filterType,
-      status: filterStatus,
-      dateFrom,
-      dateTo,
-    }),
-    [dateFrom, dateTo, filterStatus, filterType],
+    () => ({ type: activeType, status: filterStatus, dateFrom, dateTo }),
+    [activeType, dateFrom, dateTo, filterStatus],
   );
 
   const refreshLogs = async () => {
@@ -120,6 +113,13 @@ export default function LogsPage() {
     };
   }, [filters]);
 
+  const selectType = (type: LogType) => {
+    setActiveType(type);
+    setCreateFields(FIELD_TEMPLATES[type]);
+    setError('');
+    setMessage('');
+  };
+
   const createLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -127,11 +127,11 @@ export default function LogsPage() {
       setError('');
       setMessage('');
       await apiPost<LogEntry>('/logs', {
-        type: createType,
+        type: activeType,
         fields: parseFields(createFields),
       });
       await refreshLogs();
-      setMessage('Log entry created.');
+      setMessage(`${TYPE_LABELS[activeType]} entry created.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create log entry');
     } finally {
@@ -148,130 +148,6 @@ export default function LogsPage() {
       setMessage('Log entry confirmed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
-    }
-  };
-
-  const submitOverride = async (log: LogEntry) => {
-    const fieldName = overrideFieldName[log.id]?.trim();
-    const reason = overrideReason[log.id]?.trim();
-    if (!fieldName || !reason) {
-      setError('Override field and reason are required.');
-      return;
-    }
-    if (!(fieldName in (log.fields ?? {}))) {
-      setError('Choose an existing field name to override.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      const nextValue = overrideNewValue[log.id] ?? '';
-      await apiPost('/overrides', {
-        logEntryId: log.id,
-        fieldName,
-        originalValue: log.fields[fieldName],
-        newValue: nextValue,
-        reason,
-      });
-      await refreshLogs();
-      setOverrideFieldName((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideNewValue((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideReason((prev) => ({ ...prev, [log.id]: '' }));
-      setMessage('Override recorded.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save override');
-    }
-  };
-
-  const scanTemperature = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-
-    try {
-      setError('');
-      const form = new FormData();
-      form.append('file', captureFile);
-      const suggestion = await apiUpload<TemperatureCaptureSuggestion>('/logs/temperature/ocr-suggestion', form);
-      setCaptureSuggestion(suggestion);
-      if (suggestion.extractedValue) {
-        setCaptureValue(suggestion.extractedValue);
-      }
-      setMessage('Temperature suggestion ready. Please review before saving.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to process camera capture');
-    }
-  };
-
-  const createTemperatureFromCapture = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-    if (!captureValue.trim()) {
-      setError('A confirmed temperature value is required.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      const created = await apiPost<LogEntry>('/logs', {
-        type: LogType.TEMPERATURE,
-        fields: {
-          item: captureItem,
-          value: captureValue,
-          captureSource: 'phone-camera',
-          ocrSuggestion: captureSuggestion?.extractedValue ?? null,
-          ocrConfidence: captureSuggestion?.confidence ?? 0,
-          ocrMethod: captureSuggestion?.source ?? 'none',
-          confirmedByUser: true,
-          retentionPolicy: 'pending-image-upload',
-          imageLinked: false,
-        },
-      });
-
-      try {
-        const upload = new FormData();
-        upload.append('file', captureFile);
-        upload.append('linkedEntryId', created.id);
-        await apiUpload('/documents', upload);
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-retained-with-linked-document',
-            imageLinked: true,
-          },
-        });
-      } catch {
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-upload-failed',
-            imageLinked: false,
-          },
-        });
-        throw new Error('Capture saved but image upload failed. Please retry document upload from Documents.');
-      }
-
-      await refreshLogs();
-      setCaptureFile(null);
-      setCaptureSuggestion(null);
-      setCaptureValue('');
-      setCaptureConsent(false);
-      setMessage('Temperature log created with linked capture image.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save camera temperature log');
     }
   };
 
@@ -302,147 +178,97 @@ export default function LogsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
-        <p className="text-sm text-muted-foreground">Create, filter, review, confirm, and override daily log entries.</p>
+        <p className="text-sm text-muted-foreground">
+          Record, review, and confirm daily log entries by category.
+        </p>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {message && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
 
-      <form onSubmit={createLog} className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[0.9fr_1.6fr_auto]">
+      <div className="border-b border-border">
+        <nav className="-mb-px flex flex-wrap gap-1" aria-label="Log categories">
+          {Object.values(LogType).map((type) => {
+            const isActive = type === activeType;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => selectType(type)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+                }`}
+              >
+                {TYPE_LABELS[type]}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <form
+        onSubmit={createLog}
+        className="space-y-4 rounded-lg border bg-card p-5 shadow-card"
+      >
         <div>
-          <label htmlFor="createType" className="mb-1 block text-sm font-medium text-foreground">
-            Log type
-          </label>
-          <select
-            id="createType"
-            value={createType}
-            onChange={(e) => setCreateType(e.target.value as LogType)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+          <h2 className="text-lg font-semibold text-foreground">New {TYPE_LABELS[activeType].toLowerCase()} entry</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Choose how this entry is captured.</p>
         </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setInsertionMethod('manual')}
+            aria-pressed={insertionMethod === 'manual'}
+            className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
+              insertionMethod === 'manual'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-input text-foreground hover:bg-accent'
+            }`}
+          >
+            Manual entry
+          </button>
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Camera acquisition is coming soon"
+            className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-input px-4 py-2 text-sm font-medium text-muted-foreground opacity-70"
+          >
+            Phone camera
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              Coming soon
+            </span>
+          </button>
+        </div>
+
         <div>
           <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-foreground">
-            Fields JSON
+            Fields
           </label>
           <textarea
             id="createFields"
             value={createFields}
             onChange={(e) => setCreateFields(e.target.value)}
-            className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="h-32 w-full rounded-md border border-input bg-card px-3 py-2 font-mono text-sm text-foreground"
           />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Provide the entry values as a JSON object. The template above is prefilled for {TYPE_LABELS[activeType].toLowerCase()} logs.
+          </p>
         </div>
+
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 md:self-end"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Create log'}
+          {saving ? 'Saving…' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
         </button>
       </form>
 
-      <div className="rounded-lg border bg-card p-4 shadow-card">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Temperature from phone camera</h2>
-        <p className="mb-3 text-sm text-muted-foreground">Capture image, review OCR suggestion, and confirm value before save.</p>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <div>
-            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-foreground">
-              Capture image
-            </label>
-            <input
-              id="captureFile"
-              aria-label="Capture temperature image"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-foreground">
-              Item
-            </label>
-            <input
-              id="captureItem"
-              aria-label="Temperature item name"
-              value={captureItem}
-              onChange={(e) => setCaptureItem(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Item (e.g. Fridge 1)"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-foreground">
-              Confirmed temperature
-            </label>
-            <input
-              id="captureValue"
-              aria-label="Confirmed temperature value"
-              value={captureValue}
-              onChange={(e) => setCaptureValue(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Confirmed temperature"
-            />
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void scanTemperature()}
-              className="w-full rounded-md border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-accent"
-            >
-              Get suggestion
-            </button>
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void createTemperatureFromCapture()}
-              className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Save capture log
-            </button>
-          </div>
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={captureConsent}
-            onChange={(e) => setCaptureConsent(e.target.checked)}
-          />
-          I confirm image capture consent and retention for audit traceability.
-        </label>
-        {captureSuggestion && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Suggested: <span className="font-semibold">{captureSuggestion.extractedValue ?? 'no value detected'}</span> ·
-            confidence {(captureSuggestion.confidence * 100).toFixed(0)}% · source {captureSuggestion.source}
-          </p>
-        )}
-      </div>
-
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-4">
-        <div>
-          <label htmlFor="filterType" className="mb-1 block text-sm font-medium text-foreground">
-            Type
-          </label>
-          <select
-            id="filterType"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">All types</option>
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-3">
         <div>
           <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
             Status
@@ -451,7 +277,7 @@ export default function LogsPage() {
             id="filterStatus"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           >
             <option value="">All statuses</option>
             {Object.values(LogStatus).map((status) => (
@@ -470,7 +296,7 @@ export default function LogsPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           />
         </div>
         <div>
@@ -482,7 +308,7 @@ export default function LogsPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           />
         </div>
       </div>
@@ -495,7 +321,7 @@ export default function LogsPage() {
             <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold text-foreground">{log.type}</h2>
+                  <h2 className="font-semibold text-foreground">{TYPE_LABELS[log.type as LogType] ?? log.type}</h2>
                   <p className="text-xs text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString()} · {log.status}
                     {log.isException ? ' · exception mode' : ''}
@@ -551,92 +377,36 @@ export default function LogsPage() {
                 )}
               </dl>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
-                <div className="space-y-1">
-                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-foreground">
-                    Field name
-                  </label>
-                  <input
-                    id={`overrideFieldName-${log.id}`}
-                    value={overrideFieldName[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="Field name"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-foreground">
-                    New value
-                  </label>
-                  <input
-                    id={`overrideNewValue-${log.id}`}
-                    value={overrideNewValue[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="New value or JSON"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-foreground">
-                    Override reason
-                  </label>
-                  <input
-                    id={`overrideReason-${log.id}`}
-                    value={overrideReason[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="Override reason"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void submitOverride(log)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-black md:self-end"
-                >
-                  Override
-                </button>
-              </div>
-
               {user?.role === UserRole.ADMIN && (
-                <div className="mt-4 rounded-md border border-orange-200 bg-orange-50 p-3">
-                  <h3 className="mb-2 text-sm font-semibold text-orange-900">Exception mode (Admin)</h3>
+                <div className="mt-4 rounded-md border border-warning/30 bg-warning/5 p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">Exception mode (Admin)</h3>
                   <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
                     <input
                       aria-label={`Exception reason for log ${log.id}`}
                       value={exceptionReason[log.id] ?? ''}
                       onChange={(e) => setExceptionReason((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                       placeholder="Mandatory reason"
                     />
                     <input
                       aria-label={`Exception occurred at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionOccurredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      onChange={(e) => setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <input
                       aria-label={`Exception measured at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionMeasuredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      onChange={(e) => setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <select
                       aria-label={`Exception unlock status for log ${log.id}`}
                       value={exceptionStatus[log.id] ?? ''}
                       onChange={(e) => setExceptionStatus((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     >
                       <option value="">Keep current status</option>
                       {Object.values(LogStatus).map((status) => (
@@ -648,7 +418,7 @@ export default function LogsPage() {
                     <button
                       type="button"
                       onClick={() => void applyException(log.id)}
-                      className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-orange-700"
+                      className="rounded-md bg-warning px-4 py-2 text-sm font-medium text-white hover:bg-warning/90"
                     >
                       Apply
                     </button>
@@ -660,7 +430,7 @@ export default function LogsPage() {
 
           {logs.length === 0 && (
             <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
-              No log entries match the selected filters.
+              No {TYPE_LABELS[activeType].toLowerCase()} entries match the selected filters.
             </div>
           )}
         </div>

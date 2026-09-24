@@ -43,6 +43,25 @@ class UpdateLogDto {
   measuredDate?: string;
 }
 
+class BackfillLogDto {
+  @IsEnum(LogType)
+  type: LogType;
+
+  @IsObject()
+  fields: Record<string, any>;
+
+  @IsOptional()
+  @IsUUID()
+  locationId?: string;
+
+  @IsISO8601()
+  createdAt: string;
+
+  @IsOptional()
+  @IsEnum(LogStatus)
+  status?: LogStatus;
+}
+
 class FindLogsQueryDto {
   @IsOptional()
   @IsEnum(LogType)
@@ -91,6 +110,18 @@ export class LogsController {
   @Post()
   create(@CurrentUser() user: any, @Body() dto: CreateLogDto) {
     return this.logsService.create(user.orgId, user.id, dto);
+  }
+
+  @Post('backfill')
+  @Roles(UserRole.ADMIN)
+  backfill(@CurrentUser() user: any, @Body() dto: BackfillLogDto) {
+    return this.logsService.backfill(user.orgId, user.id, {
+      type: dto.type,
+      fields: dto.fields,
+      locationId: dto.locationId ?? null,
+      createdAt: new Date(dto.createdAt),
+      status: dto.status,
+    });
   }
 
   @Get()

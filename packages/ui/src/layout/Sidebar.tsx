@@ -23,7 +23,7 @@ const icons = {
   dashboard: (p: IconProps) => <Icon {...p} path={<><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></>} />,
   logs: (p: IconProps) => <Icon {...p} path={<><path d="M8 2v4M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></>} />,
   checklists: (p: IconProps) => <Icon {...p} path={<><path d="M11 12H3M16 6H3M16 18H3M18 9l3 3-3 3" /></>} />,
-  overrides: (p: IconProps) => <Icon {...p} path={<><path d="M3 2v6h6M21 12A9 9 0 0 0 6 5.3L3 8M21 22v-6h-6M3 12a9 9 0 0 0 15 6.7l3-2.7" /></>} />,
+  supermode: (p: IconProps) => <Icon {...p} path={<><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></>} />,
   reports: (p: IconProps) => <Icon {...p} path={<><path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" /></>} />,
   documents: (p: IconProps) => <Icon {...p} path={<><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" /></>} />,
   manual: (p: IconProps) => <Icon {...p} path={<><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></>} />,
@@ -34,11 +34,14 @@ const NAV_ITEMS: { href: string; label: string; icon: keyof typeof icons }[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/logs', label: 'Daily Logs', icon: 'logs' },
   { href: '/checklists', label: 'Checklists', icon: 'checklists' },
-  { href: '/overrides', label: 'Overrides', icon: 'overrides' },
   { href: '/reports', label: 'Reports', icon: 'reports' },
   { href: '/documents', label: 'Documents', icon: 'documents' },
   { href: '/manual', label: 'HACCP Manual', icon: 'manual' },
   { href: '/settings', label: 'Settings', icon: 'settings' },
+];
+
+const DEV_NAV_ITEMS: { href: string; label: string; icon: keyof typeof icons }[] = [
+  { href: '/supermode', label: 'Supermode', icon: 'supermode' },
 ];
 
 export function Sidebar({ pathname }: { pathname?: string }) {
@@ -60,6 +63,32 @@ export function Sidebar({ pathname }: { pathname?: string }) {
         </p>
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
+            const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+            const IconCmp = icons[item.icon];
+            return (
+              <li key={item.href}>
+                <a
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-sidebar-active-bg text-sidebar-active'
+                      : 'text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-active'
+                  }`}
+                >
+                  <IconCmp className={active ? 'text-sidebar-active' : 'text-sidebar-muted group-hover:text-sidebar-active'} />
+                  <span>{item.label}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+
+        <p className="px-3 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+          Development
+        </p>
+        <ul className="space-y-0.5">
+          {DEV_NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
             const IconCmp = icons[item.icon];
             return (
