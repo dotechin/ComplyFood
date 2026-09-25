@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { IsEnum, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -154,6 +154,12 @@ export class LogsController {
   @Patch(':id/confirm')
   confirm(@CurrentUser() user: any, @Param('id') id: string) {
     return this.logsService.confirm(id, user.orgId, user.id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  remove(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.logsService.remove(id, user.orgId);
   }
 
   @Post('temperature/ocr-suggestion')

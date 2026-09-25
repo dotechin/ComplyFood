@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { LogStatus, LogType, UserRole, type LogEntry, type User } from '@complyfood/shared';
-import { apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 
 const TYPE_LABELS: Record<LogType, string> = {
   [LogType.TEMPERATURE]: 'Temperature',
@@ -151,6 +151,18 @@ export default function LogsPage() {
     }
   };
 
+  const cancelLog = async (id: string) => {
+    try {
+      setError('');
+      setMessage('');
+      await apiDelete(`/logs/${id}`);
+      await refreshLogs();
+      setMessage('Pending entry cancelled.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to cancel log entry');
+    }
+  };
+
   const applyException = async (logId: string) => {
     const reason = exceptionReason[logId]?.trim();
     if (!reason) {
@@ -280,11 +292,13 @@ export default function LogsPage() {
             className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           >
             <option value="">All statuses</option>
-            {Object.values(LogStatus).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
+            {Object.values(LogStatus)
+              .filter((status) => status !== LogStatus.OVERRIDDEN)
+              .map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
           </select>
         </div>
         <div>
@@ -334,13 +348,22 @@ export default function LogsPage() {
                     </span>
                   )}
                   {log.status === LogStatus.PENDING && (
-                    <button
-                      type="button"
-                      onClick={() => void confirmLog(log.id)}
-                      className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
-                    >
-                      Confirm
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void confirmLog(log.id)}
+                        className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void cancelLog(log.id)}
+                        className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-danger/10 hover:text-danger"
+                      >
+                        Cancel
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { LogTable } from '@complyfood/ui';
 import type { LogEntry, ReminderEvent } from '@complyfood/shared';
-import { apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { ComplianceSection } from './compliance-section';
 
 interface DashboardSnapshot {
   pendingLogs: LogEntry[];
@@ -40,6 +41,24 @@ export default function DashboardPage() {
       setMessage('Log entry confirmed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    try {
+      setError('');
+      await apiDelete(`/logs/${id}`);
+      setSnapshot((prev) =>
+        prev
+          ? {
+              ...prev,
+              pendingLogs: prev.pendingLogs.filter((entry) => entry.id !== id),
+            }
+          : prev,
+      );
+      setMessage('Pending entry cancelled.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to cancel log entry');
     }
   };
 
@@ -161,9 +180,11 @@ export default function DashboardPage() {
             Loading…
           </div>
         ) : (
-          <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} />
+          <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} onCancel={handleCancel} />
         )}
       </section>
+
+      <ComplianceSection />
     </div>
   );
 }

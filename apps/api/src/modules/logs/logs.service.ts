@@ -149,6 +149,11 @@ export class LogsService {
     return this.findOne(entry.id, orgId);
   }
 
+  async remove(id: string, orgId: string): Promise<void> {
+    const entry = await this.findOne(id, orgId);
+    await this.repo.remove(entry);
+  }
+
   async confirm(id: string, orgId: string, userId: string): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
     entry.status = LogStatus.CONFIRMED;

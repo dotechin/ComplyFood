@@ -7,6 +7,7 @@ import { LogStatus } from '@complyfood/shared';
 interface LogTableProps {
   entries: LogEntry[];
   onConfirm?: (id: string) => void;
+  onCancel?: (id: string) => void;
 }
 
 const statusStyles: Record<LogStatus, string> = {
@@ -15,7 +16,8 @@ const statusStyles: Record<LogStatus, string> = {
   [LogStatus.OVERRIDDEN]: 'bg-danger/10 text-danger ring-1 ring-inset ring-danger/20',
 };
 
-export function LogTable({ entries, onConfirm }: LogTableProps) {
+export function LogTable({ entries, onConfirm, onCancel }: LogTableProps) {
+  const showActions = Boolean(onConfirm || onCancel);
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -25,7 +27,7 @@ export function LogTable({ entries, onConfirm }: LogTableProps) {
             <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
             <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Submitted</th>
             <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
-            {onConfirm && <th className="px-5 py-3" />}
+            {showActions && <th className="px-5 py-3" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -43,18 +45,33 @@ export function LogTable({ entries, onConfirm }: LogTableProps) {
               <td className="px-5 py-3.5 text-muted-foreground">
                 {new Date(entry.createdAt).toLocaleDateString()}
               </td>
-              {onConfirm && (
+              {showActions && (
                 <td className="px-5 py-3.5 text-right">
                   {entry.status === LogStatus.PENDING && (
-                    <button
-                      onClick={() => onConfirm(entry.id)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                      Confirm
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      {onConfirm && (
+                        <button
+                          onClick={() => onConfirm(entry.id)}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                          Confirm
+                        </button>
+                      )}
+                      {onCancel && (
+                        <button
+                          onClick={() => onCancel(entry.id)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm transition hover:bg-danger/10 hover:text-danger"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   )}
                 </td>
               )}
