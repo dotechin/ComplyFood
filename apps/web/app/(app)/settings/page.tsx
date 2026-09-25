@@ -40,8 +40,22 @@ export default function SettingsPage() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.STAFF);
+  const [language, setLanguage] = useState('en');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('complyfood-language') : null;
+    if (stored) setLanguage(stored);
+  }, []);
+
+  const changeLanguage = (value: string) => {
+    setLanguage(value);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('complyfood-language', value);
+    }
+    setMessage('Language preference saved. Full localization is coming soon.');
+  };
 
   useEffect(() => {
     apiGet<User>('/users/me')
@@ -191,8 +205,33 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">
           Organization profile, user management, locations, presets, and reminder rules.
         </p>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {message && <p className="mt-2 text-sm text-success">{message}</p>}
+      </div>
+
+      <div className="rounded-lg border bg-card p-6 shadow-card">
+        <h2 className="mb-1 text-lg font-semibold text-foreground">Localization</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Choose your preferred language. Full interface translation is coming soon.
+        </p>
+        <div className="max-w-xs">
+          <label htmlFor="language" className="mb-1 block text-sm font-medium text-foreground">
+            Language
+          </label>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => changeLanguage(e.target.value)}
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="pt">Português</option>
+          </select>
+        </div>
       </div>
 
       {organization ? (
@@ -259,7 +298,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => void generateDailyTasks()}
-              className="rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
+              className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
             >
               Generate today&apos;s tasks
             </button>

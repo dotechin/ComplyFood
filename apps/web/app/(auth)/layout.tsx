@@ -21,7 +21,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             Generate HACCP logs, run daily checklists, and keep an audit-ready trail — without the paperwork.
           </p>
           <ul className="mt-8 space-y-3 text-sm text-sidebar-foreground">
-            {['Automated daily log generation', 'Real-time reminders & overrides', 'One-click audit reports'].map((item) => (
+            {['Automated daily log generation', 'Real-time reminders & alerts', 'One-click audit reports'].map((item) => (
               <li key={item} className="flex items-center gap-3">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary-foreground">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--sidebar-active))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

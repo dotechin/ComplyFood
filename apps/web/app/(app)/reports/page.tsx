@@ -90,7 +90,7 @@ export default function ReportsPage() {
       <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Compliance Reports</h1>
-          <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and override activity.</p>
+          <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and exception activity.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -147,7 +147,6 @@ export default function ReportsPage() {
       {summary && (
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Log Entries" value={summary.totalLogs} tone="text-foreground" />
-          <StatCard label="Total Overrides" value={summary.totalOverrides} tone="text-orange-600" />
           <StatCard label="Pending" value={summary.byStatus.pending ?? 0} tone="text-yellow-600" />
           <StatCard label="Confirmed" value={summary.byStatus.confirmed ?? 0} tone="text-green-600" />
           <StatCard label="Exception Logs" value={summary.exceptionSummary.total ?? 0} tone="text-orange-600" />
@@ -172,15 +171,8 @@ export default function ReportsPage() {
             <dl className="space-y-2 text-sm text-muted-foreground">
               <SummaryRow label="Total incidents" value={summary.incidentSummary.total} />
               <SummaryRow label="Pending incidents" value={summary.incidentSummary.pending} />
-              <SummaryRow label="Overridden incidents" value={summary.incidentSummary.overridden} />
             </dl>
           </div>
-        </div>
-      )}
-      {summary && (
-        <div className="mb-6 grid gap-4 lg:grid-cols-2">
-          <SummaryListCard title="Overrides by field" values={summary.overridesByField} />
-          <SummaryListCard title="Overrides by log type" values={summary.overridesByType} />
         </div>
       )}
       {summary && (

@@ -1,35 +1,234 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  LogStatus,
-  LogType,
-  UserRole,
-  type LogEntry,
-  type TemperatureCaptureSuggestion,
-  type User,
-} from '@complyfood/shared';
-import { apiGet, apiPatch, apiPost, apiUpload } from '../../../lib/api';
+import { LogStatus, LogType, UserRole, type LogEntry, type User } from '@complyfood/shared';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+
+const TYPE_LABELS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Temperature',
+  [LogType.CLEANING]: 'Cleaning',
+  [LogType.RECEIVING]: 'Goods Receipt',
+  [LogType.CHECKLIST]: 'Checklist',
+  [LogType.INCIDENT]: 'Incident',
+};
+
+// Each tab maps to a sheet of the HACCP European standard package
+// (EC 852/2004 & Codex Alimentarius General Principles of Food Hygiene).
+const TYPE_STANDARDS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Sheet 2 — Daily Temperature Monitoring Log (CCP 2/3)',
+  [LogType.CLEANING]: 'Sheet 3 — Master Cleaning & Disinfection Schedule',
+  [LogType.RECEIVING]: 'Sheet 1 — Goods Receipt prerequisite check',
+  [LogType.CHECKLIST]: 'Prerequisite hygiene checklist',
+  [LogType.INCIDENT]: 'Sheet 4 — Corrective Action & Deviation Log',
+};
+
+type FieldOption = { value: string; label: string };
+
+type FieldDef = {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox';
+  placeholder?: string;
+  required?: boolean;
+  options?: FieldOption[];
+  unit?: string;
+  help?: string;
+  full?: boolean;
+};
+
+const FIELD_DEFS: Record<LogType, FieldDef[]> = {
+  [LogType.TEMPERATURE]: [
+    { name: 'unit', label: 'Workstation / unit', type: 'text', placeholder: 'e.g. Walk-in fridge 1', required: true },
+    {
+      name: 'reading',
+      label: 'Reading',
+      type: 'select',
+      options: [
+        { value: 'AM', label: 'AM' },
+        { value: 'PM', label: 'PM' },
+      ],
+    },
+    {
+      name: 'target',
+      label: 'Target (critical limit)',
+      type: 'select',
+      options: [
+        { value: 'Chilled ≤ 4°C', label: 'Chilled storage — ≤ 4°C' },
+        { value: 'Frozen ≤ -18°C', label: 'Frozen storage — ≤ -18°C' },
+        { value: 'Hot holding ≥ 63°C', label: 'Hot holding — ≥ 63°C' },
+        { value: 'Cooking core ≥ 75°C for 30s', label: 'Cooking core — ≥ 75°C for 30s' },
+      ],
+    },
+    { name: 'temperature', label: 'Measured temperature', type: 'number', unit: '°C', placeholder: '4', required: true },
+    {
+      name: 'corrective',
+      label: 'Corrective action / comments',
+      type: 'textarea',
+      placeholder: 'Required only if the critical limit was exceeded',
+      full: true,
+    },
+  ],
+  [LogType.CLEANING]: [
+    { name: 'area', label: 'Area / item', type: 'text', placeholder: 'e.g. Pastry work surfaces', required: true },
+    {
+      name: 'frequency',
+      label: 'Frequency',
+      type: 'select',
+      options: [
+        { value: 'Daily', label: 'Daily (D)' },
+        { value: 'Twice weekly', label: 'Twice weekly (TW)' },
+        { value: 'Weekly', label: 'Weekly (W)' },
+        { value: 'Monthly', label: 'Monthly (M)' },
+      ],
+    },
+    {
+      name: 'method',
+      label: 'Cleaning method & chemicals',
+      type: 'textarea',
+      placeholder: 'e.g. Wash with hot detergent, rinse, apply EN 1276 sanitizer',
+      full: true,
+    },
+    { name: 'responsibility', label: 'Responsibility', type: 'text', placeholder: 'e.g. Pastry chef' },
+    { name: 'completed', label: 'Task completed', type: 'checkbox' },
+  ],
+  [LogType.RECEIVING]: [
+    { name: 'supplier', label: 'Supplier', type: 'text', placeholder: 'e.g. Fresh Dairy Co.', required: true },
+    { name: 'product', label: 'Product', type: 'text', placeholder: 'e.g. Pasteurised cream', required: true },
+    { name: 'batch', label: 'Batch / lot number', type: 'text', placeholder: 'e.g. LOT-2291' },
+    {
+      name: 'temperature',
+      label: 'Delivery temperature',
+      type: 'number',
+      unit: '°C',
+      placeholder: '4',
+      help: 'Chilled ≤ 5°C · Frozen ≤ -18°C',
+    },
+    {
+      name: 'condition',
+      label: 'Packaging condition',
+      type: 'select',
+      options: [
+        { value: 'Acceptable', label: 'Acceptable' },
+        { value: 'Damaged packaging', label: 'Damaged packaging' },
+        { value: 'Rejected', label: 'Rejected' },
+      ],
+    },
+  ],
+  [LogType.CHECKLIST]: [
+    {
+      name: 'checklist',
+      label: 'Checklist',
+      type: 'select',
+      options: [
+        { value: 'Opening', label: 'Opening' },
+        { value: 'Mid-service', label: 'Mid-service' },
+        { value: 'Closing', label: 'Closing' },
+        { value: 'Weekly', label: 'Weekly' },
+      ],
+    },
+    {
+      name: 'shift',
+      label: 'Shift',
+      type: 'select',
+      options: [
+        { value: 'AM', label: 'AM' },
+        { value: 'PM', label: 'PM' },
+      ],
+    },
+    { name: 'completed', label: 'All items completed', type: 'checkbox' },
+    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
+  ],
+  [LogType.INCIDENT]: [
+    {
+      name: 'description',
+      label: 'Description of deviation / problem',
+      type: 'textarea',
+      placeholder: 'e.g. Walk-in fridge reading 9°C at opening',
+      required: true,
+      full: true,
+    },
+    {
+      name: 'correction',
+      label: 'Immediate correction taken',
+      type: 'textarea',
+      placeholder: 'e.g. Moved stock to backup unit, called maintenance',
+      full: true,
+    },
+    {
+      name: 'disposition',
+      label: 'Product disposition',
+      type: 'select',
+      options: [
+        { value: 'Retained', label: 'Retained' },
+        { value: 'Discarded', label: 'Discarded' },
+        { value: 'N/A', label: 'Not applicable' },
+      ],
+    },
+    {
+      name: 'severity',
+      label: 'Severity',
+      type: 'select',
+      options: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+      ],
+    },
+    {
+      name: 'preventative',
+      label: 'Preventative action to avoid repeat',
+      type: 'textarea',
+      placeholder: 'e.g. Add hourly temperature checks during service',
+      full: true,
+    },
+  ],
+};
+
+type FieldValues = Record<string, string | boolean>;
+
+type InsertionMethod = 'manual' | 'camera';
+
+function emptyValues(defs: FieldDef[]): FieldValues {
+  const values: FieldValues = {};
+  for (const def of defs) {
+    if (def.type === 'checkbox') {
+      values[def.name] = false;
+    } else if (def.type === 'select') {
+      values[def.name] = def.options?.[0]?.value ?? '';
+    } else {
+      values[def.name] = '';
+    }
+  }
+  return values;
+}
+
+function buildFields(defs: FieldDef[], values: FieldValues) {
+  const fields: Record<string, unknown> = {};
+  for (const def of defs) {
+    const raw = values[def.name];
+    if (def.type === 'checkbox') {
+      fields[def.label] = Boolean(raw);
+      continue;
+    }
+    const str = typeof raw === 'string' ? raw.trim() : '';
+    if (!str) {
+      if (def.required) {
+        throw new Error(`${def.label} is required.`);
+      }
+      continue;
+    }
+    fields[def.label] = def.type === 'number' && def.unit ? `${str} ${def.unit}` : str;
+  }
+  return fields;
+}
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-function parseFields(value: string) {
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Fields JSON must be an object.');
-  }
-  return parsed as Record<string, unknown>;
-}
-
-function buildLogsPath(filters: {
-  type: string;
-  status: string;
-  dateFrom: string;
-  dateTo: string;
-}) {
+function buildLogsPath(filters: { type: string; status: string; dateFrom: string; dateTo: string }) {
   const params = new URLSearchParams();
   if (filters.type) params.set('type', filters.type);
   if (filters.status) params.set('status', filters.status);
@@ -51,35 +250,24 @@ export default function LogsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [filterType, setFilterType] = useState('');
+  const [activeType, setActiveType] = useState<LogType>(LogType.TEMPERATURE);
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [createType, setCreateType] = useState<LogType>(LogType.TEMPERATURE);
-  const [createFields, setCreateFields] = useState('{"item":"Fridge 1","value":"4°C"}');
-  const [overrideFieldName, setOverrideFieldName] = useState<Record<string, string>>({});
-  const [overrideNewValue, setOverrideNewValue] = useState<Record<string, string>>({});
-  const [overrideReason, setOverrideReason] = useState<Record<string, string>>({});
+  const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
+  const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [exceptionReason, setExceptionReason] = useState<Record<string, string>>({});
   const [exceptionOccurredAt, setExceptionOccurredAt] = useState<Record<string, string>>({});
   const [exceptionMeasuredAt, setExceptionMeasuredAt] = useState<Record<string, string>>({});
   const [exceptionStatus, setExceptionStatus] = useState<Record<string, string>>({});
-  const [captureConsent, setCaptureConsent] = useState(false);
-  const [captureFile, setCaptureFile] = useState<File | null>(null);
-  const [captureItem, setCaptureItem] = useState('Fridge 1');
-  const [captureSuggestion, setCaptureSuggestion] = useState<TemperatureCaptureSuggestion | null>(null);
-  const [captureValue, setCaptureValue] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  const activeDefs = FIELD_DEFS[activeType];
+
   const filters = useMemo(
-    () => ({
-      type: filterType,
-      status: filterStatus,
-      dateFrom,
-      dateTo,
-    }),
-    [dateFrom, dateTo, filterStatus, filterType],
+    () => ({ type: activeType, status: filterStatus, dateFrom, dateTo }),
+    [activeType, dateFrom, dateTo, filterStatus],
   );
 
   const refreshLogs = async () => {
@@ -120,6 +308,17 @@ export default function LogsPage() {
     };
   }, [filters]);
 
+  const selectType = (type: LogType) => {
+    setActiveType(type);
+    setFormValues(emptyValues(FIELD_DEFS[type]));
+    setError('');
+    setMessage('');
+  };
+
+  const setFieldValue = (name: string, value: string | boolean) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
   const createLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -127,11 +326,12 @@ export default function LogsPage() {
       setError('');
       setMessage('');
       await apiPost<LogEntry>('/logs', {
-        type: createType,
-        fields: parseFields(createFields),
+        type: activeType,
+        fields: buildFields(activeDefs, formValues),
       });
       await refreshLogs();
-      setMessage('Log entry created.');
+      setFormValues(emptyValues(activeDefs));
+      setMessage(`${TYPE_LABELS[activeType]} entry created.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create log entry');
     } finally {
@@ -151,127 +351,15 @@ export default function LogsPage() {
     }
   };
 
-  const submitOverride = async (log: LogEntry) => {
-    const fieldName = overrideFieldName[log.id]?.trim();
-    const reason = overrideReason[log.id]?.trim();
-    if (!fieldName || !reason) {
-      setError('Override field and reason are required.');
-      return;
-    }
-    if (!(fieldName in (log.fields ?? {}))) {
-      setError('Choose an existing field name to override.');
-      return;
-    }
-
+  const cancelLog = async (id: string) => {
     try {
       setError('');
       setMessage('');
-      const nextValue = overrideNewValue[log.id] ?? '';
-      await apiPost('/overrides', {
-        logEntryId: log.id,
-        fieldName,
-        originalValue: log.fields[fieldName],
-        newValue: nextValue,
-        reason,
-      });
+      await apiDelete(`/logs/${id}`);
       await refreshLogs();
-      setOverrideFieldName((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideNewValue((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideReason((prev) => ({ ...prev, [log.id]: '' }));
-      setMessage('Override recorded.');
+      setMessage('Pending entry cancelled.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save override');
-    }
-  };
-
-  const scanTemperature = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-
-    try {
-      setError('');
-      const form = new FormData();
-      form.append('file', captureFile);
-      const suggestion = await apiUpload<TemperatureCaptureSuggestion>('/logs/temperature/ocr-suggestion', form);
-      setCaptureSuggestion(suggestion);
-      if (suggestion.extractedValue) {
-        setCaptureValue(suggestion.extractedValue);
-      }
-      setMessage('Temperature suggestion ready. Please review before saving.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to process camera capture');
-    }
-  };
-
-  const createTemperatureFromCapture = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-    if (!captureValue.trim()) {
-      setError('A confirmed temperature value is required.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      const created = await apiPost<LogEntry>('/logs', {
-        type: LogType.TEMPERATURE,
-        fields: {
-          item: captureItem,
-          value: captureValue,
-          captureSource: 'phone-camera',
-          ocrSuggestion: captureSuggestion?.extractedValue ?? null,
-          ocrConfidence: captureSuggestion?.confidence ?? 0,
-          ocrMethod: captureSuggestion?.source ?? 'none',
-          confirmedByUser: true,
-          retentionPolicy: 'pending-image-upload',
-          imageLinked: false,
-        },
-      });
-
-      try {
-        const upload = new FormData();
-        upload.append('file', captureFile);
-        upload.append('linkedEntryId', created.id);
-        await apiUpload('/documents', upload);
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-retained-with-linked-document',
-            imageLinked: true,
-          },
-        });
-      } catch {
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-upload-failed',
-            imageLinked: false,
-          },
-        });
-        throw new Error('Capture saved but image upload failed. Please retry document upload from Documents.');
-      }
-
-      await refreshLogs();
-      setCaptureFile(null);
-      setCaptureSuggestion(null);
-      setCaptureValue('');
-      setCaptureConsent(false);
-      setMessage('Temperature log created with linked capture image.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save camera temperature log');
+      setError(err instanceof Error ? err.message : 'Unable to cancel log entry');
     }
   };
 
@@ -302,147 +390,165 @@ export default function LogsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
-        <p className="text-sm text-muted-foreground">Create, filter, review, confirm, and override daily log entries.</p>
+        <p className="text-sm text-muted-foreground">
+          Record, review, and confirm daily log entries by category. Fields follow the HACCP European standard package
+          (EC 852/2004 &amp; Codex).
+        </p>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {message && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
 
-      <form onSubmit={createLog} className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[0.9fr_1.6fr_auto]">
+      <div className="border-b border-border">
+        <nav className="-mb-px flex flex-wrap gap-1" aria-label="Log categories">
+          {Object.values(LogType).map((type) => {
+            const isActive = type === activeType;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => selectType(type)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+                }`}
+              >
+                {TYPE_LABELS[type]}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <form onSubmit={createLog} className="space-y-4 rounded-lg border bg-card p-5 shadow-card">
         <div>
-          <label htmlFor="createType" className="mb-1 block text-sm font-medium text-foreground">
-            Log type
-          </label>
-          <select
-            id="createType"
-            value={createType}
-            onChange={(e) => setCreateType(e.target.value as LogType)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+          <h2 className="text-lg font-semibold text-foreground">
+            New {TYPE_LABELS[activeType].toLowerCase()} entry
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setInsertionMethod('manual')}
+            aria-pressed={insertionMethod === 'manual'}
+            className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
+              insertionMethod === 'manual'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-input text-foreground hover:bg-accent'
+            }`}
           >
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+            Manual entry
+          </button>
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Camera acquisition is coming soon"
+            className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-input px-4 py-2 text-sm font-medium text-muted-foreground opacity-70"
+          >
+            Phone camera
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              Coming soon
+            </span>
+          </button>
         </div>
-        <div>
-          <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-foreground">
-            Fields JSON
-          </label>
-          <textarea
-            id="createFields"
-            value={createFields}
-            onChange={(e) => setCreateFields(e.target.value)}
-            className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
-          />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {activeDefs.map((def) => {
+            const fieldId = `field-${def.name}`;
+            const isFull = def.full || def.type === 'textarea';
+
+            if (def.type === 'checkbox') {
+              return (
+                <label
+                  key={def.name}
+                  htmlFor={fieldId}
+                  className={`flex items-center gap-2 text-sm font-medium text-foreground ${isFull ? 'md:col-span-2' : ''}`}
+                >
+                  <input
+                    id={fieldId}
+                    type="checkbox"
+                    checked={Boolean(formValues[def.name])}
+                    onChange={(e) => setFieldValue(def.name, e.target.checked)}
+                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                  />
+                  {def.label}
+                </label>
+              );
+            }
+
+            return (
+              <div key={def.name} className={isFull ? 'md:col-span-2' : ''}>
+                <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
+                  {def.label}
+                  {def.required && <span className="ml-0.5 text-danger">*</span>}
+                </label>
+
+                {def.type === 'textarea' && (
+                  <textarea
+                    id={fieldId}
+                    value={String(formValues[def.name] ?? '')}
+                    onChange={(e) => setFieldValue(def.name, e.target.value)}
+                    placeholder={def.placeholder}
+                    className="h-24 w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+                  />
+                )}
+
+                {def.type === 'select' && (
+                  <select
+                    id={fieldId}
+                    value={String(formValues[def.name] ?? '')}
+                    onChange={(e) => setFieldValue(def.name, e.target.value)}
+                    className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+                  >
+                    {def.options?.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {(def.type === 'text' || def.type === 'number') && (
+                  <div className="relative">
+                    <input
+                      id={fieldId}
+                      type={def.type === 'number' ? 'number' : 'text'}
+                      step={def.type === 'number' ? 'any' : undefined}
+                      value={String(formValues[def.name] ?? '')}
+                      onChange={(e) => setFieldValue(def.name, e.target.value)}
+                      placeholder={def.placeholder}
+                      className={`w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground ${
+                        def.unit ? 'pr-12' : ''
+                      }`}
+                    />
+                    {def.unit && (
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                        {def.unit}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {def.help && <p className="mt-1 text-xs text-muted-foreground">{def.help}</p>}
+              </div>
+            );
+          })}
         </div>
+
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 md:self-end"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Create log'}
+          {saving ? 'Saving…' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
         </button>
       </form>
 
-      <div className="rounded-lg border bg-card p-4 shadow-card">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Temperature from phone camera</h2>
-        <p className="mb-3 text-sm text-muted-foreground">Capture image, review OCR suggestion, and confirm value before save.</p>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <div>
-            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-foreground">
-              Capture image
-            </label>
-            <input
-              id="captureFile"
-              aria-label="Capture temperature image"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-foreground">
-              Item
-            </label>
-            <input
-              id="captureItem"
-              aria-label="Temperature item name"
-              value={captureItem}
-              onChange={(e) => setCaptureItem(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Item (e.g. Fridge 1)"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-foreground">
-              Confirmed temperature
-            </label>
-            <input
-              id="captureValue"
-              aria-label="Confirmed temperature value"
-              value={captureValue}
-              onChange={(e) => setCaptureValue(e.target.value)}
-              className="w-full rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Confirmed temperature"
-            />
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void scanTemperature()}
-              className="w-full rounded-md border border-primary/30 px-4 py-2 text-sm text-primary hover:bg-accent"
-            >
-              Get suggestion
-            </button>
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void createTemperatureFromCapture()}
-              className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Save capture log
-            </button>
-          </div>
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={captureConsent}
-            onChange={(e) => setCaptureConsent(e.target.checked)}
-          />
-          I confirm image capture consent and retention for audit traceability.
-        </label>
-        {captureSuggestion && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Suggested: <span className="font-semibold">{captureSuggestion.extractedValue ?? 'no value detected'}</span> ·
-            confidence {(captureSuggestion.confidence * 100).toFixed(0)}% · source {captureSuggestion.source}
-          </p>
-        )}
-      </div>
-
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-4">
-        <div>
-          <label htmlFor="filterType" className="mb-1 block text-sm font-medium text-foreground">
-            Type
-          </label>
-          <select
-            id="filterType"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">All types</option>
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-3">
         <div>
           <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
             Status
@@ -451,14 +557,16 @@ export default function LogsPage() {
             id="filterStatus"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           >
             <option value="">All statuses</option>
-            {Object.values(LogStatus).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
+            {Object.values(LogStatus)
+              .filter((status) => status !== LogStatus.OVERRIDDEN)
+              .map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
           </select>
         </div>
         <div>
@@ -470,7 +578,7 @@ export default function LogsPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           />
         </div>
         <div>
@@ -482,7 +590,7 @@ export default function LogsPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded-md border border-input px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
           />
         </div>
       </div>
@@ -495,7 +603,7 @@ export default function LogsPage() {
             <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold text-foreground">{log.type}</h2>
+                  <h2 className="font-semibold text-foreground">{TYPE_LABELS[log.type as LogType] ?? log.type}</h2>
                   <p className="text-xs text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString()} · {log.status}
                     {log.isException ? ' · exception mode' : ''}
@@ -508,13 +616,22 @@ export default function LogsPage() {
                     </span>
                   )}
                   {log.status === LogStatus.PENDING && (
-                    <button
-                      type="button"
-                      onClick={() => void confirmLog(log.id)}
-                      className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
-                    >
-                      Confirm
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void confirmLog(log.id)}
+                        className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void cancelLog(log.id)}
+                        className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-danger/10 hover:text-danger"
+                      >
+                        Cancel
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -551,92 +668,36 @@ export default function LogsPage() {
                 )}
               </dl>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
-                <div className="space-y-1">
-                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-foreground">
-                    Field name
-                  </label>
-                  <input
-                    id={`overrideFieldName-${log.id}`}
-                    value={overrideFieldName[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="Field name"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-foreground">
-                    New value
-                  </label>
-                  <input
-                    id={`overrideNewValue-${log.id}`}
-                    value={overrideNewValue[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="New value or JSON"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-foreground">
-                    Override reason
-                  </label>
-                  <input
-                    id={`overrideReason-${log.id}`}
-                    value={overrideReason[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                    placeholder="Override reason"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void submitOverride(log)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-black md:self-end"
-                >
-                  Override
-                </button>
-              </div>
-
               {user?.role === UserRole.ADMIN && (
-                <div className="mt-4 rounded-md border border-orange-200 bg-orange-50 p-3">
-                  <h3 className="mb-2 text-sm font-semibold text-orange-900">Exception mode (Admin)</h3>
+                <div className="mt-4 rounded-md border border-warning/30 bg-warning/5 p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">Exception mode (Admin)</h3>
                   <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
                     <input
                       aria-label={`Exception reason for log ${log.id}`}
                       value={exceptionReason[log.id] ?? ''}
                       onChange={(e) => setExceptionReason((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                       placeholder="Mandatory reason"
                     />
                     <input
                       aria-label={`Exception occurred at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionOccurredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      onChange={(e) => setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <input
                       aria-label={`Exception measured at for log ${log.id}`}
                       type="datetime-local"
                       value={exceptionMeasuredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      onChange={(e) => setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <select
                       aria-label={`Exception unlock status for log ${log.id}`}
                       value={exceptionStatus[log.id] ?? ''}
                       onChange={(e) => setExceptionStatus((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
+                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                     >
                       <option value="">Keep current status</option>
                       {Object.values(LogStatus).map((status) => (
@@ -648,7 +709,7 @@ export default function LogsPage() {
                     <button
                       type="button"
                       onClick={() => void applyException(log.id)}
-                      className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-orange-700"
+                      className="rounded-md bg-warning px-4 py-2 text-sm font-medium text-white hover:bg-warning/90"
                     >
                       Apply
                     </button>
@@ -660,7 +721,7 @@ export default function LogsPage() {
 
           {logs.length === 0 && (
             <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
-              No log entries match the selected filters.
+              No {TYPE_LABELS[activeType].toLowerCase()} entries match the selected filters.
             </div>
           )}
         </div>

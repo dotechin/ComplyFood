@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { IsEnum, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -41,6 +41,25 @@ class UpdateLogDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'measuredDate must use YYYY-MM-DD format' })
   measuredDate?: string;
+}
+
+class BackfillLogDto {
+  @IsEnum(LogType)
+  type: LogType;
+
+  @IsObject()
+  fields: Record<string, any>;
+
+  @IsOptional()
+  @IsUUID()
+  locationId?: string;
+
+  @IsISO8601()
+  createdAt: string;
+
+  @IsOptional()
+  @IsEnum(LogStatus)
+  status?: LogStatus;
 }
 
 class FindLogsQueryDto {
@@ -93,6 +112,18 @@ export class LogsController {
     return this.logsService.create(user.orgId, user.id, dto);
   }
 
+  @Post('backfill')
+  @Roles(UserRole.ADMIN)
+  backfill(@CurrentUser() user: any, @Body() dto: BackfillLogDto) {
+    return this.logsService.backfill(user.orgId, user.id, {
+      type: dto.type,
+      fields: dto.fields,
+      locationId: dto.locationId ?? null,
+      createdAt: new Date(dto.createdAt),
+      status: dto.status,
+    });
+  }
+
   @Get()
   findAll(@CurrentUser() user: any, @Query() query: FindLogsQueryDto) {
     return this.logsService.findAll(
@@ -123,6 +154,12 @@ export class LogsController {
   @Patch(':id/confirm')
   confirm(@CurrentUser() user: any, @Param('id') id: string) {
     return this.logsService.confirm(id, user.orgId, user.id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  remove(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.logsService.remove(id, user.orgId);
   }
 
   @Post('temperature/ocr-suggestion')

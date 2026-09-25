@@ -105,6 +105,55 @@ export class LogsService {
     return this.repo.save(entry);
   }
 
+  async backfill(
+    orgId: string,
+    userId: string,
+    data: {
+      type: LogType;
+      fields: Record<string, any>;
+      locationId?: string | null;
+      createdAt: Date;
+      status?: LogStatus;
+      occurredAt?: Date | null;
+      measuredAt?: Date | null;
+    },
+  ): Promise<LogEntry> {
+    const status = data.status ?? LogStatus.CONFIRMED;
+    const isConfirmed = status === LogStatus.CONFIRMED;
+    const entry = await this.repo.save(
+      this.repo.create({
+        orgId,
+        locationId: data.locationId ?? null,
+        type: data.type,
+        fields: data.fields ?? {},
+        presetId: null,
+        submittedBy: isConfirmed ? userId : null,
+        submittedAt: isConfirmed ? data.createdAt : null,
+        status,
+        occurredAt: data.occurredAt ?? data.createdAt,
+        measuredAt: data.measuredAt ?? data.createdAt,
+        isException: false,
+        exceptionReason: null,
+        exceptionBy: null,
+        exceptionAt: null,
+      }),
+    );
+    // createdAt is a CreateDateColumn set automatically on insert; override it so
+    // the entry lands on the requested (backdated) day for reports and filters.
+    await this.repo
+      .createQueryBuilder()
+      .update(LogEntry)
+      .set({ createdAt: data.createdAt })
+      .where('id = :id', { id: entry.id })
+      .execute();
+    return this.findOne(entry.id, orgId);
+  }
+
+  async remove(id: string, orgId: string): Promise<void> {
+    const entry = await this.findOne(id, orgId);
+    await this.repo.remove(entry);
+  }
+
   async confirm(id: string, orgId: string, userId: string): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
     entry.status = LogStatus.CONFIRMED;
