@@ -7,7 +7,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 const TYPE_LABELS: Record<LogType, string> = {
   [LogType.TEMPERATURE]: 'Temperature',
   [LogType.CLEANING]: 'Cleaning',
-  [LogType.RECEIVING]: 'Receiving',
+  [LogType.RECEIVING]: 'Goods Receipt',
   [LogType.CHECKLIST]: 'Checklist',
   [LogType.INCIDENT]: 'Incident',
 };
