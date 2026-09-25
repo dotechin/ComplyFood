@@ -130,61 +130,67 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {snapshot && snapshot.dueReminders.length > 0 && (
-        <section className="rounded-lg border border-border bg-card p-5 shadow-card">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-danger/10 text-danger">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-            </span>
-            Due reminders
-          </h2>
-          <div className="space-y-2.5">
-            {snapshot.dueReminders.map((reminder) => (
-              <div
-                key={reminder.id}
-                className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-3.5"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">{reminder.message}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    <span className="capitalize">{reminder.type}</span> · {new Date(reminder.scheduledFor).toLocaleString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void acknowledgeReminder(reminder.id)}
-                  className="shrink-0 rounded-md border border-primary/30 bg-card px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-accent"
-                >
-                  Acknowledge
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-border bg-card shadow-card">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">Pending confirmations</h2>
-          {snapshot && (
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              {snapshot.pendingLogs.length} item{snapshot.pendingLogs.length === 1 ? '' : 's'}
-            </span>
-          )}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <ComplianceSection />
         </div>
-        {loading ? (
-          <div className="flex items-center gap-2 px-5 py-10 text-sm text-muted-foreground">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
-            Loading…
-          </div>
-        ) : (
-          <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} onCancel={handleCancel} />
-        )}
-      </section>
 
-      <ComplianceSection />
+        <div className="space-y-8 lg:col-span-2">
+          {snapshot && snapshot.dueReminders.length > 0 && (
+            <section className="rounded-lg border border-border bg-card p-5 shadow-card">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-danger/10 text-danger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                  </svg>
+                </span>
+                Due reminders
+              </h2>
+              <div className="space-y-2.5">
+                {snapshot.dueReminders.map((reminder) => (
+                  <div
+                    key={reminder.id}
+                    className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-3.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{reminder.message}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        <span className="capitalize">{reminder.type}</span> · {new Date(reminder.scheduledFor).toLocaleString()}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void acknowledgeReminder(reminder.id)}
+                      className="shrink-0 rounded-md border border-primary/30 bg-card px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-accent"
+                    >
+                      Acknowledge
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-lg border border-border bg-card shadow-card">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-base font-semibold text-foreground">Pending confirmations</h2>
+              {snapshot && (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {snapshot.pendingLogs.length} item{snapshot.pendingLogs.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            {loading ? (
+              <div className="flex items-center gap-2 px-5 py-10 text-sm text-muted-foreground">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+                Loading…
+              </div>
+            ) : (
+              <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} onCancel={handleCancel} />
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

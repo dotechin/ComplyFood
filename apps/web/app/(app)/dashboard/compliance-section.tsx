@@ -133,7 +133,7 @@ export function ComplianceSection() {
         <h2 className="text-base font-semibold text-foreground">European law compliance</h2>
       </div>
 
-      <div className="grid gap-6 p-5 lg:grid-cols-2">
+      <div className="grid gap-6 p-5">
         <div>
           <h3 className="mb-3 text-sm font-semibold text-foreground">Official references</h3>
           <ul className="space-y-2.5">
