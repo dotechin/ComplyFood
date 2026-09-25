@@ -12,27 +12,220 @@ const TYPE_LABELS: Record<LogType, string> = {
   [LogType.INCIDENT]: 'Incident',
 };
 
-const FIELD_TEMPLATES: Record<LogType, string> = {
-  [LogType.TEMPERATURE]: '{\n  "item": "Refrigerator 1",\n  "value": "4°C"\n}',
-  [LogType.CLEANING]: '{\n  "area": "Prep station",\n  "task": "Sanitize surfaces",\n  "completed": true\n}',
-  [LogType.RECEIVING]: '{\n  "supplier": "",\n  "product": "",\n  "temperature": "",\n  "condition": "acceptable"\n}',
-  [LogType.CHECKLIST]: '{\n  "checklist": "Opening",\n  "completed": true\n}',
-  [LogType.INCIDENT]: '{\n  "description": "",\n  "action": "",\n  "severity": "low"\n}',
+// Each tab maps to a sheet of the HACCP European standard package
+// (EC 852/2004 & Codex Alimentarius General Principles of Food Hygiene).
+const TYPE_STANDARDS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Sheet 2 — Daily Temperature Monitoring Log (CCP 2/3)',
+  [LogType.CLEANING]: 'Sheet 3 — Master Cleaning & Disinfection Schedule',
+  [LogType.RECEIVING]: 'Sheet 1 — Goods Receipt prerequisite check',
+  [LogType.CHECKLIST]: 'Prerequisite hygiene checklist',
+  [LogType.INCIDENT]: 'Sheet 4 — Corrective Action & Deviation Log',
 };
+
+type FieldOption = { value: string; label: string };
+
+type FieldDef = {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox';
+  placeholder?: string;
+  required?: boolean;
+  options?: FieldOption[];
+  unit?: string;
+  help?: string;
+  full?: boolean;
+};
+
+const FIELD_DEFS: Record<LogType, FieldDef[]> = {
+  [LogType.TEMPERATURE]: [
+    { name: 'unit', label: 'Workstation / unit', type: 'text', placeholder: 'e.g. Walk-in fridge 1', required: true },
+    {
+      name: 'reading',
+      label: 'Reading',
+      type: 'select',
+      options: [
+        { value: 'AM', label: 'AM' },
+        { value: 'PM', label: 'PM' },
+      ],
+    },
+    {
+      name: 'target',
+      label: 'Target (critical limit)',
+      type: 'select',
+      options: [
+        { value: 'Chilled ≤ 4°C', label: 'Chilled storage — ≤ 4°C' },
+        { value: 'Frozen ≤ -18°C', label: 'Frozen storage — ≤ -18°C' },
+        { value: 'Hot holding ≥ 63°C', label: 'Hot holding — ≥ 63°C' },
+        { value: 'Cooking core ≥ 75°C for 30s', label: 'Cooking core — ≥ 75°C for 30s' },
+      ],
+    },
+    { name: 'temperature', label: 'Measured temperature', type: 'number', unit: '°C', placeholder: '4', required: true },
+    {
+      name: 'corrective',
+      label: 'Corrective action / comments',
+      type: 'textarea',
+      placeholder: 'Required only if the critical limit was exceeded',
+      full: true,
+    },
+  ],
+  [LogType.CLEANING]: [
+    { name: 'area', label: 'Area / item', type: 'text', placeholder: 'e.g. Pastry work surfaces', required: true },
+    {
+      name: 'frequency',
+      label: 'Frequency',
+      type: 'select',
+      options: [
+        { value: 'Daily', label: 'Daily (D)' },
+        { value: 'Twice weekly', label: 'Twice weekly (TW)' },
+        { value: 'Weekly', label: 'Weekly (W)' },
+        { value: 'Monthly', label: 'Monthly (M)' },
+      ],
+    },
+    {
+      name: 'method',
+      label: 'Cleaning method & chemicals',
+      type: 'textarea',
+      placeholder: 'e.g. Wash with hot detergent, rinse, apply EN 1276 sanitizer',
+      full: true,
+    },
+    { name: 'responsibility', label: 'Responsibility', type: 'text', placeholder: 'e.g. Pastry chef' },
+    { name: 'completed', label: 'Task completed', type: 'checkbox' },
+  ],
+  [LogType.RECEIVING]: [
+    { name: 'supplier', label: 'Supplier', type: 'text', placeholder: 'e.g. Fresh Dairy Co.', required: true },
+    { name: 'product', label: 'Product', type: 'text', placeholder: 'e.g. Pasteurised cream', required: true },
+    { name: 'batch', label: 'Batch / lot number', type: 'text', placeholder: 'e.g. LOT-2291' },
+    {
+      name: 'temperature',
+      label: 'Delivery temperature',
+      type: 'number',
+      unit: '°C',
+      placeholder: '4',
+      help: 'Chilled ≤ 5°C · Frozen ≤ -18°C',
+    },
+    {
+      name: 'condition',
+      label: 'Packaging condition',
+      type: 'select',
+      options: [
+        { value: 'Acceptable', label: 'Acceptable' },
+        { value: 'Damaged packaging', label: 'Damaged packaging' },
+        { value: 'Rejected', label: 'Rejected' },
+      ],
+    },
+  ],
+  [LogType.CHECKLIST]: [
+    {
+      name: 'checklist',
+      label: 'Checklist',
+      type: 'select',
+      options: [
+        { value: 'Opening', label: 'Opening' },
+        { value: 'Mid-service', label: 'Mid-service' },
+        { value: 'Closing', label: 'Closing' },
+        { value: 'Weekly', label: 'Weekly' },
+      ],
+    },
+    {
+      name: 'shift',
+      label: 'Shift',
+      type: 'select',
+      options: [
+        { value: 'AM', label: 'AM' },
+        { value: 'PM', label: 'PM' },
+      ],
+    },
+    { name: 'completed', label: 'All items completed', type: 'checkbox' },
+    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
+  ],
+  [LogType.INCIDENT]: [
+    {
+      name: 'description',
+      label: 'Description of deviation / problem',
+      type: 'textarea',
+      placeholder: 'e.g. Walk-in fridge reading 9°C at opening',
+      required: true,
+      full: true,
+    },
+    {
+      name: 'correction',
+      label: 'Immediate correction taken',
+      type: 'textarea',
+      placeholder: 'e.g. Moved stock to backup unit, called maintenance',
+      full: true,
+    },
+    {
+      name: 'disposition',
+      label: 'Product disposition',
+      type: 'select',
+      options: [
+        { value: 'Retained', label: 'Retained' },
+        { value: 'Discarded', label: 'Discarded' },
+        { value: 'N/A', label: 'Not applicable' },
+      ],
+    },
+    {
+      name: 'severity',
+      label: 'Severity',
+      type: 'select',
+      options: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+      ],
+    },
+    {
+      name: 'preventative',
+      label: 'Preventative action to avoid repeat',
+      type: 'textarea',
+      placeholder: 'e.g. Add hourly temperature checks during service',
+      full: true,
+    },
+  ],
+};
+
+type FieldValues = Record<string, string | boolean>;
 
 type InsertionMethod = 'manual' | 'camera';
 
-function formatValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '—';
-  return typeof value === 'string' ? value : JSON.stringify(value);
+function emptyValues(defs: FieldDef[]): FieldValues {
+  const values: FieldValues = {};
+  for (const def of defs) {
+    if (def.type === 'checkbox') {
+      values[def.name] = false;
+    } else if (def.type === 'select') {
+      values[def.name] = def.options?.[0]?.value ?? '';
+    } else {
+      values[def.name] = '';
+    }
+  }
+  return values;
 }
 
-function parseFields(value: string) {
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Fields JSON must be an object.');
+function buildFields(defs: FieldDef[], values: FieldValues) {
+  const fields: Record<string, unknown> = {};
+  for (const def of defs) {
+    const raw = values[def.name];
+    if (def.type === 'checkbox') {
+      fields[def.label] = Boolean(raw);
+      continue;
+    }
+    const str = typeof raw === 'string' ? raw.trim() : '';
+    if (!str) {
+      if (def.required) {
+        throw new Error(`${def.label} is required.`);
+      }
+      continue;
+    }
+    fields[def.label] = def.type === 'number' && def.unit ? `${str} ${def.unit}` : str;
   }
-  return parsed as Record<string, unknown>;
+  return fields;
+}
+
+function formatValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function buildLogsPath(filters: { type: string; status: string; dateFrom: string; dateTo: string }) {
@@ -62,13 +255,15 @@ export default function LogsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
-  const [createFields, setCreateFields] = useState(FIELD_TEMPLATES[LogType.TEMPERATURE]);
+  const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [exceptionReason, setExceptionReason] = useState<Record<string, string>>({});
   const [exceptionOccurredAt, setExceptionOccurredAt] = useState<Record<string, string>>({});
   const [exceptionMeasuredAt, setExceptionMeasuredAt] = useState<Record<string, string>>({});
   const [exceptionStatus, setExceptionStatus] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  const activeDefs = FIELD_DEFS[activeType];
 
   const filters = useMemo(
     () => ({ type: activeType, status: filterStatus, dateFrom, dateTo }),
@@ -115,9 +310,13 @@ export default function LogsPage() {
 
   const selectType = (type: LogType) => {
     setActiveType(type);
-    setCreateFields(FIELD_TEMPLATES[type]);
+    setFormValues(emptyValues(FIELD_DEFS[type]));
     setError('');
     setMessage('');
+  };
+
+  const setFieldValue = (name: string, value: string | boolean) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
   const createLog = async (e: React.FormEvent) => {
@@ -128,9 +327,10 @@ export default function LogsPage() {
       setMessage('');
       await apiPost<LogEntry>('/logs', {
         type: activeType,
-        fields: parseFields(createFields),
+        fields: buildFields(activeDefs, formValues),
       });
       await refreshLogs();
+      setFormValues(emptyValues(activeDefs));
       setMessage(`${TYPE_LABELS[activeType]} entry created.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create log entry');
@@ -191,7 +391,8 @@ export default function LogsPage() {
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
         <p className="text-sm text-muted-foreground">
-          Record, review, and confirm daily log entries by category.
+          Record, review, and confirm daily log entries by category. Fields follow the HACCP European standard package
+          (EC 852/2004 &amp; Codex).
         </p>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {message && <p className="mt-2 text-sm text-success">{message}</p>}
@@ -220,13 +421,12 @@ export default function LogsPage() {
         </nav>
       </div>
 
-      <form
-        onSubmit={createLog}
-        className="space-y-4 rounded-lg border bg-card p-5 shadow-card"
-      >
+      <form onSubmit={createLog} className="space-y-4 rounded-lg border bg-card p-5 shadow-card">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">New {TYPE_LABELS[activeType].toLowerCase()} entry</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Choose how this entry is captured.</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            New {TYPE_LABELS[activeType].toLowerCase()} entry
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -256,19 +456,87 @@ export default function LogsPage() {
           </button>
         </div>
 
-        <div>
-          <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-foreground">
-            Fields
-          </label>
-          <textarea
-            id="createFields"
-            value={createFields}
-            onChange={(e) => setCreateFields(e.target.value)}
-            className="h-32 w-full rounded-md border border-input bg-card px-3 py-2 font-mono text-sm text-foreground"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Provide the entry values as a JSON object. The template above is prefilled for {TYPE_LABELS[activeType].toLowerCase()} logs.
-          </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {activeDefs.map((def) => {
+            const fieldId = `field-${def.name}`;
+            const isFull = def.full || def.type === 'textarea';
+
+            if (def.type === 'checkbox') {
+              return (
+                <label
+                  key={def.name}
+                  htmlFor={fieldId}
+                  className={`flex items-center gap-2 text-sm font-medium text-foreground ${isFull ? 'md:col-span-2' : ''}`}
+                >
+                  <input
+                    id={fieldId}
+                    type="checkbox"
+                    checked={Boolean(formValues[def.name])}
+                    onChange={(e) => setFieldValue(def.name, e.target.checked)}
+                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                  />
+                  {def.label}
+                </label>
+              );
+            }
+
+            return (
+              <div key={def.name} className={isFull ? 'md:col-span-2' : ''}>
+                <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
+                  {def.label}
+                  {def.required && <span className="ml-0.5 text-danger">*</span>}
+                </label>
+
+                {def.type === 'textarea' && (
+                  <textarea
+                    id={fieldId}
+                    value={String(formValues[def.name] ?? '')}
+                    onChange={(e) => setFieldValue(def.name, e.target.value)}
+                    placeholder={def.placeholder}
+                    className="h-24 w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+                  />
+                )}
+
+                {def.type === 'select' && (
+                  <select
+                    id={fieldId}
+                    value={String(formValues[def.name] ?? '')}
+                    onChange={(e) => setFieldValue(def.name, e.target.value)}
+                    className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+                  >
+                    {def.options?.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {(def.type === 'text' || def.type === 'number') && (
+                  <div className="relative">
+                    <input
+                      id={fieldId}
+                      type={def.type === 'number' ? 'number' : 'text'}
+                      step={def.type === 'number' ? 'any' : undefined}
+                      value={String(formValues[def.name] ?? '')}
+                      onChange={(e) => setFieldValue(def.name, e.target.value)}
+                      placeholder={def.placeholder}
+                      className={`w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground ${
+                        def.unit ? 'pr-12' : ''
+                      }`}
+                    />
+                    {def.unit && (
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                        {def.unit}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {def.help && <p className="mt-1 text-xs text-muted-foreground">{def.help}</p>}
+              </div>
+            );
+          })}
         </div>
 
         <button
