@@ -2,10 +2,19 @@
 
 import { useEffect, useState } from 'react';
 
+interface RegionValidity {
+  region: string;
+  validity: string;
+  note?: string;
+}
+
 interface RegulationNote {
   title: string;
   summary: string;
   points: string[];
+  reference?: { label: string; href: string };
+  regionsTitle?: string;
+  regions?: RegionValidity[];
 }
 
 const EU_REFERENCES = [
@@ -37,11 +46,27 @@ const REGULATION_NOTES: Record<string, RegulationNote> = {
   it: {
     title: 'Italia — validità regione per regione',
     summary:
-      'In Italia la registrazione sanitaria e la validità delle autorizzazioni sono disciplinate a livello regionale: i periodi di validità cambiano da regione a regione.',
+      'In Italia la registrazione sanitaria e la validità delle autorizzazioni sono disciplinate a livello regionale: i periodi di validità e i rinnovi cambiano da regione a regione.',
     points: [
-      'La notifica (SCIA) si presenta allo Sportello Unico e viene trasmessa alla ASL competente.',
+      'La notifica (SCIA) si presenta allo Sportello Unico (SUAP) e viene trasmessa alla ASL competente.',
       'I periodi di validità e i rinnovi delle autorizzazioni sanitarie variano per regione.',
       'Il piano di autocontrollo HACCP è obbligatorio ai sensi del Reg. (CE) 852/2004.',
+      'Gli attestati di formazione degli alimentaristi (ex libretto sanitario) seguono scadenze regionali.',
+    ],
+    reference: {
+      label: 'Ministero della Salute — Sicurezza alimentare',
+      href: 'https://www.salute.gov.it/portale/sicurezzaalimentare/homeSicurezzaAlimentare.jsp',
+    },
+    regionsTitle: 'Validità formazione alimentaristi (indicativa)',
+    regions: [
+      { region: 'Lombardia', validity: '3 anni', note: 'Rinnovo con aggiornamento periodico' },
+      { region: 'Lazio', validity: '4 anni', note: 'Attestato HACCP addetti' },
+      { region: 'Emilia-Romagna', validity: '3 anni', note: 'Formazione a cura dell’OSA' },
+      { region: 'Veneto', validity: '3 anni', note: 'Aggiornamento a cura dell’azienda' },
+      { region: 'Piemonte', validity: '3 anni', note: 'Attestato addetti non responsabili' },
+      { region: 'Toscana', validity: '3 anni', note: 'Rinnovo con corso di aggiornamento' },
+      { region: 'Sicilia', validity: '3 anni', note: 'Attestato regionale' },
+      { region: 'Campania', validity: '4 anni', note: 'Attestato addetti' },
     ],
   },
   es: {
@@ -166,6 +191,54 @@ export function ComplianceSection() {
                 </li>
               ))}
             </ul>
+
+            {note.regions && note.regions.length > 0 ? (
+              <div className="mt-4">
+                {note.regionsTitle ? (
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {note.regionsTitle}
+                  </p>
+                ) : null}
+                <div className="overflow-hidden rounded-md border border-border">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="bg-muted/60 text-muted-foreground">
+                        <th className="px-3 py-2 font-semibold">Regione</th>
+                        <th className="px-3 py-2 font-semibold">Validità</th>
+                        <th className="hidden px-3 py-2 font-semibold sm:table-cell">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {note.regions.map((row) => (
+                        <tr key={row.region} className="border-t border-border">
+                          <td className="px-3 py-2 font-medium text-foreground">{row.region}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.validity}</td>
+                          <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{row.note ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Valori indicativi: verificare sempre la normativa regionale vigente e i regolamenti ASL locali.
+                </p>
+              </div>
+            ) : null}
+
+            {note.reference ? (
+              <a
+                href={note.reference.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                </svg>
+                {note.reference.label}
+              </a>
+            ) : null}
+
             <p className="mt-3 text-[11px] text-muted-foreground">
               Regulation shown for the language selected in Settings. Change your language to see the matching national guidance.
             </p>
