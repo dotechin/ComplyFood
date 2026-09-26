@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { LogTable } from '@complyfood/ui';
 import type { LogEntry, ReminderEvent } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
-import { ComplianceSection } from './compliance-section';
 
 interface DashboardSnapshot {
   pendingLogs: LogEntry[];
@@ -130,12 +129,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <ComplianceSection />
-        </div>
-
-        <div className="space-y-8 lg:col-span-2">
+      <div>
+        <div className="space-y-8">
           {snapshot && snapshot.dueReminders.length > 0 && (
             <section className="rounded-lg border border-border bg-card p-5 shadow-card">
               <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
