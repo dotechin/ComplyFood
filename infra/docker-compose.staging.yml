@@ -1,0 +1,153 @@
+# Local staging stack for ComplyFood.
+#
+# Mirrors the production build (compiled images, no hot reload) but is fully
+# self-contained for local use: it ships its own Postgres and MinIO (S3), runs
+# database migrations before the API boots, and uses its own ports/volumes so
+# it can run alongside the dev stack (docker-compose.yml) without clashing.
+#
+# Usage:
+#   ./scripts/staging-up.sh            # build + migrate + start
+#   ./scripts/staging-up.sh --seed     # also load demo data
+#   ./scripts/staging-down.sh          # stop
+#   ./scripts/staging-down.sh --volumes  # stop and wipe data
+#
+# Web:     http://localhost:3100
+# API:     http://localhost:4100/api/v1
+# MinIO:   http://localhost:9003 (console)
+
+name: complyfood-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: complyfood-staging-postgres
+    environment:
+      POSTGRES_DB: complyfood
+      POSTGRES_USER: complyfood
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-complyfood_staging}
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U complyfood']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: complyfood-staging-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - '9002:9000'
+      - '9003:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # One-shot: create the S3 bucket the API expects, then exit.
+  minio-init:
+    image: minio/mc:latest
+    container_name: complyfood-staging-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-minioadmin} ${S3_SECRET_ACCESS_KEY:-minioadmin};
+      mc mb --ignore-existing local/${S3_BUCKET:-complyfood};
+      exit 0;
+      "
+
+  # One-shot: run TypeORM migrations against the staging database, then exit.
+  # Uses the `dev` image target because it has the full source + ts-node,
+  # which the migration data-source needs (it references .ts entities).
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: dev
+    container_name: complyfood-staging-migrate
+    working_dir: /app/apps/api
+    command: ['pnpm', 'migration:run']
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: production
+    container_name: complyfood-staging-api
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+      JWT_SECRET: ${JWT_SECRET:-staging-secret-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PASSWORD_RESET_TOKEN_SALT: ${PASSWORD_RESET_TOKEN_SALT:-staging-salt-change-me}
+      PORT: 4000
+      WEB_URL: http://localhost:3100
+      STORAGE_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-complyfood}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      S3_FORCE_PATH_STYLE: 'true'
+    ports:
+      - '4100:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      target: production
+      args:
+        # Baked into the client bundle; must point at the host-exposed API port.
+        NEXT_PUBLIC_API_URL: http://localhost:4100
+    container_name: complyfood-staging-web
+    ports:
+      - '3100:3000'
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # One-shot demo-data seed. Only runs with the `seed` profile:
+  #   docker compose ... --profile seed up seed
+  seed:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: dev
+    container_name: complyfood-staging-seed
+    working_dir: /app/apps/api
+    command: ['pnpm', 'ts-node', 'src/database/seeds/dev.seed.ts']
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - seed
+
+volumes:
+  postgres_data:
+  minio_data:

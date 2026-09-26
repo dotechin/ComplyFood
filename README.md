@@ -55,6 +55,32 @@ ComplyFood/
 4. **Phase 4 – Reporting and Storage Completion:** keep exports, filters, incident summaries, and document storage covered by automated regression tests
 5. **Phase 5 – Release Readiness Proof:** execute staging validation, record performance evidence, and complete beta onboarding only after the proof gates pass
 
+### Local staging
+A self-contained, production-like stack you can run on your machine to execute
+the Phase 5 staging validation. It builds the same production images used in
+deployment but ships its own Postgres and MinIO (S3), runs database migrations
+before the API boots, and uses isolated ports/volumes so it can run alongside
+the dev stack.
+
+```bash
+# Optional: override defaults (JWT secret, DB password, etc.)
+cp .env.staging.example .env.staging
+
+# Build images, run migrations, and start the stack
+./scripts/staging-up.sh
+
+# Same, but also load demo data
+./scripts/staging-up.sh --seed
+
+# Stop (add --volumes to also wipe the Postgres/MinIO data)
+./scripts/staging-down.sh
+```
+
+Once up:
+- Web: http://localhost:3100
+- API: http://localhost:4100/api/v1
+- MinIO console: http://localhost:9003
+
 ### Current status
 - Monorepo, NestJS API, and Next.js web app are implemented and wired together
 - Core modules include authentication/bootstrap, organization and user setup, daily logs, checklists, overrides, reports, documents, audit, reminders, automation, and HACCP manual workflows
