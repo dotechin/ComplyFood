@@ -32,6 +32,18 @@ export class User {
   @Column({ name: 'password_reset_expires_at', type: 'timestamptz', nullable: true })
   passwordResetExpiresAt: Date | null;
 
+  @Column({ name: 'supermode_pin_hash', type: 'varchar', nullable: true })
+  supermodePinHash: string | null;
+
+  @Column({ name: 'supermode_failed_attempts', type: 'int', default: 0 })
+  supermodeFailedAttempts: number;
+
+  @Column({ name: 'supermode_lockouts', type: 'int', default: 0 })
+  supermodeLockouts: number;
+
+  @Column({ name: 'supermode_locked_until', type: 'timestamptz', nullable: true })
+  supermodeLockedUntil: Date | null;
+
   @ManyToOne(() => Organization, { nullable: true })
   @JoinColumn({ name: 'org_id' })
   organization: Organization;

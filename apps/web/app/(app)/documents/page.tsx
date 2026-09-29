@@ -29,7 +29,9 @@ export default function DocumentsPage() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
   const [linkedEntryId, setLinkedEntryId] = useState('');
   const [category, setCategory] = useState<DocumentCategory>(DocumentCategory.GENERAL);
   const [notes, setNotes] = useState('');
@@ -49,23 +51,40 @@ export default function DocumentsPage() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      setError('Please choose a file to upload.');
+    if (files.length === 0) {
+      setError('Please choose at least one file to upload.');
       return;
     }
     setError('');
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', category);
-    if (notes.trim()) {
-      formData.append('notes', notes.trim());
+    setUploadMessage('');
+    setUploading(true);
+    const uploaded: Document[] = [];
+    const failed: string[] = [];
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('category', category);
+      if (notes.trim()) {
+        formData.append('notes', notes.trim());
+      }
+      if (linkedEntryId && category !== DocumentCategory.HACCP_MANUAL) {
+        formData.append('linkedEntryId', linkedEntryId);
+      }
+      try {
+        uploaded.push(await apiUpload<Document>('/documents', formData));
+      } catch {
+        failed.push(file.name);
+      }
     }
-    if (linkedEntryId && category !== DocumentCategory.HACCP_MANUAL) {
-      formData.append('linkedEntryId', linkedEntryId);
+    setUploading(false);
+    setDocs((prev) => [...uploaded.reverse(), ...prev]);
+    if (failed.length > 0) {
+      setError(`Failed to upload: ${failed.join(', ')}`);
     }
-    const document = await apiUpload<Document>('/documents', formData);
-    setDocs((prev) => [document, ...prev]);
-    setFile(null);
+    if (uploaded.length > 0) {
+      setUploadMessage(`${uploaded.length} file${uploaded.length === 1 ? '' : 's'} uploaded.`);
+    }
+    setFiles([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -127,13 +146,19 @@ export default function DocumentsPage() {
       </div>
       <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[1fr_1fr_auto]">
         <label className="space-y-1 text-sm text-foreground">
-          <span className="font-medium">File</span>
+          <span className="font-medium">Files</span>
           <input
             ref={fileInputRef}
             type="file"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             className="block w-full rounded-md border border-input px-3 py-2 text-sm"
           />
+          <span className="block text-xs text-muted-foreground">
+            {files.length > 0
+              ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
+              : 'Select one or more files (Ctrl/Cmd or Shift to multi-select)'}
+          </span>
         </label>
         <label className="space-y-1 text-sm text-foreground">
           <span className="font-medium">Category</span>
@@ -175,10 +200,16 @@ export default function DocumentsPage() {
         </label>
         <button
           type="submit"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          disabled={uploading}
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
-          Upload document
+          {uploading ? 'Uploading…' : files.length > 1 ? `Upload ${files.length} documents` : 'Upload document'}
         </button>
+        {uploadMessage && (
+          <p role="status" className="text-sm text-primary md:col-span-3">
+            {uploadMessage}
+          </p>
+        )}
         <label className="space-y-1 text-sm text-foreground md:col-span-2">
           <span className="font-medium">Notes</span>
           <input

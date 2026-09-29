@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { LogStatus, LogType, UserRole, type LogEntry, type User } from '@complyfood/shared';
+import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -39,15 +39,6 @@ type FieldDef = {
 const FIELD_DEFS: Record<LogType, FieldDef[]> = {
   [LogType.TEMPERATURE]: [
     { name: 'unit', label: 'Workstation / unit', type: 'text', placeholder: 'e.g. Walk-in fridge 1', required: true },
-    {
-      name: 'reading',
-      label: 'Reading',
-      type: 'select',
-      options: [
-        { value: 'AM', label: 'AM' },
-        { value: 'PM', label: 'PM' },
-      ],
-    },
     {
       name: 'target',
       label: 'Target (critical limit)',
@@ -238,16 +229,13 @@ function buildLogsPath(filters: { type: string; status: string; dateFrom: string
   return query ? `/logs?${query}` : '/logs';
 }
 
-function toIso(value: string) {
-  if (!value) return undefined;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString();
+function readingStamp(date = new Date()) {
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${time} (${date.getHours() < 12 ? 'AM' : 'PM'})`;
 }
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeType, setActiveType] = useState<LogType>(LogType.TEMPERATURE);
@@ -256,10 +244,6 @@ export default function LogsPage() {
   const [dateTo, setDateTo] = useState('');
   const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
   const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
-  const [exceptionReason, setExceptionReason] = useState<Record<string, string>>({});
-  const [exceptionOccurredAt, setExceptionOccurredAt] = useState<Record<string, string>>({});
-  const [exceptionMeasuredAt, setExceptionMeasuredAt] = useState<Record<string, string>>({});
-  const [exceptionStatus, setExceptionStatus] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -282,13 +266,9 @@ export default function LogsPage() {
     const loadLogs = async () => {
       try {
         setError('');
-        const [entries, me] = await Promise.all([
-          apiGet<LogEntry[]>(buildLogsPath(filters)),
-          apiGet<User>('/users/me'),
-        ]);
+        const entries = await apiGet<LogEntry[]>(buildLogsPath(filters));
         if (active) {
           setLogs(entries);
-          setUser(me);
         }
       } catch (err) {
         if (active) {
@@ -325,9 +305,10 @@ export default function LogsPage() {
       setSaving(true);
       setError('');
       setMessage('');
+      const fields = buildFields(activeDefs, formValues);
       await apiPost<LogEntry>('/logs', {
         type: activeType,
-        fields: buildFields(activeDefs, formValues),
+        fields: activeType === LogType.TEMPERATURE ? { Reading: readingStamp(), ...fields } : fields,
       });
       await refreshLogs();
       setFormValues(emptyValues(activeDefs));
@@ -360,29 +341,6 @@ export default function LogsPage() {
       setMessage('Pending entry cancelled.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to cancel log entry');
-    }
-  };
-
-  const applyException = async (logId: string) => {
-    const reason = exceptionReason[logId]?.trim();
-    if (!reason) {
-      setError('Exception reason is required.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      await apiPatch(`/logs/${logId}/exception`, {
-        reason,
-        occurredAt: toIso(exceptionOccurredAt[logId] ?? ''),
-        measuredAt: toIso(exceptionMeasuredAt[logId] ?? ''),
-        unlockToStatus: (exceptionStatus[logId] as LogStatus | undefined) || undefined,
-      });
-      await refreshLogs();
-      setMessage('Exception mode action applied and audited.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to apply exception');
     }
   };
 
@@ -427,6 +385,11 @@ export default function LogsPage() {
             New {TYPE_LABELS[activeType].toLowerCase()} entry
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>
+          {activeType === LogType.TEMPERATURE && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Reading time (AM/PM) is stamped automatically when you save the entry.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -667,55 +630,6 @@ export default function LogsPage() {
                   </>
                 )}
               </dl>
-
-              {user?.role === UserRole.ADMIN && (
-                <div className="mt-4 rounded-md border border-warning/30 bg-warning/5 p-3">
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">Exception mode (Admin)</h3>
-                  <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
-                    <input
-                      aria-label={`Exception reason for log ${log.id}`}
-                      value={exceptionReason[log.id] ?? ''}
-                      onChange={(e) => setExceptionReason((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-                      placeholder="Mandatory reason"
-                    />
-                    <input
-                      aria-label={`Exception occurred at for log ${log.id}`}
-                      type="datetime-local"
-                      value={exceptionOccurredAt[log.id] ?? ''}
-                      onChange={(e) => setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-                    />
-                    <input
-                      aria-label={`Exception measured at for log ${log.id}`}
-                      type="datetime-local"
-                      value={exceptionMeasuredAt[log.id] ?? ''}
-                      onChange={(e) => setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-                    />
-                    <select
-                      aria-label={`Exception unlock status for log ${log.id}`}
-                      value={exceptionStatus[log.id] ?? ''}
-                      onChange={(e) => setExceptionStatus((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-                    >
-                      <option value="">Keep current status</option>
-                      {Object.values(LogStatus).map((status) => (
-                        <option key={status} value={status}>
-                          Unlock to {status}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void applyException(log.id)}
-                      className="rounded-md bg-warning px-4 py-2 text-sm font-medium text-white hover:bg-warning/90"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
 

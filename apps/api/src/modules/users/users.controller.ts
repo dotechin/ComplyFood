@@ -1,11 +1,11 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Post, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, Post, Req, HttpCode } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
-import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 import { User } from './entities/user.entity';
 
 class UpdateRoleDto {
@@ -23,6 +23,18 @@ class CreateUserDto {
 
   @IsEnum(UserRole)
   role: UserRole;
+}
+
+export class SupermodePinDto {
+  @IsString()
+  @Matches(/^\d{4,8}$/, { message: 'PIN must be 4 to 8 digits' })
+  pin: string;
+}
+
+class SetSupermodePinDto extends SupermodePinDto {
+  @IsOptional()
+  @IsString()
+  currentPin?: string;
 }
 
 @Controller('users')
@@ -65,5 +77,27 @@ export class UsersController {
   @Get('me')
   getProfile(@CurrentUser() user: any) {
     return user;
+  }
+
+  @Get('me/supermode')
+  @Roles(UserRole.ADMIN)
+  getSupermodeStatus(@CurrentUser() user: any) {
+    return this.usersService.getSupermodeStatusById(user.id);
+  }
+
+  @Post('me/supermode/pin')
+  @Roles(UserRole.ADMIN)
+  setSupermodePin(@CurrentUser() user: any, @Body() dto: SetSupermodePinDto, @Req() request: Request) {
+    request.body.pin = '[REDACTED]';
+    if (request.body.currentPin) request.body.currentPin = '[REDACTED]';
+    return this.usersService.setSupermodePin(user.id, dto.pin, dto.currentPin);
+  }
+
+  @Post('me/supermode/verify')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  verifySupermodePin(@CurrentUser() user: any, @Body() dto: SupermodePinDto, @Req() request: Request) {
+    request.body.pin = '[REDACTED]';
+    return this.usersService.verifySupermodePin(user.id, dto.pin);
   }
 }

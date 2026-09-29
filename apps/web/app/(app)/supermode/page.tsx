@@ -19,6 +19,15 @@ const HACCP_PRESETS: HaccpPreset[] = [
   { id: 'hot-holding', label: 'Hot holding (≥ 63°C)', item: 'Hot holding unit', min: 63, max: 75 },
 ];
 
+type SupermodeStatus = { pinSet: boolean; lockedUntil: string | null; attemptsLeft: number };
+
+function formatCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 type ActivityEntry = { id: string; at: string; message: string; tone: 'ok' | 'error' };
 
 function randomInRange(min: number, max: number) {
@@ -68,20 +77,124 @@ export default function SupermodePage() {
   const [tickCount, setTickCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // PIN protection
+  const [pinStatus, setPinStatus] = useState<SupermodeStatus | null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Reset
+  const [resetScope, setResetScope] = useState<'generated' | 'all'>('generated');
+  const [resetPin, setResetPin] = useState('');
+  const [resetting, setResetting] = useState(false);
+
   const isAdmin = user?.role === UserRole.ADMIN;
+  const lockedUntilMs = pinStatus?.lockedUntil ? new Date(pinStatus.lockedUntil).getTime() : 0;
+  const isLocked = lockedUntilMs > now;
+
+  const stopScheduler = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    setRunning(false);
+  }, []);
+
+  const refreshPinStatus = useCallback(async () => {
+    const status = await apiGet<SupermodeStatus>('/users/me/supermode');
+    setPinStatus(status);
+    return status;
+  }, []);
 
   useEffect(() => {
     apiGet<User>('/users/me')
-      .then(setUser)
+      .then(async (me) => {
+        setUser(me);
+        if (me.role === UserRole.ADMIN) await refreshPinStatus();
+      })
       .catch((err: Error) => setError(err.message))
       .finally(() => setChecking(false));
-  }, []);
+  }, [refreshPinStatus]);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // Countdown tick while locked out.
+  useEffect(() => {
+    if (!lockedUntilMs || lockedUntilMs <= Date.now()) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lockedUntilMs]);
+
+  const handleFailedPin = async (err: unknown) => {
+    setPinError(err instanceof Error ? err.message : 'Wrong PIN');
+    const status = await refreshPinStatus().catch(() => null);
+    setNow(Date.now());
+    if (status?.lockedUntil && new Date(status.lockedUntil).getTime() > Date.now()) {
+      stopScheduler();
+      setUnlocked(false);
+    }
+  };
+
+  const submitPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError('');
+    if (!/^\d{4,8}$/.test(pinInput)) {
+      setPinError('PIN must be 4 to 8 digits.');
+      return;
+    }
+    setPinBusy(true);
+    try {
+      if (!pinStatus?.pinSet) {
+        if (pinInput !== pinConfirm) {
+          setPinError('PINs do not match.');
+          return;
+        }
+        setPinStatus(await apiPost<SupermodeStatus>('/users/me/supermode/pin', { pin: pinInput }));
+      } else {
+        setPinStatus(await apiPost<SupermodeStatus>('/users/me/supermode/verify', { pin: pinInput }));
+      }
+      setUnlocked(true);
+    } catch (err) {
+      await handleFailedPin(err);
+    } finally {
+      setPinBusy(false);
+      setPinInput('');
+      setPinConfirm('');
+    }
+  };
+
+  const lockSupermode = () => {
+    stopScheduler();
+    setUnlocked(false);
+  };
+
+  const resetLogs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    const label = resetScope === 'all' ? 'ALL log entries' : 'all Supermode-generated entries';
+    if (!window.confirm(`This permanently deletes ${label}. Continue?`)) return;
+    setResetting(true);
+    try {
+      stopScheduler();
+      const result = await apiPost<{ deleted: number }>('/logs/reset', { pin: resetPin, scope: resetScope });
+      const summary = `Reset complete: ${result?.deleted ?? 0} entries deleted.`;
+      setMessage(summary);
+      pushActivity(summary, 'ok');
+      setTickCount(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reset failed');
+      await handleFailedPin(err);
+    } finally {
+      setResetPin('');
+      setResetting(false);
+    }
+  };
 
   const pushActivity = useCallback((message: string, tone: 'ok' | 'error') => {
     setActivity((prev) =>
@@ -232,6 +345,83 @@ export default function SupermodePage() {
     );
   }
 
+  if (isLocked) {
+    return (
+      <div className="mx-auto max-w-md rounded-lg border border-danger/40 bg-card p-6 text-center shadow-card" role="alert">
+        <h1 className="text-xl font-semibold text-foreground">Supermode locked</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Too many wrong PIN attempts. For security, Supermode is locked and any running scheduler was stopped. Each
+          repeated lockout doubles the wait.
+        </p>
+        <p className="mt-4 font-mono text-3xl font-bold text-danger" aria-live="polite">
+          {formatCountdown(lockedUntilMs - now)}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Unlocks at {new Date(lockedUntilMs).toLocaleTimeString()}
+        </p>
+      </div>
+    );
+  }
+
+  if (!unlocked) {
+    const creating = !pinStatus?.pinSet;
+    return (
+      <div className="mx-auto max-w-sm rounded-lg border bg-card p-6 shadow-card">
+        <h1 className="text-xl font-semibold text-foreground">{creating ? 'Set a Supermode PIN' : 'Enter Supermode PIN'}</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          {creating
+            ? 'Choose a 4–8 digit PIN. It is stored hashed on the server and required to open Supermode and to reset logs.'
+            : `Supermode is PIN protected. ${pinStatus?.attemptsLeft ?? 3} attempt${pinStatus?.attemptsLeft === 1 ? '' : 's'} left before lockout.`}
+        </p>
+        <form onSubmit={submitPin} className="mt-4 flex flex-col gap-3">
+          <label htmlFor="pin" className="text-sm font-medium text-foreground">
+            PIN
+          </label>
+          <input
+            id="pin"
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={8}
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+            className="rounded-md border border-input bg-card px-3 py-2 text-center font-mono text-lg tracking-widest text-foreground"
+            autoFocus
+          />
+          {creating && (
+            <>
+              <label htmlFor="pinConfirm" className="text-sm font-medium text-foreground">
+                Confirm PIN
+              </label>
+              <input
+                id="pinConfirm"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={8}
+                value={pinConfirm}
+                onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, ''))}
+                className="rounded-md border border-input bg-card px-3 py-2 text-center font-mono text-lg tracking-widest text-foreground"
+              />
+            </>
+          )}
+          {pinError && (
+            <p role="alert" className="text-sm text-danger">
+              {pinError}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={pinBusy}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {pinBusy ? 'Checking…' : creating ? 'Save PIN and unlock' : 'Unlock'}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -246,6 +436,13 @@ export default function SupermodePage() {
             Development utilities for seeding backlogged entries and automating HACCP-compliant temperature records.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={lockSupermode}
+          className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
+        >
+          Lock Supermode
+        </button>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -482,6 +679,52 @@ export default function SupermodePage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-lg border border-danger/40 bg-card p-5 shadow-card">
+        <h2 className="text-lg font-semibold text-foreground">Clear logs / Reset</h2>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          Permanently deletes log entries for your organization. Re-enter your PIN to confirm; wrong PINs count toward
+          the lockout.
+        </p>
+        <form onSubmit={resetLogs} className="mt-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor="resetScope" className="mb-1 block text-xs font-medium text-foreground">
+              What to clear
+            </label>
+            <select
+              id="resetScope"
+              value={resetScope}
+              onChange={(e) => setResetScope(e.target.value as 'generated' | 'all')}
+              className="rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+            >
+              <option value="generated">Supermode-generated entries only</option>
+              <option value="all">All log entries (full reset)</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="resetPin" className="mb-1 block text-xs font-medium text-foreground">
+              PIN
+            </label>
+            <input
+              id="resetPin"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={resetPin}
+              onChange={(e) => setResetPin(e.target.value.replace(/\D/g, ''))}
+              className="w-32 rounded-md border border-input bg-card px-3 py-2 font-mono text-sm tracking-widest text-foreground"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={resetting || resetPin.length < 4}
+            className="rounded-md bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50"
+          >
+            {resetting ? 'Clearing…' : 'Reset logs'}
+          </button>
+        </form>
+      </section>
 
       <section className="rounded-lg border bg-card p-5 shadow-card">
         <h2 className="text-lg font-semibold text-foreground">Activity</h2>
