@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Start the local staging stack: build images, run DB migrations, start
-# web + api + postgres + minio. Pass --seed to also load demo data.
+# web + api + postgres (uploads stored in a local volume). Pass --seed to also load demo data.
 #
 #   ./scripts/staging-up.sh          # build + migrate + start
 #   ./scripts/staging-up.sh --seed   # also seed demo data
@@ -63,7 +63,6 @@ echo ""
 echo "Staging is up:"
 echo "  Web:           http://localhost:3100"
 echo "  API:           http://localhost:4100/api/v1"
-echo "  MinIO console: http://localhost:9003"
 if [ "$SEED" = true ]; then
   echo ""
   echo "Demo login: admin@demo.com / password123  (also staff@demo.com / password123)"
