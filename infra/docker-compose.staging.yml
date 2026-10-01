@@ -1,7 +1,7 @@
 name: complyfood-staging
 
 # Local staging: production image targets (compiled builds, no hot reload),
-# but fully self-contained on your machine with its own Postgres + MinIO.
+# but fully self-contained on your machine with its own Postgres and local upload storage.
 # Isolated ports/volumes so it can run alongside the dev stack.
 
 services:
@@ -21,37 +21,6 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
-
-  minio:
-    image: quay.io/minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
-    ports:
-      - '9002:9000'
-      - '9003:9001'
-    volumes:
-      - staging_minio_data:/data
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  # Creates the bucket once MinIO is up, then exits.
-  minio-init:
-    image: quay.io/minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-minioadmin} ${S3_SECRET_ACCESS_KEY:-minioadmin} &&
-      mc mb --ignore-existing local/${S3_BUCKET:-complyfood} &&
-      echo 'Bucket ready.'
-      "
 
   # One-shot: runs TypeORM migrations, then exits. Uses the dev image target
   # because migrations need ts-node + the .ts data-source/entities, which the
@@ -82,15 +51,11 @@ services:
       JWT_EXPIRES_IN: 7d
       PORT: 4000
       WEB_URL: http://localhost:3100
-      STORAGE_DRIVER: s3
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: us-east-1
-      S3_BUCKET: ${S3_BUCKET:-complyfood}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
-      S3_FORCE_PATH_STYLE: 'true'
+      STORAGE_DRIVER: local
     ports:
       - '4100:4000'
+    volumes:
+      - staging_storage:/app/apps/api/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -135,4 +100,4 @@ services:
 
 volumes:
   staging_postgres_data:
-  staging_minio_data:
+  staging_storage:

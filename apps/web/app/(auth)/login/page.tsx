@@ -21,15 +21,16 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
+    const url = getApiUrl('/auth/login');
     try {
-      const res = await fetch(getApiUrl('/auth/login'), {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.message || 'Login failed');
+        const data = await res.json().catch(() => null);
+        setError(data?.message || `Login failed (HTTP ${res.status} from ${url})`);
         return;
       }
       const { accessToken } = await res.json();
@@ -37,7 +38,7 @@ export default function LoginPage() {
       router.push('/dashboard');
       router.refresh();
     } catch {
-      setError('Network error. Please try again.');
+      setError(`Cannot reach the API at ${url}. Is the backend running?`);
     } finally {
       setLoading(false);
     }
