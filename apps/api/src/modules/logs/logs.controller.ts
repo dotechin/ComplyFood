@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsEnum, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
+import { IsEnum, IsIn, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -8,6 +9,13 @@ import { Roles, UserRole } from '../../common/decorators/roles.decorator';
 import { LogStatus, LogType } from './entities/log-entry.entity';
 import { parseDateBoundary } from '../../common/utils/date-boundary';
 import { LogsService } from './logs.service';
+import { UsersService } from '../users/users.service';
+import { SupermodePinDto } from '../users/users.controller';
+
+class ResetLogsDto extends SupermodePinDto {
+  @IsIn(['generated', 'all'])
+  scope: 'generated' | 'all';
+}
 
 class CreateLogDto {
   @IsEnum(LogType)
@@ -105,7 +113,10 @@ class ApplyExceptionDto {
 @Controller('logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LogsController {
-  constructor(private readonly logsService: LogsService) {}
+  constructor(
+    private readonly logsService: LogsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post()
   create(@CurrentUser() user: any, @Body() dto: CreateLogDto) {
@@ -122,6 +133,15 @@ export class LogsController {
       createdAt: new Date(dto.createdAt),
       status: dto.status,
     });
+  }
+
+  @Post('reset')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  async reset(@CurrentUser() user: any, @Body() dto: ResetLogsDto, @Req() request: Request) {
+    request.body.pin = '[REDACTED]';
+    await this.usersService.verifySupermodePin(user.id, dto.pin);
+    return this.logsService.reset(user.orgId, dto.scope);
   }
 
   @Get()

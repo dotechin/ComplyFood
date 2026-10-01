@@ -175,11 +175,6 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
-      {summary && (
-        <div className="mb-6">
-          <SummaryListCard title="Exceptions by log type" values={summary.exceptionSummary.byType} />
-        </div>
-      )}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : canViewAudit ? (
@@ -209,22 +204,6 @@ function SummaryRow({ label, value }: { label: string; value: number }) {
     <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
       <dt>{label}</dt>
       <dd className="font-semibold text-foreground">{value}</dd>
-    </div>
-  );
-}
-
-function SummaryListCard({ title, values }: { title: string; values: Record<string, number> }) {
-  const entries = Object.entries(values);
-  return (
-    <div className="rounded-lg border bg-card p-4 shadow-card">
-      <h2 className="mb-3 text-lg font-semibold text-foreground">{title}</h2>
-      <div className="space-y-2 text-sm text-muted-foreground">
-        {entries.length === 0 ? (
-          <p className="text-gray-400">No data.</p>
-        ) : (
-          entries.map(([key, value]) => <SummaryRow key={key} label={key} value={value} />)
-        )}
-      </div>
     </div>
   );
 }

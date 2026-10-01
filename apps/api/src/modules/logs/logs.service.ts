@@ -149,6 +149,15 @@ export class LogsService {
     return this.findOne(entry.id, orgId);
   }
 
+  async reset(orgId: string, scope: 'generated' | 'all'): Promise<{ deleted: number }> {
+    const query = this.repo.createQueryBuilder().delete().from(LogEntry).where('org_id = :orgId', { orgId });
+    if (scope === 'generated') {
+      query.andWhere(`fields->>'source' LIKE 'supermode-%'`);
+    }
+    const result = await query.execute();
+    return { deleted: result.affected ?? 0 };
+  }
+
   async remove(id: string, orgId: string): Promise<void> {
     const entry = await this.findOne(id, orgId);
     await this.repo.remove(entry);
