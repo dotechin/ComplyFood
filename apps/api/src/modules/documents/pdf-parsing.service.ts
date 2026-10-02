@@ -61,16 +61,24 @@ export class PdfParsingService {
           let line = '';
           let height = 0;
           let previousY: number | undefined;
+          let previousEndX: number | undefined;
           const flush = () => {
             if (line.trim()) lines.push({ text: line.trim(), height });
             line = '';
             height = 0;
+            previousEndX = undefined;
           };
           for (const item of content.items) {
             if (!('str' in item)) continue;
             const y = item.transform[5];
             if (previousY !== undefined && Math.abs(y - previousY) > 2) flush();
-            line += `${line && !line.endsWith(' ') ? ' ' : ''}${item.str}`;
+            const gap = previousEndX === undefined ? 0 : item.transform[4] - previousEndX;
+            if (line && !/\s$/.test(line) && !/^\s/.test(item.str) &&
+              gap > Math.max(1, Math.min(height, Math.abs(item.height)) * 0.2)) {
+              line += ' ';
+            }
+            line += item.str;
+            previousEndX = item.transform[4] + item.width;
             height = Math.max(height, Math.abs(item.height));
             previousY = y;
             if (item.hasEOL) flush();

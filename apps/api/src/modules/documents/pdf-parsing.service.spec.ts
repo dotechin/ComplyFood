@@ -6,7 +6,7 @@ describe('PdfParsingService', () => {
   let pdf: any;
   let task: any;
   const item = (str: string, height = 12, y = 100) => ({
-    str, height, transform: [height, 0, 0, height, 0, y], hasEOL: true,
+    str, height, width: str.length * 6, transform: [height, 0, 0, height, 0, y], hasEOL: true,
   });
 
   beforeEach(() => {
@@ -45,6 +45,21 @@ describe('PdfParsingService', () => {
     (service as any).loadPdfJs.mockResolvedValue({ getDocument });
     await service.parse(Buffer.from('pdf'));
     expect(getDocument).toHaveBeenCalledWith(expect.objectContaining({ isEvalSupported: false }));
+  });
+
+  it('preserves adjacent word and number fragments and spaces only actual gaps', async () => {
+    pdf.numPages = 1;
+    pdf.getPage.mockResolvedValue({
+      getTextContent: async () => ({ items: [
+        { ...item('12'), hasEOL: false },
+        { ...item('.5'), transform: [12, 0, 0, 12, 12, 100], hasEOL: false },
+        { ...item('kg'), transform: [12, 0, 0, 12, 30, 100] },
+        { ...item('Food'), hasEOL: false },
+        { ...item('Safety'), transform: [12, 0, 0, 12, 24, 100] },
+      ] }),
+      cleanup: jest.fn(),
+    });
+    expect((await service.parse(Buffer.from('pdf'))).text).toBe('12.5 kg\nFoodSafety');
   });
 
   it('handles scanned pages with no text and missing metadata', async () => {

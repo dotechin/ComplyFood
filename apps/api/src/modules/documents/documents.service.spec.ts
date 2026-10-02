@@ -193,6 +193,20 @@ describe('DocumentsService', () => {
     await expect(service.extract('org-1', doc.id)).rejects.toThrow(NotFoundException);
   });
 
+  it('keeps transient storage failures retryable', async () => {
+    repo.findOne.mockResolvedValue(doc);
+    (service as any).s3Client.send.mockRejectedValueOnce(new Error('Storage unavailable'));
+    await expect(service.extract('org-1', doc.id)).rejects.toThrow(ServiceUnavailableException);
+    expect(repo.update).not.toHaveBeenCalled();
+    (service as any).s3Client.send.mockResolvedValue({
+      Body: { transformToByteArray: async () => Buffer.from('pdf') },
+    });
+    parser.parse.mockResolvedValue(extraction);
+    expect(await service.extract('org-1', doc.id)).toEqual({
+      supported: true, ...extraction, processingStatus: 'completed',
+    });
+  });
+
   it('does not recreate a document deleted during extraction', async () => {
     repo.findOne.mockResolvedValue(doc);
     repo.update.mockResolvedValueOnce({ affected: 0 });

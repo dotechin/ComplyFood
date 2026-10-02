@@ -180,21 +180,28 @@ export class DocumentsService implements OnModuleDestroy {
     if (existing) return existing;
     const job = this.extractionQueue.then(async () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
+      let file: Buffer;
       try {
-        const result = await this.pdfParser.parse(await this.readStoredFile(doc, true));
-        const updated = await this.repo.update({ id: doc.id, orgId: doc.orgId }, {
-          extractedText: result.text,
-          extractedPages: result.pages,
-          metadata: result.metadata,
-          processingStatus: 'completed',
-        });
-        if (!updated.affected) throw new NotFoundException('Document was deleted during extraction');
-        return { supported: true, ...result, processingStatus: 'completed' };
+        file = await this.readStoredFile(doc, true);
       } catch (error) {
-        await this.repo.update({ id: doc.id, orgId: doc.orgId }, { processingStatus: 'failed' });
         if (error instanceof NotFoundException || error instanceof PayloadTooLargeException) throw error;
+        throw new ServiceUnavailableException('Could not read the stored file; please retry');
+      }
+      let result: Awaited<ReturnType<PdfParsingService['parse']>>;
+      try {
+        result = await this.pdfParser.parse(file);
+      } catch {
+        await this.repo.update({ id: doc.id, orgId: doc.orgId }, { processingStatus: 'failed' });
         throw new UnprocessableEntityException('PDF extraction failed; the file may be corrupt or password-protected');
       }
+      const updated = await this.repo.update({ id: doc.id, orgId: doc.orgId }, {
+        extractedText: result.text,
+        extractedPages: result.pages,
+        metadata: result.metadata,
+        processingStatus: 'completed',
+      });
+      if (!updated.affected) throw new NotFoundException('Document was deleted during extraction');
+      return { supported: true, ...result, processingStatus: 'completed' };
     }).finally(() => this.extractions.delete(doc.id));
     this.extractions.set(doc.id, job);
     this.extractionQueue = job.catch(() => undefined);
