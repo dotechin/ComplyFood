@@ -42,9 +42,18 @@ export default function DocumentsPage() {
   const [extracting, setExtracting] = useState(false);
   const [readError, setReadError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openFolder, setOpenFolder] = useState<DocumentCategory | null>(null);
   const readRequestRef = useRef(0);
   const readingIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (openFolder) {
+      folderHeadingRef.current?.focus({ preventScroll: true });
+      folderHeadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [openFolder]);
 
   useEffect(() => {
     Promise.all([apiGet<User>('/users/me'), apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
@@ -174,6 +183,10 @@ export default function DocumentsPage() {
   );
 
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
+  const folderDocs = useMemo(
+    () => docs.filter((doc) => doc.category === openFolder),
+    [docs, openFolder],
+  );
   const uploadCategoryOptions = useMemo<readonly DocumentCategory[]>(
     () =>
       user?.role === UserRole.ADMIN
@@ -189,7 +202,10 @@ export default function DocumentsPage() {
     }
   }, [category, uploadCategoryOptions]);
 
-  const documentActions = { user, deletingId, onRead: handleRead, onDelete: handleDelete };
+  const documentActions = {
+    user, deletingId, onRead: handleRead, onDelete: handleDelete,
+    onOpenFolder: (doc: Document) => setOpenFolder(doc.category),
+  };
 
   return (
     <div>
@@ -332,6 +348,48 @@ export default function DocumentsPage() {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <div className="space-y-6">
+          <section aria-label="Document folders" className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Folders</h2>
+            <p className="text-sm text-muted-foreground">Browse documents by category. Deleting a file from a folder also removes it from the document lists.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {CATEGORY_OPTIONS.map((folder) => {
+                const count = docs.filter((doc) => doc.category === folder).length;
+                return (
+                  <div key={folder} className="rounded-lg border bg-card p-4">
+                    <h3 className="font-medium text-foreground">{CATEGORY_LABELS[folder]}</h3>
+                    <p className="text-sm text-muted-foreground">{count} file{count === 1 ? '' : 's'}</p>
+                    <button
+                      type="button"
+                      aria-label={`Open folder: ${CATEGORY_LABELS[folder]}`}
+                      aria-pressed={openFolder === folder}
+                      onClick={() => setOpenFolder(folder)}
+                      className="mt-2 text-sm text-primary hover:text-primary/80"
+                    >
+                      Open folder
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          {openFolder && (
+            <section aria-label={`${CATEGORY_LABELS[openFolder]} folder`} className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 ref={folderHeadingRef} tabIndex={-1} className="text-lg font-semibold text-foreground">
+                  Folder: {CATEGORY_LABELS[openFolder]}
+                </h2>
+                <button type="button" onClick={() => setOpenFolder(null)} className="text-sm text-primary">
+                  Close folder
+                </button>
+              </div>
+              <DocumentTable
+                title={`${CATEGORY_LABELS[openFolder]} files`}
+                docs={folderDocs}
+                logsById={logsById}
+                {...documentActions}
+              />
+            </section>
+          )}
           <DocumentTable
             title="Uploaded manuals"
             docs={groupedDocs.uploadedManuals}
@@ -368,6 +426,7 @@ function DocumentTable({
   deletingId,
   onRead,
   onDelete,
+  onOpenFolder,
 }: {
   title: string;
   docs: Document[];
@@ -376,6 +435,7 @@ function DocumentTable({
   deletingId: string | null;
   onRead: (doc: Document) => Promise<void>;
   onDelete: (doc: Document) => Promise<void>;
+  onOpenFolder: (doc: Document) => void;
 }) {
   return (
     <div className="rounded-lg border bg-card shadow-card">
@@ -414,6 +474,13 @@ function DocumentTable({
                 <td className="px-4 py-3 text-muted-foreground">{doc.notes || '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground">{new Date(doc.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onOpenFolder(doc)}
+                    className="mr-3 text-sm text-primary hover:text-primary/80"
+                  >
+                    Open folder
+                  </button>
                   <button
                     type="button"
                     onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
