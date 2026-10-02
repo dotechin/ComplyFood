@@ -16,7 +16,7 @@ Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. Comply
 - Automation presets and reminders
 - Override system with mandatory reason and full audit trail
 - Compliance reporting: PDF / CSV export
-- Document storage
+- Document storage, PDF text reading, and authorized document deletion
 
 ### Tech stack
 | Layer | Technology |
@@ -61,3 +61,11 @@ ComplyFood/
 - CI runs install, lint, build, and test through GitHub Actions
 - Backend automated coverage includes unit tests, pg-mem-backed integration tests, and API end-to-end smoke coverage
 - The product is a working MVP foundation, but release readiness still depends on captured staging validation evidence, performance results, and live beta onboarding outcomes
+
+### PDF documents
+- Run database migrations before deploying: `cd apps/api && pnpm exec typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts`.
+- PDF uploads are queued for asynchronous text extraction. `GET /api/v1/documents/:id/extract` returns cached full text, page text, basic heading/list detection, and metadata; document lists include `metadata` and `processingStatus`.
+- The Documents page offers **Read PDF** and **Delete**. `DELETE /api/v1/documents/:id` removes storage and the database record; only the uploader or an admin in the same organization can delete. Linked log entries are preserved.
+- Uploads are limited to 20 MB; extraction supports up to 1,000 pages and 5 million text characters. Scanned/image-only PDFs return empty text (no OCR); corrupt or password-protected PDFs are marked `failed`. Other file types remain downloadable and return `supported: false` from extraction.
+- The extraction queue runs in the API process and reads files from storage one at a time. Pending documents after a restart can be extracted on demand; successful extraction is cached in PostgreSQL.
+- Focused checks: `pnpm --filter @complyfood/api run test --runInBand documents` and `pnpm --filter @complyfood/api run test:e2e --runInBand`. Jest uses native ESM support for PDF.js.

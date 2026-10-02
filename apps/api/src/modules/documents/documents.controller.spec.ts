@@ -9,6 +9,8 @@ describe('DocumentsController', () => {
     findByOrg: jest.fn(),
     findByLogEntry: jest.fn(),
     getDownload: jest.fn(),
+    extract: jest.fn(),
+    delete: jest.fn(),
   };
 
   let controller: DocumentsController;
@@ -86,5 +88,15 @@ describe('DocumentsController', () => {
         notes: 'Current permit',
       },
     );
+  });
+
+  it('passes organization scoping to extraction', () => {
+    controller.extract({ orgId: 'org-1' }, 'doc-1');
+    expect(documentsService.extract).toHaveBeenCalledWith('org-1', 'doc-1');
+  });
+
+  it('passes the organization, uploader identity and role to deletion', () => {
+    controller.delete({ orgId: 'org-1', id: 'user-1', role: UserRole.STAFF }, 'doc-1');
+    expect(documentsService.delete).toHaveBeenCalledWith('org-1', 'doc-1', 'user-1', UserRole.STAFF);
   });
 });

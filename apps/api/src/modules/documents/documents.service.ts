@@ -1,20 +1,27 @@
 import { DocumentCategory } from '@complyfood/shared';
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, PayloadTooLargeException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
+import { randomUUID } from 'crypto';
 import { dirname, extname, join } from 'path';
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { Document } from './entities/document.entity';
+import { UserRole } from '../../common/decorators/roles.decorator';
+import { MAX_DOCUMENT_BYTES, PdfParsingService } from './pdf-parsing.service';
 
 @Injectable()
-export class DocumentsService {
+export class DocumentsService implements OnModuleDestroy {
+  private readonly logger = new Logger(DocumentsService.name);
+  private extractionQueue: Promise<unknown> = Promise.resolve();
+  private readonly extractions = new Map<string, Promise<unknown>>();
   private readonly storageDriver = process.env.STORAGE_DRIVER || 's3';
   private readonly bucket = process.env.S3_BUCKET || 'complyfood';
   private bucketReadyPromise: Promise<void> | null = null;
@@ -37,7 +44,12 @@ export class DocumentsService {
   constructor(
     @InjectRepository(Document)
     private readonly repo: Repository<Document>,
+    private readonly pdfParser: PdfParsingService,
   ) {}
+
+  async onModuleDestroy() {
+    await this.extractionQueue;
+  }
 
   async upload(
     orgId: string,
@@ -45,8 +57,11 @@ export class DocumentsService {
     file: any,
     options?: { linkedEntryId?: string; category?: DocumentCategory; notes?: string },
   ) {
+    if (file.buffer.length > MAX_DOCUMENT_BYTES) {
+      throw new PayloadTooLargeException('Documents must be no larger than 20 MB');
+    }
     const safeName = this.sanitizeFileName(file.originalname ?? `document${extname(file.mimetype || '')}`);
-    const relativePath = join(orgId, `${Date.now()}-${safeName}`);
+    const relativePath = join(orgId, `${randomUUID()}-${safeName}`);
     const category = this.normalizeCategory(options?.category);
     const notes = options?.notes?.trim() ? options.notes.trim() : null;
 
@@ -66,7 +81,7 @@ export class DocumentsService {
       await writeFile(absolutePath, file.buffer);
     }
 
-    return this.repo.save(
+    const doc = await this.repo.save(
       this.repo.create({
         orgId,
         name: safeName,
@@ -75,8 +90,16 @@ export class DocumentsService {
         notes,
         linkedEntryId: options?.linkedEntryId ?? null,
         uploadedBy: userId,
+        mimeType: file.mimetype || null,
+        processingStatus: this.isPdf({ name: safeName, mimeType: file.mimetype }) ? 'pending' : 'completed',
       }),
     );
+    if (this.isPdf(doc)) {
+      void this.enqueueExtraction(doc).catch(() => {
+        this.logger.warn(`PDF extraction failed for document ${doc.id}`);
+      });
+    }
+    return doc;
   }
 
   findByOrg(orgId: string, category?: DocumentCategory) {
@@ -95,23 +118,117 @@ export class DocumentsService {
     const doc = await this.repo.findOne({ where: { id, orgId } });
     if (!doc) return null;
 
-    if (this.storageDriver === 's3' && this.s3Client) {
-      const object = await this.s3Client.send(
-        new GetObjectCommand({
-          Bucket: this.bucket,
-          Key: doc.s3Key,
-        }),
-      );
-      const file = object.Body ? Buffer.from(await object.Body.transformToByteArray()) : null;
-      if (!file) {
-        return null;
-      }
-      return { file, name: doc.name };
-    }
+    return { file: await this.readStoredFile(doc), name: doc.name };
+  }
 
-    const filePath = join(process.cwd(), 'storage', doc.s3Key);
-    const file = await readFile(filePath);
-    return { file, name: doc.name };
+  private async readStoredFile(doc: Document, limitSize = false): Promise<Buffer> {
+    try {
+      if (this.storageDriver === 's3' && this.s3Client) {
+        const object = await this.s3Client.send(
+          new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: doc.s3Key,
+          }),
+        );
+        if (limitSize && object.ContentLength > MAX_DOCUMENT_BYTES) {
+          (object.Body as { destroy?: () => void })?.destroy?.();
+          throw new PayloadTooLargeException('Document exceeds the 20 MB limit');
+        }
+        const file = object.Body ? Buffer.from(await object.Body.transformToByteArray()) : null;
+        if (!file) throw new NotFoundException('Document file not found in storage');
+        if (limitSize && file.length > MAX_DOCUMENT_BYTES) throw new PayloadTooLargeException('Document exceeds the 20 MB limit');
+        return file;
+      }
+
+      const filePath = join(process.cwd(), 'storage', doc.s3Key);
+      if (limitSize && (await stat(filePath)).size > MAX_DOCUMENT_BYTES) {
+        throw new PayloadTooLargeException('Document exceeds the 20 MB limit');
+      }
+      const file = await readFile(filePath);
+      if (limitSize && file.length > MAX_DOCUMENT_BYTES) throw new PayloadTooLargeException('Document exceeds the 20 MB limit');
+      return file;
+    } catch (error) {
+      if (this.isMissingFileError(error)) throw new NotFoundException('Document file not found in storage');
+      throw error;
+    }
+  }
+
+  async extract(orgId: string, id: string) {
+    if (!orgId) throw new ForbiddenException('Organization membership is required');
+    const doc = await this.repo.findOne({
+      where: { id, orgId },
+      select: ['id', 'orgId', 'name', 'mimeType', 's3Key', 'processingStatus', 'extractedText', 'extractedPages', 'metadata'],
+    });
+    if (!doc) throw new NotFoundException('Document not found');
+    if (!this.isPdf(doc)) {
+      return { supported: false, text: null, pages: [], metadata: null, processingStatus: 'completed' };
+    }
+    if (doc.processingStatus === 'completed') {
+      return {
+        supported: true, text: doc.extractedText, pages: doc.extractedPages,
+        metadata: doc.metadata, processingStatus: 'completed',
+      };
+    }
+    if (doc.processingStatus === 'failed') {
+      throw new UnprocessableEntityException('PDF extraction failed; the file may be corrupt or password-protected');
+    }
+    return this.enqueueExtraction(doc);
+  }
+
+  private enqueueExtraction(doc: Document) {
+    const existing = this.extractions.get(doc.id);
+    if (existing) return existing;
+    const job = this.extractionQueue.then(async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      try {
+        const result = await this.pdfParser.parse(await this.readStoredFile(doc, true));
+        const updated = await this.repo.update({ id: doc.id, orgId: doc.orgId }, {
+          extractedText: result.text,
+          extractedPages: result.pages,
+          metadata: result.metadata,
+          processingStatus: 'completed',
+        });
+        if (!updated.affected) throw new NotFoundException('Document was deleted during extraction');
+        return { supported: true, ...result, processingStatus: 'completed' };
+      } catch (error) {
+        await this.repo.update({ id: doc.id, orgId: doc.orgId }, { processingStatus: 'failed' });
+        if (error instanceof NotFoundException || error instanceof PayloadTooLargeException) throw error;
+        throw new UnprocessableEntityException('PDF extraction failed; the file may be corrupt or password-protected');
+      }
+    }).finally(() => this.extractions.delete(doc.id));
+    this.extractions.set(doc.id, job);
+    this.extractionQueue = job.catch(() => undefined);
+    return job;
+  }
+
+  async delete(orgId: string, id: string, userId: string, role: UserRole) {
+    if (!orgId) throw new ForbiddenException('Organization membership is required');
+    const doc = await this.repo.findOne({ where: { id, orgId } });
+    if (!doc) throw new NotFoundException('Document not found');
+    if (role !== UserRole.ADMIN && doc.uploadedBy !== userId) {
+      throw new ForbiddenException('Only organization admins or the uploader can delete this document');
+    }
+    try {
+      if (this.storageDriver === 's3' && this.s3Client) {
+        await this.s3Client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: doc.s3Key }));
+      } else {
+        await unlink(join(process.cwd(), 'storage', doc.s3Key));
+      }
+    } catch (error) {
+      if (!this.isMissingFileError(error)) {
+        throw new ServiceUnavailableException('Could not delete the stored file; please retry');
+      }
+    }
+    await this.repo.delete({ id, orgId });
+  }
+
+  private isPdf(doc: { name: string; mimeType?: string | null }) {
+    return doc.mimeType === 'application/pdf' || extname(doc.name).toLowerCase() === '.pdf';
+  }
+
+  private isMissingFileError(error: unknown) {
+    return this.getS3ErrorName(error) === 'NoSuchKey' || this.getS3ErrorName(error) === 'NotFound' ||
+      (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT');
   }
 
   private sanitizeFileName(fileName: string) {

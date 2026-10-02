@@ -1,5 +1,6 @@
 import { DocumentCategory } from '@complyfood/shared';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import type { PdfMetadata, PdfPage } from '../pdf-parsing.service';
 
 @Entity('documents')
 export class Document {
@@ -26,6 +27,21 @@ export class Document {
 
   @Column({ name: 'uploaded_by' })
   uploadedBy: string;
+
+  @Column({ name: 'mime_type', nullable: true })
+  mimeType: string | null;
+
+  @Column({ name: 'extracted_text', type: 'text', nullable: true, select: false })
+  extractedText: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: PdfMetadata | null;
+
+  @Column({ name: 'extracted_pages', type: 'jsonb', nullable: true, select: false })
+  extractedPages: PdfPage[] | null;
+
+  @Column({ name: 'processing_status', default: 'pending' })
+  processingStatus: 'pending' | 'completed' | 'failed';
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
