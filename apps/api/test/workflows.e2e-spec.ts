@@ -2,6 +2,13 @@ import { DocumentCategory } from '@complyfood/shared';
 import { cleanupTestStorage, createTestApp, destroyTestApp } from '../src/test-utils/pg-mem';
 import { LogType } from '../src/modules/logs/entities/log-entry.entity';
 import { ReminderEvent } from '../src/modules/automation/entities/reminder-event.entity';
+import { Document } from '../src/modules/documents/entities/document.entity';
+import { PdfParsingService } from '../src/modules/documents/pdf-parsing.service';
+import { Organization } from '../src/modules/organizations/entities/organization.entity';
+import { AuthService } from '../src/modules/auth/auth.service';
+import { UserRole } from '../src/common/decorators/roles.decorator';
+import { access, unlink } from 'fs/promises';
+import { join } from 'path';
 
 describe('ComplyFood API workflows (e2e)', () => {
   let baseUrl: string;
@@ -218,6 +225,93 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     expect(login.status).toBe(201);
     expect(login.body.accessToken).toBeTruthy();
+  });
+
+  it('extracts and caches PDFs and deletes only authorized organization documents', async () => {
+    const bootstrap = await postJson('/auth/bootstrap', {
+      organizationName: 'PDF Kitchen', email: 'pdf-owner@example.com', password: 'password123',
+    });
+    const adminToken = bootstrap.body.accessToken as string;
+    await postJson('/users', {
+      email: 'pdf-staff@example.com', password: 'password123', role: 'staff',
+    }, adminToken);
+    const staff = await postJson('/auth/login', { email: 'pdf-staff@example.com', password: 'password123' });
+    const staffToken = staff.body.accessToken as string;
+    const parser = jest.spyOn(app.get(PdfParsingService), 'parse');
+    const report = await fetch(`${baseUrl}/reports/export/pdf`, { headers: withToken(adminToken) });
+    const pdfContent = await report.text();
+    const uploaded = await uploadDocument('/documents', {}, adminToken, 'report.pdf', 'application/pdf', pdfContent);
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.processingStatus).toBe('pending');
+    const id = uploaded.body.id;
+    const extracted = await getJson(`/documents/${id}/extract`, adminToken);
+    expect(extracted.status).toBe(200);
+    expect(extracted.body.text).toContain('ComplyFood Compliance Report');
+    expect(extracted.body.pages).toHaveLength(1);
+    expect(extracted.body.metadata.pageCount).toBe(1);
+    const cached = await getJson(`/documents/${id}/extract`, adminToken);
+    expect(cached.body).toEqual(extracted.body);
+    expect(parser).toHaveBeenCalledTimes(1);
+    const listed = await getJson('/documents', adminToken);
+    expect(listed.body[0].processingStatus).toBe('completed');
+    expect(listed.body[0].metadata.pageCount).toBe(1);
+    expect(listed.body[0].extractedText).toBeUndefined();
+
+    const forbidden = await fetch(`${baseUrl}/documents/${id}`, { method: 'DELETE', headers: withToken(staffToken) });
+    expect(forbidden.status).toBe(403);
+    const otherOrg = await dataSource.getRepository(Organization).save({ name: 'Other Kitchen' });
+    const otherAdmin = await app.get(AuthService).register(
+      'pdf-other@example.com', 'password123', UserRole.ADMIN, otherOrg.id,
+    );
+    const otherToken = otherAdmin.accessToken;
+    expect((await getJson(`/documents/${id}/extract`, otherToken)).status).toBe(404);
+    expect((await fetch(`${baseUrl}/documents/${id}`, {
+      method: 'DELETE', headers: withToken(otherToken),
+    })).status).toBe(404);
+    const storedPath = join(process.cwd(), 'storage', uploaded.body.s3Key);
+    expect((await fetch(`${baseUrl}/documents/${id}`, {
+      method: 'DELETE', headers: withToken(adminToken),
+    })).status).toBe(204);
+    await expect(access(storedPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await dataSource.getRepository(Document).findOneBy({ id })).toBeNull();
+    expect((await fetch(`${baseUrl}/documents/${id}`, {
+      method: 'DELETE', headers: withToken(adminToken),
+    })).status).toBe(404);
+    parser.mockRestore();
+  });
+
+  it('supports non-PDF fallback and uploader deletion of log attachments even when storage is missing', async () => {
+    const bootstrap = await postJson('/auth/bootstrap', {
+      organizationName: 'Attachment Kitchen', email: 'attachment-owner@example.com', password: 'password123',
+    });
+    const token = bootstrap.body.accessToken as string;
+    await postJson('/users', { email: 'attachment-staff@example.com', password: 'password123', role: 'staff' }, token);
+    const login = await postJson('/auth/login', { email: 'attachment-staff@example.com', password: 'password123' });
+    const staffToken = login.body.accessToken as string;
+    const log = await postJson('/logs', { type: LogType.CLEANING, fields: { task: 'Clean kitchen' } }, staffToken);
+    const uploaded = await uploadDocument('/documents', { linkedEntryId: log.body.id }, staffToken, 'photo.jpg', 'image/jpeg', 'photo');
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.processingStatus).toBe('completed');
+    const extracted = await getJson(`/documents/${uploaded.body.id}/extract`, staffToken);
+    expect(extracted.status).toBe(200);
+    expect(extracted.body.supported).toBe(false);
+    await unlink(join(process.cwd(), 'storage', uploaded.body.s3Key));
+    expect((await fetch(`${baseUrl}/documents/${uploaded.body.id}`, {
+      method: 'DELETE', headers: withToken(staffToken),
+    })).status).toBe(204);
+    expect((await getJson(`/documents/entry/${log.body.id}`, staffToken)).body).toEqual([]);
+    expect((await getJson('/logs', staffToken)).body.some((entry: any) => entry.id === log.body.id)).toBe(true);
+  });
+
+  it('records corrupt PDF extraction failures without failing upload', async () => {
+    const bootstrap = await postJson('/auth/bootstrap', {
+      organizationName: 'Corrupt PDF Kitchen', email: 'corrupt-owner@example.com', password: 'password123',
+    });
+    const token = bootstrap.body.accessToken as string;
+    const uploaded = await uploadDocument('/documents', {}, token, 'broken.pdf', 'application/pdf', 'not a PDF');
+    expect(uploaded.status).toBe(201);
+    expect((await getJson(`/documents/${uploaded.body.id}/extract`, token)).status).toBe(422);
+    expect((await getJson('/documents', token)).body[0].processingStatus).toBe('failed');
   });
 
   async function getJson(path: string, token?: string) {

@@ -2,9 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Res,
@@ -22,6 +25,7 @@ import { UserRole } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { DocumentsService } from './documents.service';
+import { MAX_DOCUMENT_BYTES } from './pdf-parsing.service';
 
 class UploadDocumentDto {
   @IsOptional()
@@ -49,7 +53,7 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   upload(
     @CurrentUser() user: any,
@@ -75,6 +79,17 @@ export class DocumentsController {
   @Get('entry/:entryId')
   findByEntry(@CurrentUser() user: any, @Param('entryId') entryId: string) {
     return this.documentsService.findByLogEntry(user.orgId, entryId);
+  }
+
+  @Get(':id/extract')
+  extract(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.documentsService.extract(user.orgId, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  delete(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.documentsService.delete(user.orgId, id, user.id, user.role);
   }
 
   @Get(':id/download')

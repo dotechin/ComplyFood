@@ -129,6 +129,27 @@ export enum DocumentCategory {
   INSPECTION_EVIDENCE = 'inspection_evidence',
 }
 
+export interface DocumentMetadata {
+  title: string | null;
+  author: string | null;
+  creationDate: string | null;
+  pageCount: number;
+}
+
+export type DocumentProcessingStatus = 'pending' | 'completed' | 'failed';
+
+export interface DocumentExtraction {
+  supported: boolean;
+  text: string | null;
+  pages: {
+    pageNumber: number;
+    text: string;
+    structure: { type: 'heading' | 'list'; text: string }[];
+  }[];
+  metadata: DocumentMetadata | null;
+  processingStatus: 'completed';
+}
+
 export interface Document {
   id: string;
   orgId: string;
@@ -138,5 +159,8 @@ export interface Document {
   notes: string | null;
   linkedEntryId: string | null;
   uploadedBy: string;
+  mimeType: string | null;
+  metadata: DocumentMetadata | null;
+  processingStatus: DocumentProcessingStatus;
   createdAt: string;
 }

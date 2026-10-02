@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DocumentCategory, UserRole, type Document, type LogEntry, type User } from '@complyfood/shared';
-import { apiDownload, apiGet, apiUpload } from '../../../lib/api';
+import { DocumentCategory, UserRole, type Document, type DocumentExtraction, type DocumentMetadata, type LogEntry, type User } from '@complyfood/shared';
+import { apiDelete, apiDownload, apiGet, apiUpload } from '../../../lib/api';
 
 const CATEGORY_OPTIONS = [
   DocumentCategory.GENERAL,
@@ -37,7 +37,23 @@ export default function DocumentsPage() {
   const [notes, setNotes] = useState('');
   const [filterCategory, setFilterCategory] = useState<DocumentCategory | ''>('');
   const [error, setError] = useState('');
+  const [readingDoc, setReadingDoc] = useState<Document | null>(null);
+  const [extraction, setExtraction] = useState<DocumentExtraction | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [readError, setReadError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openFolder, setOpenFolder] = useState<DocumentCategory | null>(null);
+  const readRequestRef = useRef(0);
+  const readingIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (openFolder) {
+      folderHeadingRef.current?.focus({ preventScroll: true });
+      folderHeadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [openFolder]);
 
   useEffect(() => {
     Promise.all([apiGet<User>('/users/me'), apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
@@ -46,8 +62,54 @@ export default function DocumentsPage() {
         setDocs(documents);
         setLogs(entries);
       })
+      .catch(() => setError('Could not load documents. Please reload to try again.'))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleRead = async (doc: Document) => {
+    const requestId = ++readRequestRef.current;
+    readingIdRef.current = doc.id;
+    setReadingDoc(doc);
+    setExtraction(null);
+    setReadError('');
+    setExtracting(true);
+    try {
+      const result = await apiGet<DocumentExtraction>(`/documents/${doc.id}/extract`);
+      if (requestId !== readRequestRef.current) return;
+      setExtraction(result);
+      setDocs((prev) => prev.map((item) => item.id === doc.id
+        ? { ...item, metadata: result.metadata, processingStatus: result.processingStatus }
+        : item));
+    } catch {
+      if (requestId !== readRequestRef.current) return;
+      setReadError('Could not extract this PDF. It may be damaged or encrypted. Please try again or download the file.');
+    } finally {
+      if (requestId === readRequestRef.current) setExtracting(false);
+    }
+  };
+
+  const handleDelete = async (doc: Document) => {
+    if (!user || user.orgId !== doc.orgId || (user.role !== UserRole.ADMIN && user.id !== doc.uploadedBy)) return;
+    if (!window.confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
+    setDeletingId(doc.id);
+    setError('');
+    try {
+      await apiDelete<void>(`/documents/${doc.id}`);
+      setDocs((prev) => prev.filter((item) => item.id !== doc.id));
+      if (readingIdRef.current === doc.id) {
+        ++readRequestRef.current;
+        readingIdRef.current = null;
+        setReadingDoc(null);
+        setExtraction(null);
+        setReadError('');
+        setExtracting(false);
+      }
+    } catch {
+      setError(`Could not delete "${doc.name}". Please try again.`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +183,10 @@ export default function DocumentsPage() {
   );
 
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
+  const folderDocs = useMemo(
+    () => docs.filter((doc) => doc.category === openFolder),
+    [docs, openFolder],
+  );
   const uploadCategoryOptions = useMemo<readonly DocumentCategory[]>(
     () =>
       user?.role === UserRole.ADMIN
@@ -135,6 +201,11 @@ export default function DocumentsPage() {
       setLinkedEntryId('');
     }
   }, [category, uploadCategoryOptions]);
+
+  const documentActions = {
+    user, deletingId, onRead: handleRead, onDelete: handleDelete,
+    onOpenFolder: (doc: Document) => setOpenFolder(doc.category),
+  };
 
   return (
     <div>
@@ -157,7 +228,7 @@ export default function DocumentsPage() {
           <span className="block text-xs text-muted-foreground">
             {files.length > 0
               ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
-              : 'Select one or more files (Ctrl/Cmd or Shift to multi-select)'}
+              : 'Select one or more files (Ctrl/Cmd or Shift to multi-select)'} · Max 20 MB per file.
           </span>
         </label>
         <label className="space-y-1 text-sm text-foreground">
@@ -234,23 +305,104 @@ export default function DocumentsPage() {
             ))}
           </select>
         </label>
-        {error && <p className="text-sm text-danger md:col-span-3">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger md:col-span-3">{error}</p>}
       </form>
+      {readingDoc && (
+        <section aria-label="PDF reader" className="mb-6 space-y-3 rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">{readingDoc.name}</h2>
+            <button type="button" className="text-sm text-primary" onClick={() => {
+              ++readRequestRef.current;
+              readingIdRef.current = null;
+              setReadingDoc(null);
+              setExtraction(null);
+              setReadError('');
+              setExtracting(false);
+            }}>Close reader</button>
+          </div>
+          {extracting && <p role="status">Extracting PDF text…</p>}
+          {readError && <p role="alert" className="text-danger">{readError}</p>}
+          {extraction && (
+            <>
+              <p className="text-sm text-muted-foreground">Processing: {extraction.processingStatus}</p>
+              <DocumentMetadataDetails metadata={extraction.metadata} />
+              {!extraction.supported ? (
+                <p>Text extraction is not supported for this document. Download it to read it.</p>
+              ) : !extraction.text?.trim() && !extraction.pages.some((page) => page.text.trim()) ? (
+                <p>No readable text was found. This PDF may be scanned or image-only; download it to view the pages. OCR is not available here.</p>
+              ) : extraction.pages.length > 0 ? (
+                extraction.pages.map((page) => (
+                  <section key={page.pageNumber} className="space-y-2 border-t pt-3">
+                    <h3 className="font-medium">Page {page.pageNumber}</h3>
+                    <p className="whitespace-pre-wrap break-words text-sm">{page.text.trim() ? page.text : 'No readable text on this page; it may contain only images.'}</p>
+                  </section>
+                ))
+              ) : (
+                <p className="whitespace-pre-wrap break-words text-sm">{extraction.text}</p>
+              )}
+            </>
+          )}
+        </section>
+      )}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <div className="space-y-6">
+          <section aria-label="Document folders" className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Folders</h2>
+            <p className="text-sm text-muted-foreground">Browse documents by category. Deleting a file from a folder also removes it from the document lists.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {CATEGORY_OPTIONS.map((folder) => {
+                const count = docs.filter((doc) => doc.category === folder).length;
+                return (
+                  <div key={folder} className="rounded-lg border bg-card p-4">
+                    <h3 className="font-medium text-foreground">{CATEGORY_LABELS[folder]}</h3>
+                    <p className="text-sm text-muted-foreground">{count} file{count === 1 ? '' : 's'}</p>
+                    <button
+                      type="button"
+                      aria-label={`Open folder: ${CATEGORY_LABELS[folder]}`}
+                      aria-pressed={openFolder === folder}
+                      onClick={() => setOpenFolder(folder)}
+                      className="mt-2 text-sm text-primary hover:text-primary/80"
+                    >
+                      Open folder
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          {openFolder && (
+            <section aria-label={`${CATEGORY_LABELS[openFolder]} folder`} className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 ref={folderHeadingRef} tabIndex={-1} className="text-lg font-semibold text-foreground">
+                  Folder: {CATEGORY_LABELS[openFolder]}
+                </h2>
+                <button type="button" onClick={() => setOpenFolder(null)} className="text-sm text-primary">
+                  Close folder
+                </button>
+              </div>
+              <DocumentTable
+                title={`${CATEGORY_LABELS[openFolder]} files`}
+                docs={folderDocs}
+                logsById={logsById}
+                {...documentActions}
+              />
+            </section>
+          )}
           <DocumentTable
             title="Uploaded manuals"
             docs={groupedDocs.uploadedManuals}
             logsById={logsById}
+            {...documentActions}
           />
           <DocumentTable
             title="Business compliance documents"
             docs={groupedDocs.organizationDocs}
             logsById={logsById}
+            {...documentActions}
           />
-          <DocumentTable title="Log-linked documents" docs={groupedDocs.logLinkedDocs} logsById={logsById} />
+          <DocumentTable title="Log-linked documents" docs={groupedDocs.logLinkedDocs} logsById={logsById} {...documentActions} />
         </div>
       )}
     </div>
@@ -270,10 +422,20 @@ function DocumentTable({
   title,
   docs,
   logsById,
+  user,
+  deletingId,
+  onRead,
+  onDelete,
+  onOpenFolder,
 }: {
   title: string;
   docs: Document[];
   logsById: Map<string, LogEntry>;
+  user: User | null;
+  deletingId: string | null;
+  onRead: (doc: Document) => Promise<void>;
+  onDelete: (doc: Document) => Promise<void>;
+  onOpenFolder: (doc: Document) => void;
 }) {
   return (
     <div className="rounded-lg border bg-card shadow-card">
@@ -296,7 +458,15 @@ function DocumentTable({
             const linkedLog = doc.linkedEntryId ? logsById.get(doc.linkedEntryId) : null;
             return (
               <tr key={doc.id}>
-                <td className="px-4 py-3 font-medium text-foreground">{doc.name}</td>
+                <td className="px-4 py-3 font-medium text-foreground">
+                  {doc.name}
+                  {(doc.mimeType === 'application/pdf' || /\.pdf$/i.test(doc.name)) && (
+                    <div className="mt-1 text-xs font-normal text-muted-foreground">
+                      <p>Processing: {doc.processingStatus}</p>
+                      <DocumentMetadataDetails metadata={doc.metadata} />
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{CATEGORY_LABELS[doc.category]}</td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {linkedLog ? `${linkedLog.type} log` : doc.linkedEntryId ? 'Linked log' : 'Organization'}
@@ -306,11 +476,38 @@ function DocumentTable({
                 <td className="px-4 py-3">
                   <button
                     type="button"
+                    onClick={() => onOpenFolder(doc)}
+                    className="mr-3 text-sm text-primary hover:text-primary/80"
+                  >
+                    Open folder
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
                     className="text-sm text-primary hover:text-primary/80"
                   >
                     Download
                   </button>
+                  {(doc.mimeType === 'application/pdf' || /\.pdf$/i.test(doc.name)) && (
+                    <button
+                      type="button"
+                      disabled={deletingId === doc.id}
+                      onClick={() => void onRead(doc)}
+                      className="ml-3 text-sm text-primary hover:text-primary/80 disabled:opacity-60"
+                    >
+                      Read PDF
+                    </button>
+                  )}
+                  {user && user.orgId === doc.orgId && (user.role === UserRole.ADMIN || user.id === doc.uploadedBy) && (
+                    <button
+                      type="button"
+                      disabled={deletingId !== null}
+                      onClick={() => void onDelete(doc)}
+                      className="ml-3 text-sm text-danger disabled:opacity-60"
+                    >
+                      {deletingId === doc.id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  )}
                 </td>
               </tr>
             );
@@ -325,5 +522,17 @@ function DocumentTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function DocumentMetadataDetails({ metadata }: { metadata: DocumentMetadata | null }) {
+  if (!metadata) return null;
+  return (
+    <dl className="text-sm text-muted-foreground">
+      <div><dt className="inline">Pages: </dt><dd className="inline">{metadata.pageCount}</dd></div>
+      {metadata.title && <div><dt className="inline">Title: </dt><dd className="inline">{metadata.title}</dd></div>}
+      {metadata.author && <div><dt className="inline">Author: </dt><dd className="inline">{metadata.author}</dd></div>}
+      {metadata.creationDate && <div><dt className="inline">Created: </dt><dd className="inline">{metadata.creationDate}</dd></div>}
+    </dl>
   );
 }

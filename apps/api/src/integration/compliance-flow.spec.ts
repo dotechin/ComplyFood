@@ -10,6 +10,7 @@ import { LogsService } from '../modules/logs/logs.service';
 import { OverridesService } from '../modules/overrides/overrides.service';
 import { AutomationService } from '../modules/automation/automation.service';
 import { DocumentsService } from '../modules/documents/documents.service';
+import { PdfParsingService } from '../modules/documents/pdf-parsing.service';
 import { ReportsService } from '../modules/reports/reports.service';
 import { UserRole } from '../common/decorators/roles.decorator';
 import { LogEntry, LogStatus, LogType } from '../modules/logs/entities/log-entry.entity';
@@ -53,7 +54,9 @@ describe('Compliance integration flow', () => {
       dataSource.getRepository(ReminderEvent),
       logsService,
     );
-    documentsService = new DocumentsService(dataSource.getRepository(Document));
+    documentsService = new DocumentsService(dataSource.getRepository(Document), {
+      parse: jest.fn().mockRejectedValue(new Error('Invalid PDF')),
+    } as unknown as PdfParsingService);
     reportsService = new ReportsService(logsService, overridesService);
     authService = new AuthService(
       usersService,
@@ -63,6 +66,7 @@ describe('Compliance integration flow', () => {
   });
 
   afterEach(async () => {
+    await documentsService?.onModuleDestroy();
     await cleanupTestStorage();
     if (dataSource?.isInitialized) {
       await dataSource.destroy();
