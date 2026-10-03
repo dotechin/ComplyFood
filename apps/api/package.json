@@ -55,10 +55,13 @@
   },
   "jest": {
     "moduleFileExtensions": [
+      "ts",
       "js",
-      "json",
-      "ts"
+      "json"
     ],
+    "moduleNameMapper": {
+      "^@complyfood/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
+    },
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
