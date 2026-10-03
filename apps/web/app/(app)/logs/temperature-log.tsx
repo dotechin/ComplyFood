@@ -28,11 +28,11 @@ export function TemperatureLog({
       log.fields['Workstation / unit'] !== KITCHEN_FRIDGE_5
     ) continue;
     const date = new Date(log.measuredAt ?? log.occurredAt ?? log.createdAt);
-    const raw = String(log.fields['Measured temperature'] ?? '').trim();
-    const match = raw.match(/^(-?\d+(?:\.\d+)?)\s*(?:°C)?$/);
-    if (date.getFullYear() !== year || !match) continue;
+    const raw = String(log.fields['Measured temperature'] ?? '').replace(/\s*°C$/, '').trim();
+    const temperature = Number(raw);
+    if (date.getFullYear() !== year || !raw || !Number.isFinite(temperature)) continue;
     const key = `${date.getMonth()}-${date.getDate()}`;
-    const status = Number(match[1]) <= 4 ? 'C' : 'NC';
+    const status = temperature <= 4 ? 'C' : 'NC';
     readings.set(key, readings.get(key) === 'NC' ? 'NC' : status);
   }
 

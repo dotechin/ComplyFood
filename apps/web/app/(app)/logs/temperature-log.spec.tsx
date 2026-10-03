@@ -49,6 +49,12 @@ describe('Kitchen Fridge 5 temperature log', () => {
     expect(monthCells(renderLog([reading('5 °C'), reading('4 °C')]), 'January')[0]).toBe('NC');
   });
 
+  it('accepts decimal and scientific notation from the existing number input', () => {
+    expect(monthCells(renderLog([reading('.5 °C')]), 'January')[0]).toBe('C');
+    expect(monthCells(renderLog([reading('1e1 °C')]), 'January')[0]).toBe('NC');
+    expect(monthCells(renderLog([reading(''), reading('Infinity °C')]), 'January')[0]).toBe('');
+  });
+
   it('excludes other units, types, pending readings, invalid values and other years', () => {
     const html = renderLog([
       reading('4 °C', { fields: { 'Workstation / unit': 'Bar 1', 'Measured temperature': '4 °C' } }),
