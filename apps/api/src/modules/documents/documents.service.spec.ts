@@ -179,6 +179,26 @@ describe('DocumentsService', () => {
     expect(parser.parse).not.toHaveBeenCalled();
   });
 
+  it('types organization-scoped PDF downloads as application/pdf', async () => {
+    repo.findOne.mockResolvedValue({ ...doc, mimeType: null });
+    (service as any).s3Client.send.mockResolvedValue({
+      Body: { transformToByteArray: async () => Buffer.from('%PDF-1.4') },
+    });
+    const result = await service.getDownload('org-1', doc.id);
+    expect(repo.findOne).toHaveBeenCalledWith({ where: { id: doc.id, orgId: 'org-1' } });
+    expect(result).toEqual({ file: Buffer.from('%PDF-1.4'), name: 'manual.pdf', contentType: 'application/pdf' });
+  });
+
+  it('never types uploaded HTML or SVG for inline rendering on download', async () => {
+    (service as any).s3Client.send.mockResolvedValue({
+      Body: { transformToByteArray: async () => Buffer.from('<script>') },
+    });
+    for (const file of [{ name: 'evil.html', mimeType: 'text/html' }, { name: 'evil.svg', mimeType: 'image/svg+xml' }]) {
+      repo.findOne.mockResolvedValue({ ...doc, ...file });
+      expect((await service.getDownload('org-1', doc.id))?.contentType).toBe('application/octet-stream');
+    }
+  });
+
   it('handles non-PDF files without parsing', async () => {
     repo.findOne.mockResolvedValue({ ...doc, name: 'photo.jpg', mimeType: 'image/jpeg' });
     expect(await service.extract('org-1', doc.id)).toEqual({

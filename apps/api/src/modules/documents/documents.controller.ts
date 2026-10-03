@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Header,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -71,6 +72,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   findAll(@CurrentUser() user: any, @Query() query: FindDocumentsQueryDto) {
     return this.documentsService.findByOrg(user.orgId, query.category);
@@ -93,11 +95,14 @@ export class DocumentsController {
   }
 
   @Get(':id/download')
-  async download(@CurrentUser() user: any, @Param('id') id: string, @Res() res: Response) {
+  async download(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const result = await this.documentsService.getDownload(user.orgId, id);
     if (!result) {
       throw new BadRequestException('Document not found');
     }
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Content-Disposition', `attachment; filename="${result.name}"`);
     res.send(result.file);
   }
