@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { KITCHEN_FRIDGE_5, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
   [LogType.TEMPERATURE]: 'Temperature',
@@ -378,6 +379,18 @@ export default function LogsPage() {
           })}
         </nav>
       </div>
+
+      {activeType === LogType.TEMPERATURE && (
+        <TemperatureLog
+          logs={logs}
+          year={new Date().getFullYear()}
+          loading={loading}
+          onRecord={() => {
+            setFormValues({ ...emptyValues(FIELD_DEFS[LogType.TEMPERATURE]), unit: KITCHEN_FRIDGE_5 });
+            document.getElementById('field-temperature')?.focus();
+          }}
+        />
+      )}
 
       <form onSubmit={createLog} className="space-y-4 rounded-lg border bg-card p-5 shadow-card">
         <div>
