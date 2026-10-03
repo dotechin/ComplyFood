@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { TemperatureSheet } from './temperature-sheet';
 import { KITCHEN_FRIDGE_5, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -16,7 +17,7 @@ const TYPE_LABELS: Record<LogType, string> = {
 // Each tab maps to a sheet of the HACCP European standard package
 // (EC 852/2004 & Codex Alimentarius General Principles of Food Hygiene).
 const TYPE_STANDARDS: Record<LogType, string> = {
-  [LogType.TEMPERATURE]: 'Sheet 2 — Daily Temperature Monitoring Log (CCP 2/3)',
+  [LogType.TEMPERATURE]: 'Temperature Log · CCP 2/3',
   [LogType.CLEANING]: 'Sheet 3 — Master Cleaning & Disinfection Schedule',
   [LogType.RECEIVING]: 'Sheet 1 — Goods Receipt prerequisite check',
   [LogType.CHECKLIST]: 'Prerequisite hygiene checklist',
@@ -28,6 +29,7 @@ type FieldOption = { value: string; label: string };
 type FieldDef = {
   name: string;
   label: string;
+  displayLabel?: string;
   type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox';
   placeholder?: string;
   required?: boolean;
@@ -39,24 +41,26 @@ type FieldDef = {
 
 const FIELD_DEFS: Record<LogType, FieldDef[]> = {
   [LogType.TEMPERATURE]: [
-    { name: 'unit', label: 'Workstation / unit', type: 'text', placeholder: 'e.g. Walk-in fridge 1', required: true },
+    { name: 'unit', label: 'Workstation / unit', displayLabel: 'Unit', type: 'text', placeholder: 'e.g. Bar fridge 1', required: true },
     {
       name: 'target',
       label: 'Target (critical limit)',
+      displayLabel: 'Critical limit',
       type: 'select',
       options: [
-        { value: 'Chilled ≤ 4°C', label: 'Chilled storage — ≤ 4°C' },
-        { value: 'Frozen ≤ -18°C', label: 'Frozen storage — ≤ -18°C' },
-        { value: 'Hot holding ≥ 63°C', label: 'Hot holding — ≥ 63°C' },
-        { value: 'Cooking core ≥ 75°C for 30s', label: 'Cooking core — ≥ 75°C for 30s' },
+        { value: 'Chilled ≤ 4°C', label: 'Chilled ≤ 4°C' },
+        { value: 'Frozen ≤ -18°C', label: 'Frozen ≤ -18°C' },
+        { value: 'Hot holding ≥ 63°C', label: 'Hot holding ≥ 63°C' },
+        { value: 'Cooking core ≥ 75°C for 30s', label: 'Cooking ≥ 75°C for 30s' },
       ],
     },
-    { name: 'temperature', label: 'Measured temperature', type: 'number', unit: '°C', placeholder: '4', required: true },
+    { name: 'temperature', label: 'Measured temperature', displayLabel: 'Temperature', type: 'number', unit: '°C', placeholder: '4', required: true },
     {
       name: 'corrective',
       label: 'Corrective action / comments',
+      displayLabel: 'Corrective action / notes',
       type: 'textarea',
-      placeholder: 'Required only if the critical limit was exceeded',
+      placeholder: 'If outside the critical limit',
       full: true,
     },
   ],
@@ -346,13 +350,9 @@ export default function LogsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          Record, review, and confirm daily log entries by category. Fields follow the HACCP European standard package
-          (EC 852/2004 &amp; Codex).
-        </p>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {message && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
@@ -392,20 +392,20 @@ export default function LogsPage() {
         />
       )}
 
-      <form onSubmit={createLog} className="space-y-4 rounded-lg border bg-card p-5 shadow-card">
+      <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">
-            New {TYPE_LABELS[activeType].toLowerCase()} entry
+            {activeType === LogType.TEMPERATURE ? TYPE_STANDARDS[activeType] : `New ${TYPE_LABELS[activeType].toLowerCase()} entry`}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>
+          {activeType !== LogType.TEMPERATURE && <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>}
           {activeType === LogType.TEMPERATURE && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Reading time (AM/PM) is stamped automatically when you save the entry.
+              Time recorded on save.
             </p>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        {activeType !== LogType.TEMPERATURE && <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={() => setInsertionMethod('manual')}
@@ -430,9 +430,9 @@ export default function LogsPage() {
               Coming soon
             </span>
           </button>
-        </div>
+        </div>}
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={`grid gap-3 ${activeType === LogType.TEMPERATURE ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           {activeDefs.map((def) => {
             const fieldId = `field-${def.name}`;
             const isFull = def.full || def.type === 'textarea';
@@ -451,15 +451,15 @@ export default function LogsPage() {
                     onChange={(e) => setFieldValue(def.name, e.target.checked)}
                     className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
                   />
-                  {def.label}
+                  {def.displayLabel ?? def.label}
                 </label>
               );
             }
 
             return (
-              <div key={def.name} className={isFull ? 'md:col-span-2' : ''}>
+              <div key={def.name} className={isFull ? (activeType === LogType.TEMPERATURE ? 'md:col-span-3' : 'md:col-span-2') : ''}>
                 <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
-                  {def.label}
+                  {def.displayLabel ?? def.label}
                   {def.required && <span className="ml-0.5 text-danger">*</span>}
                 </label>
 
@@ -469,7 +469,7 @@ export default function LogsPage() {
                     value={String(formValues[def.name] ?? '')}
                     onChange={(e) => setFieldValue(def.name, e.target.value)}
                     placeholder={def.placeholder}
-                    className="h-24 w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+                    className={`${activeType === LogType.TEMPERATURE ? 'h-16' : 'h-24'} w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground`}
                   />
                 )}
 
@@ -520,7 +520,7 @@ export default function LogsPage() {
           disabled={saving}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
-          {saving ? 'Saving…' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+          {saving ? 'Saving…' : activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
         </button>
       </form>
 
@@ -573,6 +573,8 @@ export default function LogsPage() {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : activeType === LogType.TEMPERATURE ? (
+        <TemperatureSheet logs={logs} onConfirm={confirmLog} onCancel={cancelLog} />
       ) : (
         <div className="space-y-4">
           {logs.map((log) => (

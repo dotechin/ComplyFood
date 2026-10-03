@@ -23,12 +23,12 @@ function monthCells(html: string, month: string) {
 }
 
 describe('Kitchen Fridge 5 temperature log', () => {
-  it('is accessible alongside the unchanged daily temperature form', () => {
+  it('is accessible alongside the compact daily temperature form', () => {
     const html = renderToStaticMarkup(<LogsPage />);
     expect(html).toContain(KITCHEN_FRIDGE_5_TITLE);
     expect(html).toContain('Record reading');
-    expect(html).toContain('Workstation / unit');
-    expect(html).toContain('Create temperature entry');
+    expect(html).toContain('>Unit<span');
+    expect(html).toContain('Save reading');
     expect(html).toContain('Cleaning');
   });
 
