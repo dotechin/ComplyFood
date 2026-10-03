@@ -140,6 +140,7 @@ export function createDocumentLibrary(deps: LibraryDeps): DocumentLibrary {
           refreshing: false,
           error: LIST_ERROR_MESSAGE,
         });
+        schedulePoll();
       } finally {
         if (seq === requestSeq) inFlight = null;
       }

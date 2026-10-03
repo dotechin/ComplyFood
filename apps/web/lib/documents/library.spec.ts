@@ -229,6 +229,21 @@ describe('createDocumentLibrary', () => {
     expect(deps.list).toHaveBeenCalledTimes(3);
   });
 
+  it('keeps polling pending PDFs after a transient refresh failure', async () => {
+    jest.useFakeTimers();
+    const { deps, library } = setup({ pollIntervalMs: 1_000, maxPolls: 5 });
+    deps.list
+      .mockResolvedValueOnce([makeDoc('a', { processingStatus: 'pending' })])
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue([makeDoc('a', { processingStatus: 'completed' })]);
+
+    await library.refresh();
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(library.getState().error).toBe(LIST_ERROR_MESSAGE);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(library.getState()).toMatchObject({ error: '', docs: [expect.objectContaining({ processingStatus: 'completed' })] });
+  });
+
   it('stops polling once processing completes', async () => {
     jest.useFakeTimers();
     const { deps, library } = setup({ pollIntervalMs: 1_000 });
