@@ -41,8 +41,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path, { method: 'GET' });
+export interface ApiGetOptions {
+  signal?: AbortSignal;
+  cache?: RequestCache;
+}
+
+export function apiGet<T>(path: string, options: ApiGetOptions = {}): Promise<T> {
+  return request<T>(path, { method: 'GET', ...options });
 }
 
 export function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -86,12 +91,17 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   return res.json();
 }
 
-export async function apiDownload(path: string, fileName: string) {
+export const DOWNLOAD_URL_REVOKE_DELAY_MS = 10_000;
+
+/** Authenticated GET that returns the raw response body as a Blob. */
+export async function apiFetchBlob(path: string, options: ApiGetOptions = {}): Promise<Blob> {
   const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
     headers: token ? { Authorization: 'Bearer ' + token } : undefined,
     credentials: 'include',
+    cache: options.cache ?? 'no-store',
+    signal: options.signal,
   });
 
   if (!res.ok) {
@@ -99,11 +109,27 @@ export async function apiDownload(path: string, fileName: string) {
     throw new Error(error.message || 'Download failed');
   }
 
-  const blob = await res.blob();
+  return res.blob();
+}
+
+/** Saves a Blob to disk under the given file name. */
+export function saveBlob(blob: Blob, fileName: string) {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
-  link.click();
-  window.URL.revokeObjectURL(url);
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    // Revoking synchronously can cancel the download in some browsers.
+    window.setTimeout(() => window.URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS);
+  }
+}
+
+export async function apiDownload(path: string, fileName: string) {
+  saveBlob(await apiFetchBlob(path), fileName);
 }

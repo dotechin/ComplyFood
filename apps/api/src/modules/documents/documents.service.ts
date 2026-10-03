@@ -118,7 +118,10 @@ export class DocumentsService implements OnModuleDestroy {
     const doc = await this.repo.findOne({ where: { id, orgId } });
     if (!doc) return null;
 
-    return { file: await this.readStoredFile(doc), name: doc.name };
+    // Only recognized PDFs are typed for inline rendering; everything else is
+    // delivered as opaque bytes so uploaded HTML/SVG is never interpreted.
+    const contentType = this.isPdf(doc) ? 'application/pdf' : 'application/octet-stream';
+    return { file: await this.readStoredFile(doc), name: doc.name, contentType };
   }
 
   private async readStoredFile(doc: Document, limitSize = false): Promise<Buffer> {

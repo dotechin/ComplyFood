@@ -1,538 +1,280 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { DocumentCategory, UserRole, type Document, type DocumentExtraction, type DocumentMetadata, type LogEntry, type User } from '@complyfood/shared';
-import { apiDelete, apiDownload, apiGet, apiUpload } from '../../../lib/api';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type { Document, DocumentCategory, LogEntry, User } from '@complyfood/shared';
+import { apiDelete, apiDownload, apiFetchBlob, apiGet, apiUpload } from '../../../lib/api';
+import { createDocumentLibrary, type DocumentLibrary, type LibraryState } from '../../../lib/documents/library';
+import { createPreviewController, type PreviewController, type PreviewState } from '../../../lib/documents/preview';
+import { CATEGORY_LABELS, CATEGORY_OPTIONS, canDeleteDocument } from '../../../lib/documents/rules';
+import { ActionButton, RefreshIcon, UploadIcon } from './actions';
+import { DocumentList } from './document-list';
+import { PreviewPanel } from './preview-panel';
+import { UploadPanel } from './upload-panel';
 
-const CATEGORY_OPTIONS = [
-  DocumentCategory.GENERAL,
-  DocumentCategory.HACCP_MANUAL,
-  DocumentCategory.STORE_LAYOUT,
-  DocumentCategory.PERMIT,
-  DocumentCategory.CERTIFICATE,
-  DocumentCategory.PROCEDURE,
-  DocumentCategory.INSPECTION_EVIDENCE,
-] as const;
+/** Minimum age of the list before a window focus/visibility change triggers a refetch. */
+const FOCUS_REFRESH_MIN_AGE_MS = 5_000;
+const INITIAL_LIBRARY: LibraryState = { docs: [], status: 'loading', refreshing: false, error: '', lastLoadedAt: null };
+const IDLE_PREVIEW: PreviewState = { status: 'idle' };
+const noopSubscribe = () => () => undefined;
 
-const CATEGORY_LABELS: Record<DocumentCategory, string> = {
-  [DocumentCategory.GENERAL]: 'General compliance',
-  [DocumentCategory.HACCP_MANUAL]: 'HACCP manual',
-  [DocumentCategory.STORE_LAYOUT]: 'Store layout',
-  [DocumentCategory.PERMIT]: 'Permit',
-  [DocumentCategory.CERTIFICATE]: 'Certificate',
-  [DocumentCategory.PROCEDURE]: 'Procedure',
-  [DocumentCategory.INSPECTION_EVIDENCE]: 'Inspection evidence',
-};
+function useStoreState<S>(store: { getState: () => S; subscribe: (listener: () => void) => () => void } | null, initial: S) {
+  return useSyncExternalStore(
+    store ? store.subscribe : noopSubscribe,
+    store ? store.getState : () => initial,
+    () => initial,
+  );
+}
 
 export default function DocumentsPage() {
+  const [library, setLibrary] = useState<DocumentLibrary | null>(null);
+  const [preview, setPreview] = useState<PreviewController | null>(null);
+  const libraryState = useStoreState(library, INITIAL_LIBRARY);
+  const previewState = useStoreState(preview, IDLE_PREVIEW);
   const [user, setUser] = useState<User | null>(null);
-  const [docs, setDocs] = useState<Document[]>([]);
+  const [userError, setUserError] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState('');
-  const [linkedEntryId, setLinkedEntryId] = useState('');
-  const [category, setCategory] = useState<DocumentCategory>(DocumentCategory.GENERAL);
-  const [notes, setNotes] = useState('');
+  const [logsError, setLogsError] = useState('');
   const [filterCategory, setFilterCategory] = useState<DocumentCategory | ''>('');
-  const [error, setError] = useState('');
-  const [readingDoc, setReadingDoc] = useState<Document | null>(null);
-  const [extraction, setExtraction] = useState<DocumentExtraction | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [readError, setReadError] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [openFolder, setOpenFolder] = useState<DocumentCategory | null>(null);
-  const readRequestRef = useRef(0);
-  const readingIdRef = useRef<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderHeadingRef = useRef<HTMLHeadingElement>(null);
+  const [downloadingIds, setDownloadingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
-    if (openFolder) {
-      folderHeadingRef.current?.focus({ preventScroll: true });
-      folderHeadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [openFolder]);
+    const lib = createDocumentLibrary({
+      list: (signal) => apiGet<Document[]>('/documents', { signal, cache: 'no-store' }),
+      upload: (formData) => apiUpload<Document>('/documents', formData),
+      remove: (id) => apiDelete<void>(`/documents/${id}`),
+    });
+    const previewer = createPreviewController({
+      fetchBlob: (path, signal) => apiFetchBlob(path, { signal }),
+      createObjectURL: (blob) => URL.createObjectURL(blob),
+      revokeObjectURL: (url) => URL.revokeObjectURL(url),
+    });
+    setLibrary(lib);
+    setPreview(previewer);
+    void lib.refresh();
 
-  useEffect(() => {
-    Promise.all([apiGet<User>('/users/me'), apiGet<Document[]>('/documents'), apiGet<LogEntry[]>('/logs')])
-      .then(([me, documents, entries]) => {
-        setUser(me);
-        setDocs(documents);
-        setLogs(entries);
-      })
-      .catch(() => setError('Could not load documents. Please reload to try again.'))
-      .finally(() => setLoading(false));
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void lib.refreshIfStale(FOCUS_REFRESH_MIN_AGE_MS);
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      lib.dispose();
+      previewer.dispose();
+    };
   }, []);
 
-  const handleRead = async (doc: Document) => {
-    const requestId = ++readRequestRef.current;
-    readingIdRef.current = doc.id;
-    setReadingDoc(doc);
-    setExtraction(null);
-    setReadError('');
-    setExtracting(true);
+  const loadUser = useCallback(async () => {
     try {
-      const result = await apiGet<DocumentExtraction>(`/documents/${doc.id}/extract`);
-      if (requestId !== readRequestRef.current) return;
-      setExtraction(result);
-      setDocs((prev) => prev.map((item) => item.id === doc.id
-        ? { ...item, metadata: result.metadata, processingStatus: result.processingStatus }
-        : item));
+      setUser(await apiGet<User>('/users/me', { cache: 'no-store' }));
+      setUserError('');
     } catch {
-      if (requestId !== readRequestRef.current) return;
-      setReadError('Could not extract this PDF. It may be damaged or encrypted. Please try again or download the file.');
+      setUserError('Could not verify your account, so delete actions and admin-only upload categories are hidden. Use Refresh to retry.');
+    }
+  }, []);
+
+  const loadLogs = useCallback(async () => {
+    try {
+      setLogs(await apiGet<LogEntry[]>('/logs', { cache: 'no-store' }));
+      setLogsError('');
+    } catch {
+      setLogsError('Log entries could not be loaded; you can still upload without linking one.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUser();
+    void loadLogs();
+  }, [loadUser, loadLogs]);
+
+  useEffect(() => {
+    if (!preview || previewState.status === 'idle') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') preview.close();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [preview, previewState.status]);
+
+  const handleRefresh = async () => {
+    if (!library) return;
+    setManualRefreshing(true);
+    setActionError('');
+    await Promise.all([library.refresh(), loadUser(), loadLogs()]);
+    setManualRefreshing(false);
+  };
+
+  const handleShow = (doc: Document) => {
+    setActionError('');
+    void preview?.show(doc);
+  };
+
+  const handleDownload = async (doc: Document) => {
+    if (downloadingIds.has(doc.id)) return;
+    setActionError('');
+    setDownloadingIds((prev) => new Set(prev).add(doc.id));
+    try {
+      await apiDownload(`/documents/${doc.id}/download`, doc.name);
+    } catch {
+      setActionError(`Could not download "${doc.name}". Please try again.`);
     } finally {
-      if (requestId === readRequestRef.current) setExtracting(false);
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(doc.id);
+        return next;
+      });
     }
   };
 
   const handleDelete = async (doc: Document) => {
-    if (!user || user.orgId !== doc.orgId || (user.role !== UserRole.ADMIN && user.id !== doc.uploadedBy)) return;
+    if (!library || !canDeleteDocument(user, doc)) return;
     if (!window.confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
     setDeletingId(doc.id);
-    setError('');
+    setActionError('');
     try {
-      await apiDelete<void>(`/documents/${doc.id}`);
-      setDocs((prev) => prev.filter((item) => item.id !== doc.id));
-      if (readingIdRef.current === doc.id) {
-        ++readRequestRef.current;
-        readingIdRef.current = null;
-        setReadingDoc(null);
-        setExtraction(null);
-        setReadError('');
-        setExtracting(false);
-      }
+      await library.remove(doc.id);
+      preview?.handleDeleted(doc.id);
     } catch {
-      setError(`Could not delete "${doc.name}". Please try again.`);
+      setActionError(`Could not delete "${doc.name}". Please try again.`);
     } finally {
       setDeletingId(null);
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (files.length === 0) {
-      setError('Please choose at least one file to upload.');
-      return;
-    }
-    setError('');
-    setUploadMessage('');
-    setUploading(true);
-    const uploaded: Document[] = [];
-    const failed: string[] = [];
-    for (const file of files) {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('category', category);
-      if (notes.trim()) {
-        formData.append('notes', notes.trim());
-      }
-      if (linkedEntryId && category !== DocumentCategory.HACCP_MANUAL) {
-        formData.append('linkedEntryId', linkedEntryId);
-      }
-      try {
-        uploaded.push(await apiUpload<Document>('/documents', formData));
-      } catch {
-        failed.push(file.name);
-      }
-    }
-    setUploading(false);
-    setDocs((prev) => [...uploaded.reverse(), ...prev]);
-    if (failed.length > 0) {
-      setError(`Failed to upload: ${failed.join(', ')}`);
-    }
-    if (uploaded.length > 0) {
-      setUploadMessage(`${uploaded.length} file${uploaded.length === 1 ? '' : 's'} uploaded.`);
-    }
-    setFiles([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setLinkedEntryId('');
-    setCategory(DocumentCategory.GENERAL);
-    setNotes('');
-  };
-
+  const { docs, status, error } = libraryState;
   const filteredDocs = useMemo(
-    () => docs.filter((doc) => (filterCategory ? doc.category === filterCategory : true)),
+    () => (filterCategory ? docs.filter((doc) => doc.category === filterCategory) : docs),
     [docs, filterCategory],
   );
-
-  const groupedDocs = useMemo(
-    () =>
-      filteredDocs.reduce(
-        (acc, doc) => {
-          if (doc.category === DocumentCategory.HACCP_MANUAL) {
-            acc.uploadedManuals.push(doc);
-          } else if (doc.linkedEntryId) {
-            acc.logLinkedDocs.push(doc);
-          } else {
-            acc.organizationDocs.push(doc);
-          }
-          return acc;
-        },
-        {
-          uploadedManuals: [] as Document[],
-          organizationDocs: [] as Document[],
-          logLinkedDocs: [] as Document[],
-        },
-      ),
-    [filteredDocs],
-  );
-
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<DocumentCategory, number>();
+    docs.forEach((doc) => counts.set(doc.category, (counts.get(doc.category) ?? 0) + 1));
+    return counts;
+  }, [docs]);
   const logsById = useMemo(() => new Map(logs.map((entry) => [entry.id, entry])), [logs]);
-  const folderDocs = useMemo(
-    () => docs.filter((doc) => doc.category === openFolder),
-    [docs, openFolder],
+  const retryButton = (
+    <ActionButton icon={<RefreshIcon />} label="Try again" busy={manualRefreshing} busyLabel="Retrying…" onClick={() => void handleRefresh()} />
   );
-  const uploadCategoryOptions = useMemo<readonly DocumentCategory[]>(
-    () =>
-      user?.role === UserRole.ADMIN
-        ? CATEGORY_OPTIONS
-        : CATEGORY_OPTIONS.filter((option) => option !== DocumentCategory.HACCP_MANUAL),
-    [user],
-  );
-
-  useEffect(() => {
-    if (!uploadCategoryOptions.includes(category)) {
-      setCategory(uploadCategoryOptions[0] ?? DocumentCategory.GENERAL);
-      setLinkedEntryId('');
-    }
-  }, [category, uploadCategoryOptions]);
-
-  const documentActions = {
-    user, deletingId, onRead: handleRead, onDelete: handleDelete,
-    onOpenFolder: (doc: Document) => setOpenFolder(doc.category),
-  };
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold text-foreground">Documents</h1>
-      <div className="mb-4 grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Manual files" value={groupedDocs.uploadedManuals.length} />
-        <SummaryCard label="Business compliance docs" value={groupedDocs.organizationDocs.length} />
-        <SummaryCard label="Log-linked docs" value={groupedDocs.logLinkedDocs.length} />
-      </div>
-      <form onSubmit={handleUpload} className="mb-6 grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-[1fr_1fr_auto]">
-        <label className="space-y-1 text-sm text-foreground">
-          <span className="font-medium">Files</span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-            className="block w-full rounded-md border border-input px-3 py-2 text-sm"
-          />
-          <span className="block text-xs text-muted-foreground">
-            {files.length > 0
-              ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
-              : 'Select one or more files (Ctrl/Cmd or Shift to multi-select)'} · Max 20 MB per file.
-          </span>
-        </label>
-        <label className="space-y-1 text-sm text-foreground">
-          <span className="font-medium">Category</span>
-          <select
-            value={category}
-            onChange={(e) => {
-              const nextCategory = e.target.value as DocumentCategory;
-              setCategory(nextCategory);
-              if (nextCategory === DocumentCategory.HACCP_MANUAL) {
-                setLinkedEntryId('');
-              }
-            }}
-            className="block w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            {uploadCategoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {CATEGORY_LABELS[option]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm text-foreground">
-          <span className="font-medium">Linked log entry</span>
-          <select
-            value={linkedEntryId}
-            onChange={(e) => setLinkedEntryId(e.target.value)}
-            disabled={category === DocumentCategory.HACCP_MANUAL}
-            className="block w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">
-              {category === DocumentCategory.HACCP_MANUAL ? 'Manual files are organization-level only' : 'No linked log entry'}
-            </option>
-            {logs.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.type} · {new Date(entry.createdAt).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={uploading}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-        >
-          {uploading ? 'Uploading…' : files.length > 1 ? `Upload ${files.length} documents` : 'Upload document'}
-        </button>
-        {uploadMessage && (
-          <p role="status" className="text-sm text-primary md:col-span-3">
-            {uploadMessage}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Documents</h1>
+          <p className="text-sm text-muted-foreground">
+            Your organization&apos;s compliance files. Show previews a PDF here; Download saves the original file.
           </p>
-        )}
-        <label className="space-y-1 text-sm text-foreground md:col-span-2">
-          <span className="font-medium">Notes</span>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="block w-full rounded-md border border-input px-3 py-2 text-sm"
-            placeholder="Optional notes (e.g. fire permit 2026, signed layout)"
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            icon={<RefreshIcon />}
+            label="Refresh"
+            busy={manualRefreshing}
+            busyLabel="Refreshing…"
+            disabled={!library}
+            onClick={() => void handleRefresh()}
           />
-        </label>
-        <label className="space-y-1 text-sm text-foreground">
-          <span className="font-medium">Filter by category</span>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value as DocumentCategory | '')}
-            className="block w-full rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">All categories</option>
-            {CATEGORY_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {CATEGORY_LABELS[option]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {error && <p role="alert" className="text-sm text-danger md:col-span-3">{error}</p>}
-      </form>
-      {readingDoc && (
-        <section aria-label="PDF reader" className="mb-6 space-y-3 rounded-lg border bg-card p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">{readingDoc.name}</h2>
-            <button type="button" className="text-sm text-primary" onClick={() => {
-              ++readRequestRef.current;
-              readingIdRef.current = null;
-              setReadingDoc(null);
-              setExtraction(null);
-              setReadError('');
-              setExtracting(false);
-            }}>Close reader</button>
-          </div>
-          {extracting && <p role="status">Extracting PDF text…</p>}
-          {readError && <p role="alert" className="text-danger">{readError}</p>}
-          {extraction && (
-            <>
-              <p className="text-sm text-muted-foreground">Processing: {extraction.processingStatus}</p>
-              <DocumentMetadataDetails metadata={extraction.metadata} />
-              {!extraction.supported ? (
-                <p>Text extraction is not supported for this document. Download it to read it.</p>
-              ) : !extraction.text?.trim() && !extraction.pages.some((page) => page.text.trim()) ? (
-                <p>No readable text was found. This PDF may be scanned or image-only; download it to view the pages. OCR is not available here.</p>
-              ) : extraction.pages.length > 0 ? (
-                extraction.pages.map((page) => (
-                  <section key={page.pageNumber} className="space-y-2 border-t pt-3">
-                    <h3 className="font-medium">Page {page.pageNumber}</h3>
-                    <p className="whitespace-pre-wrap break-words text-sm">{page.text.trim() ? page.text : 'No readable text on this page; it may contain only images.'}</p>
-                  </section>
-                ))
-              ) : (
-                <p className="whitespace-pre-wrap break-words text-sm">{extraction.text}</p>
-              )}
-            </>
-          )}
-        </section>
-      )}
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
-        <div className="space-y-6">
-          <section aria-label="Document folders" className="space-y-3">
-            <h2 className="text-lg font-semibold text-foreground">Folders</h2>
-            <p className="text-sm text-muted-foreground">Browse documents by category. Deleting a file from a folder also removes it from the document lists.</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {CATEGORY_OPTIONS.map((folder) => {
-                const count = docs.filter((doc) => doc.category === folder).length;
-                return (
-                  <div key={folder} className="rounded-lg border bg-card p-4">
-                    <h3 className="font-medium text-foreground">{CATEGORY_LABELS[folder]}</h3>
-                    <p className="text-sm text-muted-foreground">{count} file{count === 1 ? '' : 's'}</p>
-                    <button
-                      type="button"
-                      aria-label={`Open folder: ${CATEGORY_LABELS[folder]}`}
-                      aria-pressed={openFolder === folder}
-                      onClick={() => setOpenFolder(folder)}
-                      className="mt-2 text-sm text-primary hover:text-primary/80"
-                    >
-                      Open folder
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-          {openFolder && (
-            <section aria-label={`${CATEGORY_LABELS[openFolder]} folder`} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 ref={folderHeadingRef} tabIndex={-1} className="text-lg font-semibold text-foreground">
-                  Folder: {CATEGORY_LABELS[openFolder]}
-                </h2>
-                <button type="button" onClick={() => setOpenFolder(null)} className="text-sm text-primary">
-                  Close folder
-                </button>
-              </div>
-              <DocumentTable
-                title={`${CATEGORY_LABELS[openFolder]} files`}
-                docs={folderDocs}
-                logsById={logsById}
-                {...documentActions}
-              />
-            </section>
-          )}
-          <DocumentTable
-            title="Uploaded manuals"
-            docs={groupedDocs.uploadedManuals}
-            logsById={logsById}
-            {...documentActions}
+          <ActionButton
+            icon={<UploadIcon />}
+            label={uploadOpen ? 'Hide upload' : 'Upload'}
+            variant="primary"
+            aria-expanded={uploadOpen}
+            aria-controls={uploadOpen ? 'upload-panel' : undefined}
+            disabled={!library}
+            onClick={() => {
+              if (!uploadOpen) void loadLogs();
+              setUploadOpen((open) => !open);
+            }}
           />
-          <DocumentTable
-            title="Business compliance documents"
-            docs={groupedDocs.organizationDocs}
-            logsById={logsById}
-            {...documentActions}
+        </div>
+      </div>
+
+      {uploadOpen && library && (
+        <div id="upload-panel">
+          <UploadPanel
+            user={user}
+            logs={logs}
+            logsError={logsError}
+            onUpload={library.upload}
+            onClose={() => setUploadOpen(false)}
           />
-          <DocumentTable title="Log-linked documents" docs={groupedDocs.logLinkedDocs} logsById={logsById} {...documentActions} />
         </div>
       )}
-    </div>
-  );
-}
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border bg-card p-4 shadow-card">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-3xl font-bold text-foreground">{value}</p>
-    </div>
-  );
-}
+      {userError && <p role="alert" className="mb-3 text-sm text-danger">{userError}</p>}
+      {actionError && <p role="alert" className="mb-3 text-sm text-danger">{actionError}</p>}
 
-function DocumentTable({
-  title,
-  docs,
-  logsById,
-  user,
-  deletingId,
-  onRead,
-  onDelete,
-  onOpenFolder,
-}: {
-  title: string;
-  docs: Document[];
-  logsById: Map<string, LogEntry>;
-  user: User | null;
-  deletingId: string | null;
-  onRead: (doc: Document) => Promise<void>;
-  onDelete: (doc: Document) => Promise<void>;
-  onOpenFolder: (doc: Document) => void;
-}) {
-  return (
-    <div className="rounded-lg border bg-card shadow-card">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-      </div>
-      <table className="min-w-full divide-y divide-border text-sm">
-        <thead className="bg-muted">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Category</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Scope</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Notes</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Uploaded</th>
-            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border bg-card">
-          {docs.map((doc) => {
-            const linkedLog = doc.linkedEntryId ? logsById.get(doc.linkedEntryId) : null;
-            return (
-              <tr key={doc.id}>
-                <td className="px-4 py-3 font-medium text-foreground">
-                  {doc.name}
-                  {(doc.mimeType === 'application/pdf' || /\.pdf$/i.test(doc.name)) && (
-                    <div className="mt-1 text-xs font-normal text-muted-foreground">
-                      <p>Processing: {doc.processingStatus}</p>
-                      <DocumentMetadataDetails metadata={doc.metadata} />
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{CATEGORY_LABELS[doc.category]}</td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {linkedLog ? `${linkedLog.type} log` : doc.linkedEntryId ? 'Linked log' : 'Organization'}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{doc.notes || '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">{new Date(doc.createdAt).toLocaleDateString()}</td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onOpenFolder(doc)}
-                    className="mr-3 text-sm text-primary hover:text-primary/80"
-                  >
-                    Open folder
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void apiDownload(`/documents/${doc.id}/download`, doc.name)}
-                    className="text-sm text-primary hover:text-primary/80"
-                  >
-                    Download
-                  </button>
-                  {(doc.mimeType === 'application/pdf' || /\.pdf$/i.test(doc.name)) && (
-                    <button
-                      type="button"
-                      disabled={deletingId === doc.id}
-                      onClick={() => void onRead(doc)}
-                      className="ml-3 text-sm text-primary hover:text-primary/80 disabled:opacity-60"
-                    >
-                      Read PDF
-                    </button>
-                  )}
-                  {user && user.orgId === doc.orgId && (user.role === UserRole.ADMIN || user.id === doc.uploadedBy) && (
-                    <button
-                      type="button"
-                      disabled={deletingId !== null}
-                      onClick={() => void onDelete(doc)}
-                      className="ml-3 text-sm text-danger disabled:opacity-60"
-                    >
-                      {deletingId === doc.id ? 'Deleting…' : 'Delete'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-          {docs.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                No documents in this section.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+      {previewState.status !== 'idle' && preview && (
+        <PreviewPanel
+          state={previewState}
+          downloading={downloadingIds.has(previewState.doc.id)}
+          onClose={preview.close}
+          onRetry={(doc) => void preview.show(doc)}
+          onDownload={(doc) => void handleDownload(doc)}
+        />
+      )}
 
-function DocumentMetadataDetails({ metadata }: { metadata: DocumentMetadata | null }) {
-  if (!metadata) return null;
-  return (
-    <dl className="text-sm text-muted-foreground">
-      <div><dt className="inline">Pages: </dt><dd className="inline">{metadata.pageCount}</dd></div>
-      {metadata.title && <div><dt className="inline">Title: </dt><dd className="inline">{metadata.title}</dd></div>}
-      {metadata.author && <div><dt className="inline">Author: </dt><dd className="inline">{metadata.author}</dd></div>}
-      {metadata.creationDate && <div><dt className="inline">Created: </dt><dd className="inline">{metadata.creationDate}</dd></div>}
-    </dl>
+      <section aria-labelledby="library-heading" className="rounded-lg border bg-card shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+          <h2 id="library-heading" className="text-lg font-semibold text-foreground">
+            Library <span className="text-sm font-normal text-muted-foreground">({filteredDocs.length})</span>
+          </h2>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <span className="font-medium">Category</span>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value as DocumentCategory | '')}
+              className="rounded-md border border-input px-3 py-1.5 text-sm"
+            >
+              <option value="">All categories ({docs.length})</option>
+              {CATEGORY_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {CATEGORY_LABELS[option]} ({categoryCounts.get(option) ?? 0})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {status === 'loading' ? (
+          <p role="status" className="px-4 py-8 text-center text-sm text-muted-foreground">Loading documents…</p>
+        ) : status === 'error' ? (
+          <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-8">
+            <p role="alert" className="text-sm text-danger">{error}</p>
+            {retryButton}
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
+                <p role="alert" className="text-sm text-danger">{error} Showing the last loaded list.</p>
+                {retryButton}
+              </div>
+            )}
+            <DocumentList
+              docs={filteredDocs}
+              logsById={logsById}
+              user={user}
+              deletingId={deletingId}
+              downloadingIds={downloadingIds}
+              previewId={previewState.status === 'idle' ? null : previewState.doc.id}
+              previewLoading={previewState.status === 'loading'}
+              emptyMessage={
+                filterCategory
+                  ? `No ${CATEGORY_LABELS[filterCategory]} documents.`
+                  : 'No documents yet. Use Upload to add your first file.'
+              }
+              onShow={handleShow}
+              onDownload={(doc) => void handleDownload(doc)}
+              onDelete={(doc) => void handleDelete(doc)}
+            />
+          </>
+        )}
+      </section>
+    </div>
   );
 }
