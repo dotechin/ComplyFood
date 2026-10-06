@@ -19,6 +19,7 @@ services:
     environment:
       DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD}@postgres:5432/complyfood
       JWT_SECRET: ${JWT_SECRET}
+      PASSWORD_RESET_TOKEN_SALT: ${PASSWORD_RESET_TOKEN_SALT}
       JWT_EXPIRES_IN: 7d
       PORT: 4000
       WEB_URL: ${WEB_URL}
@@ -38,8 +39,11 @@ services:
       context: .
       dockerfile: infra/Dockerfile.web
       target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-${API_URL:-}}
+        API_PROXY_URL: ${API_PROXY_URL:-}
     environment:
-      NEXT_PUBLIC_API_URL: ${API_URL}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-${API_URL:-}}
     depends_on:
       - api
     restart: unless-stopped

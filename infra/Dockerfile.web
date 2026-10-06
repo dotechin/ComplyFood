@@ -22,6 +22,8 @@ FROM base AS build
 # API URL must be provided as a build arg (not just a runtime env var).
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG API_PROXY_URL
+ENV API_PROXY_URL=$API_PROXY_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
