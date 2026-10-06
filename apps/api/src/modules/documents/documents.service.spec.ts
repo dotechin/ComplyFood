@@ -12,9 +12,9 @@ describe('DocumentsService', () => {
     find: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
-    delete: jest.fn(),
-    manager: { query: jest.fn().mockResolvedValue([]) },
+    manager: { transaction: jest.fn() },
   };
+  const transactionDelete = jest.fn();
   const parser = { parse: jest.fn() };
 
   let service: DocumentsService;
@@ -22,7 +22,8 @@ describe('DocumentsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     parser.parse.mockReset();
-    repo.manager.query.mockResolvedValue([]);
+    transactionDelete.mockResolvedValue({ affected: 1 });
+    repo.manager.transaction.mockImplementation(async (callback: (manager: any) => Promise<unknown>) => callback({ delete: transactionDelete }));
     service = new DocumentsService(repo as any, parser as any);
     (service as any).ensureBucketExists = jest.fn().mockResolvedValue(undefined);
     (service as any).s3Client = {
@@ -265,30 +266,31 @@ describe('DocumentsService', () => {
   ])('allows deletion by %s with role %s', async (userId, role) => {
     repo.findOne.mockResolvedValue(doc);
     await service.delete('org-1', doc.id, userId, role);
+    expect(transactionDelete).toHaveBeenCalledWith(expect.anything(), { id: doc.id, orgId: 'org-1' });
     expect((service as any).s3Client.send).toHaveBeenCalledWith(expect.any(DeleteObjectCommand));
-    expect(repo.delete).toHaveBeenCalledWith({ id: doc.id, orgId: 'org-1' });
+    expect(repo.manager.transaction).toHaveBeenCalled();
   });
 
   it('rejects deletion by non-uploaders without touching storage', async () => {
     repo.findOne.mockResolvedValue(doc);
     await expect(service.delete('org-1', doc.id, 'other-user', UserRole.STAFF)).rejects.toThrow(ForbiddenException);
     expect((service as any).s3Client.send).not.toHaveBeenCalled();
-    expect(repo.delete).not.toHaveBeenCalled();
+    expect(repo.manager.transaction).not.toHaveBeenCalled();
   });
 
   it('preserves PDFs referenced by historical log records', async () => {
     repo.findOne.mockResolvedValue(doc);
-    repo.manager.query.mockResolvedValue([{ id: 'log-1' }]);
+    transactionDelete.mockRejectedValue(Object.assign(new Error('foreign key violation'), { code: '23503' }));
     await expect(service.delete('org-1', doc.id, 'user-1', UserRole.ADMIN)).rejects.toThrow(ConflictException);
     expect((service as any).s3Client.send).not.toHaveBeenCalled();
-    expect(repo.delete).not.toHaveBeenCalled();
+    expect(repo.manager.transaction).toHaveBeenCalled();
   });
 
   it('scopes deletion to the organization and handles already deleted records', async () => {
     repo.findOne.mockResolvedValue(null);
     await expect(service.delete('other-org', doc.id, 'user-1', UserRole.ADMIN)).rejects.toThrow(NotFoundException);
     expect(repo.findOne).toHaveBeenCalledWith({ where: { id: doc.id, orgId: 'other-org' } });
-    expect(repo.delete).not.toHaveBeenCalled();
+    expect(repo.manager.transaction).not.toHaveBeenCalled();
     await expect(service.extract('other-org', doc.id)).rejects.toThrow(NotFoundException);
   });
 
@@ -302,13 +304,13 @@ describe('DocumentsService', () => {
     repo.findOne.mockResolvedValue(doc);
     (service as any).s3Client.send.mockRejectedValue({ name: 'NoSuchKey' });
     await service.delete('org-1', doc.id, 'user-1', UserRole.STAFF);
-    expect(repo.delete).toHaveBeenCalledWith({ id: doc.id, orgId: 'org-1' });
+    expect(transactionDelete).toHaveBeenCalledWith(expect.anything(), { id: doc.id, orgId: 'org-1' });
   });
 
   it('preserves the record when S3 deletion fails', async () => {
     repo.findOne.mockResolvedValue(doc);
     (service as any).s3Client.send.mockRejectedValue(new Error('Storage unavailable'));
     await expect(service.delete('org-1', doc.id, 'user-1', UserRole.STAFF)).rejects.toThrow(ServiceUnavailableException);
-    expect(repo.delete).not.toHaveBeenCalled();
+    expect(transactionDelete).toHaveBeenCalled();
   });
 });

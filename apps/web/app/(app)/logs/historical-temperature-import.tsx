@@ -25,7 +25,7 @@ function parseRecords(value: string): ImportRecord[] {
   });
 }
 
-export function HistoricalTemperatureImport() {
+export function HistoricalTemperatureImport({ onImported }: { onImported: () => Promise<void> }) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentId, setDocumentId] = useState('');
   const [recordsText, setRecordsText] = useState('');
@@ -64,6 +64,7 @@ export function HistoricalTemperatureImport() {
           duplicates: result.duplicates + batch.duplicates,
         };
       }
+      await onImported();
       setMessage(`${result.imported} historical outcomes imported; ${result.skippedSundays} Sunday entries skipped as closed days; ${result.duplicates} duplicates ignored.`);
       setRecordsText('');
     } catch (err) {

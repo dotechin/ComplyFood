@@ -16,6 +16,7 @@ describe('LogsService', () => {
     manager: {
       transaction: jest.fn(async (callback) => callback({ save: transactionSave })),
     },
+    createQueryBuilder: jest.fn(),
   };
   const documents = { findOne: jest.fn() };
 
@@ -40,6 +41,33 @@ describe('LogsService', () => {
       }),
     );
     expect(result.status).toBe(LogStatus.PENDING);
+  });
+
+  it('filters historical source months exclusively and otherwise prefers measured dates', async () => {
+    const query = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    repo.createQueryBuilder.mockReturnValue(query);
+    const dateFrom = new Date('2026-01-01T00:00:00Z');
+    const dateTo = new Date('2026-12-31T23:59:59Z');
+
+    await service.findAll('org-1', undefined, undefined, undefined, dateFrom, dateTo);
+
+    expect(query.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining("log.fields->>'Source month' IS NOT NULL AND log.fields->>'Source month' BETWEEN"),
+      expect.objectContaining({ sourcePeriodFrom: '2026-01', sourcePeriodTo: '2026-12' }),
+    );
+    expect(query.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('COALESCE(log.measured_at, log.occurred_at, log.created_at)'),
+      expect.any(Object),
+    );
+    expect(query.orderBy).toHaveBeenCalledWith(
+      expect.stringContaining("to_date(log.fields->>'Source month', 'YYYY-MM')::timestamptz, log.measured_at, log.occurred_at"),
+      'DESC',
+    );
   });
 
   it('requires all weekly cleaning outcomes and corrective action for NC', async () => {

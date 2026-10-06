@@ -462,10 +462,10 @@ export default function LogsPage() {
               document.getElementById('field-temperature')?.focus();
             }}
           />
-          <HistoricalTemperatureImport />
+          <HistoricalTemperatureImport onImported={refreshLogs} />
         </>
       )}
-      {activeType === LogType.CLEANING && <HistoricalCleaningImport />}
+      {activeType === LogType.CLEANING && <HistoricalCleaningImport onImported={refreshLogs} />}
 
       <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
         <div>
@@ -480,7 +480,7 @@ export default function LogsPage() {
           )}
           {activeType === LogType.CLEANING && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Record one weekly check. Sunday is excluded by the business schedule; the signed-in user is recorded as responsible.
+              Record one weekly check.
             </p>
           )}
         </div>

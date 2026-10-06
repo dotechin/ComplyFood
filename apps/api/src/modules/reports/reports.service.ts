@@ -133,11 +133,15 @@ export class ReportsService {
       '',
       'Recent logs:',
       ...summary.recentLogs.map((log) => {
+        const isHistorical = log.recordOrigin === 'historical_transcription';
         const sourcePeriod = log.fields?.['Source month']
           ? `${log.fields['Source month']} week ${log.fields['Source week']}`
           : null;
         const recordDate = sourcePeriod ?? log.measuredAt ?? log.occurredAt ?? log.createdAt;
-        return `${log.type} | ${log.status} | ${recordDate}`;
+        const provenance = isHistorical
+          ? ` | Source: ${log.fields?.['Source PDF'] ?? log.sourceDocumentId} page ${log.sourcePage ?? log.fields?.['Source page']} | Imported by: ${log.submittedBy} at ${log.submittedAt?.toISOString?.()}`
+          : '';
+        return `${log.type} | ${log.status} | ${recordDate}${provenance}`;
       }),
     ];
 

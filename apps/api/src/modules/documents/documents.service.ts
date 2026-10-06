@@ -218,25 +218,28 @@ export class DocumentsService implements OnModuleDestroy {
     if (role !== UserRole.ADMIN && doc.uploadedBy !== userId) {
       throw new ForbiddenException('Only organization admins or the uploader can delete this document');
     }
-    const linkedHistoricalLogs = await this.repo.manager.query(
-      'SELECT id FROM log_entries WHERE org_id = $1 AND source_document_id = $2 LIMIT 1',
-      [orgId, id],
-    );
-    if (linkedHistoricalLogs.length > 0) {
-      throw new ConflictException('This PDF is the source for historical log records and cannot be deleted');
-    }
     try {
-      if (this.storageDriver === 's3' && this.s3Client) {
-        await this.s3Client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: doc.s3Key }));
-      } else {
-        await unlink(join(process.cwd(), 'storage', doc.s3Key));
-      }
+      await this.repo.manager.transaction(async (manager) => {
+        const result = await manager.delete(Document, { id, orgId });
+        if (!result.affected) throw new NotFoundException('Document not found');
+        try {
+          if (this.storageDriver === 's3' && this.s3Client) {
+            await this.s3Client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: doc.s3Key }));
+          } else {
+            await unlink(join(process.cwd(), 'storage', doc.s3Key));
+          }
+        } catch (error) {
+          if (!this.isMissingFileError(error)) {
+            throw new ServiceUnavailableException('Could not delete the stored file; please retry');
+          }
+        }
+      });
     } catch (error) {
-      if (!this.isMissingFileError(error)) {
-        throw new ServiceUnavailableException('Could not delete the stored file; please retry');
+      if (this.isForeignKeyViolation(error)) {
+        throw new ConflictException('This PDF is the source for historical log records and cannot be deleted');
       }
+      throw error;
     }
-    await this.repo.delete({ id, orgId });
   }
 
   private isPdf(doc: { name: string; mimeType?: string | null }) {
@@ -246,6 +249,13 @@ export class DocumentsService implements OnModuleDestroy {
   private isMissingFileError(error: unknown) {
     return this.getS3ErrorName(error) === 'NoSuchKey' || this.getS3ErrorName(error) === 'NotFound' ||
       (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT');
+  }
+
+  private isForeignKeyViolation(error: unknown) {
+    if (typeof error !== 'object' || error === null) return false;
+    const driverError = 'driverError' in error ? error.driverError : null;
+    return ('code' in error && error.code === '23503') ||
+      (typeof driverError === 'object' && driverError !== null && 'code' in driverError && driverError.code === '23503');
   }
 
   private sanitizeFileName(fileName: string) {
