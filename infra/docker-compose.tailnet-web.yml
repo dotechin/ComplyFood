@@ -1,0 +1,12 @@
+services:
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        API_PROXY_URL: http://api:4000
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: ""
+    ports:
+      - "127.0.0.1:3000:3000"
