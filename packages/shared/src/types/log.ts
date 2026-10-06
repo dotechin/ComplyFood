@@ -24,6 +24,9 @@ export interface LogEntry {
   presetId: string | null;
   occurredAt: string | null;
   measuredAt: string | null;
+  recordOrigin: string | null;
+  sourceDocumentId: string | null;
+  sourcePage: number | null;
   isException: boolean;
   exceptionReason: string | null;
   exceptionBy: string | null;

@@ -4,6 +4,7 @@ import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
 import LogsPage from './page';
 import { TemperatureSheet } from './temperature-sheet';
+import { TEMPERATURE_UNITS } from './temperature-log';
 
 jest.mock('../../../lib/api', () => ({
   apiGet: jest.fn(),
@@ -30,6 +31,9 @@ const reading: LogEntry = {
   presetId: null,
   occurredAt: null,
   measuredAt: null,
+  recordOrigin: null,
+  sourceDocumentId: null,
+  sourcePage: null,
   isException: false,
   exceptionReason: null,
   exceptionBy: null,
@@ -48,7 +52,7 @@ describe('Temperature logs UI', () => {
     const html = renderToStaticMarkup(<LogsPage />);
     expect(html).toContain('Daily Logs');
     expect(html).toContain('Temperature Log · CCP 2/3');
-    expect(html).toContain('>Unit<span');
+    expect(html).toContain('>Unit</label>');
     expect(html).toContain('>Critical limit</label>');
     expect(html).toContain('>Temperature<span');
     expect(html).toContain('Save reading');
@@ -130,7 +134,7 @@ describe('Temperature logs UI', () => {
     jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
       let value = typeof initial === 'function' ? initial() : initial;
       if (value && typeof value === 'object' && 'unit' in value) {
-        value = { unit: 'Bar fridge 1', target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
+        value = { unit: TEMPERATURE_UNITS[0].value, target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
       }
       return [value, jest.fn()];
     });
@@ -149,7 +153,7 @@ describe('Temperature logs UI', () => {
       type: LogType.TEMPERATURE,
       fields: {
         Reading: expect.any(String),
-        'Workstation / unit': 'Bar fridge 1',
+        'Workstation / unit': TEMPERATURE_UNITS[0].value,
         'Target (critical limit)': 'Chilled ≤ 4°C',
         'Measured temperature': '0 °C',
         'Corrective action / comments': 'Checked seal',

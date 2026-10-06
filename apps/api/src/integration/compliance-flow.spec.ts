@@ -43,7 +43,10 @@ describe('Compliance integration flow', () => {
       dataSource.getRepository(Organization),
       dataSource.getRepository(Location),
     );
-    logsService = new LogsService(dataSource.getRepository(LogEntry));
+    logsService = new LogsService(
+      dataSource.getRepository(LogEntry),
+      dataSource.getRepository(Document),
+    );
     overridesService = new OverridesService(
       dataSource.getRepository(OverrideRecord),
       logsService,

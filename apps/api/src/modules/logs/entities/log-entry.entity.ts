@@ -49,6 +49,15 @@ export class LogEntry {
   @Column({ name: 'measured_at', type: 'timestamptz', nullable: true })
   measuredAt: Date | null;
 
+  @Column({ name: 'record_origin', nullable: true })
+  recordOrigin: string | null;
+
+  @Column({ name: 'source_document_id', type: 'uuid', nullable: true })
+  sourceDocumentId: string | null;
+
+  @Column({ name: 'source_page', type: 'integer', nullable: true })
+  sourcePage: number | null;
+
   @Column({ name: 'is_exception', type: 'boolean', default: false })
   isException: boolean;
 

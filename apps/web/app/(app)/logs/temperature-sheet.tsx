@@ -14,9 +14,10 @@ function valueLabel(value: unknown): string {
 
 export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheetProps) {
   const months = new Map<string, { date: Date; entries: LogEntry[] }>();
-  for (const log of [...logs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())) {
-    const date = new Date(log.createdAt);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const occurredDate = (log: LogEntry) => new Date(log.measuredAt ?? log.occurredAt ?? log.createdAt);
+  for (const log of [...logs].sort((a, b) => occurredDate(a).getTime() - occurredDate(b).getTime())) {
+    const date = occurredDate(log);
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
     const month = months.get(key) ?? { date, entries: [] };
     month.entries.push(log);
     months.set(key, month);
@@ -32,7 +33,7 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
         <div key={key} className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full text-left text-sm">
             <caption className="p-3 text-left font-semibold text-foreground">
-              {month.date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              {month.date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
             </caption>
             <thead className="border-y bg-muted text-foreground">
               <tr>
@@ -44,7 +45,7 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
             <tbody>
               {month.entries.map((log) => (
                 <tr key={log.id} className="border-b last:border-0">
-                  <td className="px-3 py-2 align-top tabular-nums">{new Date(log.createdAt).getDate()}</td>
+                  <td className="px-3 py-2 align-top tabular-nums">{occurredDate(log).getUTCDate()}</td>
                   <th scope="row" className="px-3 py-2 align-top font-medium">
                     {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item)}
                   </th>

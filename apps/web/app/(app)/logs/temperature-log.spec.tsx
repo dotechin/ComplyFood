@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import LogsPage from './page';
-import { KITCHEN_FRIDGE_5, KITCHEN_FRIDGE_5_TITLE, TemperatureLog } from './temperature-log';
+import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 function reading(temperature: string, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
     type: LogType.TEMPERATURE,
     status: LogStatus.CONFIRMED,
-    fields: { 'Workstation / unit': KITCHEN_FRIDGE_5, 'Measured temperature': temperature },
+    fields: { 'Workstation / unit': TEMPERATURE_UNITS[0].value, 'Measured temperature': temperature },
     createdAt: '2026-01-01T12:00:00Z',
     ...overrides,
   } as LogEntry;
@@ -22,57 +22,89 @@ function monthCells(html: string, month: string) {
   return Array.from(row.matchAll(/<td[^>]*>(.*?)<\/td>/g), (match) => match[1]);
 }
 
-describe('Kitchen Fridge 5 temperature log', () => {
-  it('is accessible alongside the compact daily temperature form', () => {
+describe('temperature log sheets', () => {
+  it('renders all source-form units and weekly cleaning controls on Daily Logs', () => {
     const html = renderToStaticMarkup(<LogsPage />);
-    expect(html).toContain(KITCHEN_FRIDGE_5_TITLE);
-    expect(html).toContain('Record reading');
-    expect(html).toContain('>Unit<span');
+    expect(html).toContain('Temperature Log — Bar counter 1');
+    expect(html).toContain('Temperature Log — Bar counter 2');
+    expect(html).toContain('Temperature Log — Bar counter 3');
+    expect(html).toContain('Temperature Log — Kitchen chest freezer 4');
+    expect(html).toContain('Import verified historical temperature outcomes');
+    expect(html).toContain('Week 1');
+    expect(html).toContain('C — Compliant');
+    expect(html).toContain('A — Acceptable');
+    expect(html).toContain('NC — Non-compliant');
     expect(html).toContain('Save reading');
-    expect(html).toContain('Cleaning');
   });
 
-  it('renders a compact English annual grid without fabricating readings', () => {
+  it('renders annual grids for each unit and marks Sundays as closed', () => {
     const html = renderLog();
-    expect(html).toContain(KITCHEN_FRIDGE_5_TITLE);
+    expect(html.match(/<table/g)).toHaveLength(4);
     expect(html).toContain('Year: 2026');
-    expect(html).toContain('December');
-    expect(html).toContain('C = Compliant');
-    expect(monthCells(html, 'January')).toEqual(Array(31).fill(''));
+    expect(html).toContain('November');
+    expect(html).toContain('Off');
     expect(monthCells(html, 'February').slice(28)).toEqual(['—', '—', '—']);
-    expect(monthCells(renderLog([], 2028), 'February')[28]).toBe('');
+    expect(monthCells(renderLog([], 2028), 'February')[28]).toBe('Off');
   });
 
-  it('uses the fridge limit and retains any non-compliant reading for a day', () => {
-    expect(monthCells(renderLog([reading('4 °C')]), 'January')[0]).toBe('C');
-    expect(monthCells(renderLog([reading('4 °C'), reading('5 °C')]), 'January')[0]).toBe('NC');
-    expect(monthCells(renderLog([reading('5 °C'), reading('4 °C')]), 'January')[0]).toBe('NC');
-  });
-
-  it('accepts decimal and scientific notation from the existing number input', () => {
-    expect(monthCells(renderLog([reading('.5 °C')]), 'January')[0]).toBe('C');
-    expect(monthCells(renderLog([reading('1e1 °C')]), 'January')[0]).toBe('NC');
-    expect(monthCells(renderLog([reading(''), reading('Infinity °C')]), 'January')[0]).toBe('');
-  });
-
-  it('excludes other units, types, pending readings, invalid values and other years', () => {
+  it('uses explicit historical C/NC outcomes and ignores Sundays', () => {
     const html = renderLog([
-      reading('4 °C', { fields: { 'Workstation / unit': 'Bar 1', 'Measured temperature': '4 °C' } }),
+      reading('', {
+        fields: {
+          'Workstation / unit': TEMPERATURE_UNITS[0].value,
+          'Original form outcome': 'C',
+        },
+        occurredAt: '2026-01-05T00:00:00.000Z',
+      }),
+      reading('', {
+        fields: {
+          'Workstation / unit': TEMPERATURE_UNITS[0].value,
+          'Original form outcome': 'NC',
+        },
+        occurredAt: '2026-01-06T00:00:00.000Z',
+      }),
+      reading('', {
+        fields: {
+          'Workstation / unit': TEMPERATURE_UNITS[0].value,
+          'Original form outcome': 'NC',
+        },
+        occurredAt: '2026-01-04T00:00:00.000Z',
+      }),
+    ]);
+    const cells = monthCells(html, 'January');
+    expect(cells[4]).toBe('C');
+    expect(cells[5]).toBe('NC');
+    expect(cells[3]).toBe('Off');
+  });
+
+  it('uses the equipment-specific limits for new numeric readings', () => {
+    const bar = renderLog([reading('4 °C')]);
+    const freezer = renderLog([reading('-18 °C', {
+      fields: { 'Workstation / unit': TEMPERATURE_UNITS[3].value, 'Measured temperature': '-18 °C' },
+    })]);
+    expect(monthCells(bar, 'January')[0]).toBe('C');
+    expect(monthCells(freezer, 'January')[0]).toBe('C');
+    expect(monthCells(renderLog([reading('-17 °C', {
+      fields: { 'Workstation / unit': TEMPERATURE_UNITS[3].value, 'Measured temperature': '-17 °C' },
+    })]), 'January')[0]).toBe('NC');
+  });
+
+  it('retains a non-compliant result when multiple readings exist for one day', () => {
+    const logs = [
+      reading('4 °C', { occurredAt: '2026-01-05T00:00:00.000Z' }),
+      reading('5 °C', { occurredAt: '2026-01-05T00:00:00.000Z' }),
+    ];
+    expect(monthCells(renderLog(logs), 'January')[4]).toBe('NC');
+  });
+
+  it('excludes unsupported units, other types, pending entries, invalid values and other years', () => {
+    const html = renderLog([
+      reading('4 °C', { fields: { 'Workstation / unit': 'Kitchen Fridge 5', 'Measured temperature': '4 °C' } }),
       reading('4 °C', { type: LogType.RECEIVING }),
       reading('4 °C', { status: LogStatus.PENDING }),
       reading('unknown'),
       reading('4 °C', { createdAt: '2025-01-01T12:00:00Z' }),
     ]);
     expect(monthCells(html, 'January')[0]).toBe('');
-  });
-
-  it('uses the measurement date before the occurrence and creation dates', () => {
-    const html = renderLog([reading('3 °C', {
-      measuredAt: '2026-02-02T12:00:00Z',
-      occurredAt: '2026-03-03T12:00:00Z',
-    })]);
-    expect(monthCells(html, 'January')[0]).toBe('');
-    expect(monthCells(html, 'February')[1]).toBe('C');
-    expect(monthCells(html, 'March')[2]).toBe('');
   });
 });
