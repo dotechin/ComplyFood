@@ -90,8 +90,8 @@ export class LogsService {
       const from = dateFrom ?? new Date('2000-01-01T00:00:00.000Z');
       const to = dateTo ?? new Date('2999-12-31T23:59:59.999Z');
       query.andWhere(
-        `(COALESCE(log.occurred_at, log.measured_at, log.created_at) BETWEEN :dateFrom AND :dateTo
-          OR (log.record_origin = 'historical_transcription' AND log.fields->>'Source month' BETWEEN :sourcePeriodFrom AND :sourcePeriodTo))`,
+        `((log.fields->>'Source month' IS NOT NULL AND log.fields->>'Source month' BETWEEN :sourcePeriodFrom AND :sourcePeriodTo)
+          OR (log.fields->>'Source month' IS NULL AND COALESCE(log.measured_at, log.occurred_at, log.created_at) BETWEEN :dateFrom AND :dateTo))`,
         {
           dateFrom: from,
           dateTo: to,
@@ -100,7 +100,10 @@ export class LogsService {
         },
       );
     }
-    return query.orderBy('COALESCE(log.occurred_at, log.measured_at, log.created_at)', 'DESC').getMany();
+    return query.orderBy(
+      "COALESCE(to_date(log.fields->>'Source month', 'YYYY-MM')::timestamptz, log.measured_at, log.occurred_at, log.created_at)",
+      'DESC',
+    ).getMany();
   }
 
   async findOne(id: string, orgId: string): Promise<LogEntry> {

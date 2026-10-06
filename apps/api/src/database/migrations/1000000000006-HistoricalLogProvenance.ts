@@ -21,21 +21,35 @@ export class HistoricalLogProvenance1000000000006 implements MigrationInterface 
           (record_origin = 'historical_transcription' AND source_document_id IS NOT NULL AND source_page IS NOT NULL)
         );
 
-      CREATE UNIQUE INDEX log_entries_historical_source_idx
+      CREATE UNIQUE INDEX log_entries_historical_temperature_source_idx
+      ON log_entries (
+        org_id,
+        source_document_id,
+        occurred_at,
+        (fields->>'Workstation / unit')
+      )
+      WHERE record_origin = 'historical_transcription'
+        AND type = 'temperature'
+        AND source_document_id IS NOT NULL;
+
+      CREATE UNIQUE INDEX log_entries_historical_cleaning_source_idx
       ON log_entries (
         org_id,
         source_document_id,
         source_page,
-        occurred_at,
-        (fields->>'Workstation / unit')
+        (fields->>'Source month'),
+        (fields->>'Source week')
       )
-      WHERE source_document_id IS NOT NULL;
+      WHERE record_origin = 'historical_transcription'
+        AND type = 'cleaning'
+        AND source_document_id IS NOT NULL;
     `);
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      DROP INDEX log_entries_historical_source_idx;
+      DROP INDEX log_entries_historical_cleaning_source_idx;
+      DROP INDEX log_entries_historical_temperature_source_idx;
       ALTER TABLE log_entries
       DROP CONSTRAINT log_entries_historical_provenance_check,
       DROP CONSTRAINT log_entries_record_origin_check,

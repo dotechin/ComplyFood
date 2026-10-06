@@ -89,13 +89,19 @@ describe('ReportsService', () => {
       createdAt: new Date('2026-10-06T07:00:00Z'),
       occurredAt: null,
       measuredAt: null,
-      fields: { 'Source month': '2020-11', 'Source week': 2 },
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'source-pdf-1',
+      sourcePage: 7,
+      submittedBy: 'user-1',
+      submittedAt: new Date('2026-10-06T07:00:00Z'),
+      fields: { 'Source month': '2020-11', 'Source week': 2, 'Source PDF': 'cleaning.pdf' },
     }]);
     overridesService.findByOrg.mockResolvedValue([]);
 
     const pdf = await service.generatePdf('org-1');
 
     expect(pdf.toString('utf8')).toContain('2020-11 week 2');
+    expect(pdf.toString('utf8')).toContain('Source: cleaning.pdf page 7 | Imported by: user-1 at 2026-10-06T07:00:00.000Z');
   });
 
   it('generates a PDF buffer', async () => {

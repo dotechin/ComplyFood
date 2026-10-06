@@ -78,6 +78,7 @@ describe('Temperature logs UI', () => {
     expect(html).toContain('A — Acceptable');
     expect(html).toContain('NC — Non-compliant');
     expect(html).toContain('Corrective action');
+    expect(html).not.toMatch(/Sunday is excluded|signed-in user is recorded/);
   });
 
   it('groups readings into English monthly tables with chronological days', () => {

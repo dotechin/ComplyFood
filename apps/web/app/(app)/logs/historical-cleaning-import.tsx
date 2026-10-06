@@ -45,7 +45,7 @@ function parseRecords(value: string): ImportRecord[] {
   });
 }
 
-export function HistoricalCleaningImport() {
+export function HistoricalCleaningImport({ onImported }: { onImported: () => Promise<void> }) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentId, setDocumentId] = useState('');
   const [recordsText, setRecordsText] = useState('');
@@ -83,6 +83,7 @@ export function HistoricalCleaningImport() {
           duplicates: result.duplicates + batch.duplicates,
         };
       }
+      await onImported();
       setMessage(`${result.imported} historical weekly checks imported; ${result.duplicates} duplicates ignored.`);
       setRecordsText('');
     } catch (err) {
