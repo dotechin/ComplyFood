@@ -58,22 +58,60 @@ The local backend machine must remain powered on, online, and running the API.
    Serve/Funnel connects to it locally.
 
 For a Docker backend, the Tailscale override publishes only the API to the host's
-loopback interface. Run these commands from your checkout, replacing
-`/path/to/ComplyFood` with its absolute path:
+loopback interface, waits for PostgreSQL, and runs migrations before starting the
+API. It also mounts a persistent volume for local document storage.
+
+On your Linux PC, install Docker with Compose and prepare the backend settings
+(these commands use this checkout's absolute path; replace it with your Linux
+checkout's absolute path if different):
+
+```sh
+cp /home/runner/work/ComplyFood/ComplyFood/.env.example \
+  /home/runner/work/ComplyFood/ComplyFood/.env
+chmod 600 /home/runner/work/ComplyFood/ComplyFood/.env
+```
+
+If `.env` already exists, edit it instead of overwriting it. Set:
+
+- `POSTGRES_PASSWORD`, `JWT_SECRET`, and `PASSWORD_RESET_TOKEN_SALT` to separate,
+  strong secrets. Generate each independently with `openssl rand -hex 32`.
+  Do not retain the development example secrets.
+- `WEB_URL=https://app.example.com,https://your-project.vercel.app,http://localhost:3100`,
+  replacing the example domains with your actual frontend origins. Include only
+  origins you use, without paths or trailing slashes. This is the CORS allowlist,
+  not the backend URL. Restart the API after changing it.
+- `STORAGE_DRIVER=local` for documents stored on this PC. S3 settings are not
+  needed in local mode; existing S3 deployments can keep `STORAGE_DRIVER=s3` with
+  their configured bucket and credentials.
+
+Start the backend:
 
 ```sh
 docker compose --project-directory /path/to/ComplyFood \
   --env-file /path/to/ComplyFood/.env \
   -f /path/to/ComplyFood/infra/docker-compose.prod.yml \
   -f /path/to/ComplyFood/infra/docker-compose.tailscale.yml \
-  up -d --build postgres api
+  up -d --build api
 ```
 
 This does not start the web or nginx services and does not publish PostgreSQL.
 Use the override with the production compose file, **not** the development file,
 which already publishes database and API ports. It assumes Tailscale runs on the
-host, not inside the API container. Migrations and storage provisioning remain
-required; this command does not perform them.
+host, not inside the API container. The `migrate` service runs the compiled
+TypeORM migrations; if it fails, the API does not start. Inspect `migrate` and
+`api` logs using the same Compose options above followed by `logs migrate api`.
+For S3 mode, provision the bucket separately.
+
+Before enabling Funnel, check the API without sending credentials:
+
+```sh
+curl -i http://127.0.0.1:4000/api/v1/auth/me
+```
+
+An HTTP **401** JSON response is expected for this protected endpoint and confirms
+the API is responding. Connection refusal means the backend is not ready.
+Back up both the database and local document volume; do not use `down -v` unless
+you intend to delete their data.
 
 ### Option 1: Funnel for public browser access
 
@@ -92,11 +130,17 @@ on your public hosting provider.
 
    Follow any permission/setup prompts. Use the HTTPS origin printed by Tailscale,
    for example `https://backend.example-tailnet.ts.net`.
-3. On the frontend hosting provider, set
+3. On Vercel, open **Project Settings → Environment Variables** and set
    `NEXT_PUBLIC_API_URL=https://backend.example-tailnet.ts.net` and leave
-   `API_PROXY_URL` unset. Do not append `/api/v1`: the client adds that prefix.
+   `API_PROXY_URL` unset. Use the actual HTTPS origin from Funnel, with no trailing
+   slash. Do not append `/api/v1`: the client adds that prefix. Apply the setting
+   to Production and to any Preview/Development environments you use. Keep your
+   public frontend domain attached to Vercel; it does not need to point to the PC.
 4. Rebuild and redeploy the frontend with this setting available during the build.
    Setting it only when starting an already-built container is insufficient.
+   On Vercel, create a new deployment after changing the environment variable.
+   Normal Vercel hosting does not automatically join your tailnet:
+   `API_PROXY_URL` alone cannot reach a private Tailscale backend from Vercel.
    For a standalone frontend image:
 
    ```sh
@@ -118,6 +162,28 @@ it and expect its certificate to match.
 
 To stop forwarding, run `tailscale funnel --https=443 off` (adjust the HTTPS port
 if you changed it). Funnel and Serve cannot share the same listener simultaneously.
+
+### Local frontend on port 3100
+
+For a native Next.js development server, set
+`NEXT_PUBLIC_API_URL=https://backend.example-tailnet.ts.net` in
+`/home/runner/work/ComplyFood/ComplyFood/apps/web/.env.local` (replace the checkout
+path and Funnel origin as appropriate). Leave `API_PROXY_URL` unset there and in
+the shell environment. Next.js loads environment files from `apps/web`; the
+repository root `.env` used by Compose is not automatically the web app's env file.
+
+Start or restart the frontend from the workspace root:
+
+```sh
+cd /home/runner/work/ComplyFood/ComplyFood
+corepack pnpm install --frozen-lockfile
+corepack pnpm --filter @complyfood/web run start:dev --port 3100
+```
+
+Open `http://localhost:3100`. The backend CORS allowlist must include that exact
+origin. If the browser and backend are on the same PC, local development can use
+`NEXT_PUBLIC_API_URL=http://localhost:4000` instead. Never use that localhost URL
+for a public Vercel deployment: it refers to each visitor's own computer.
 
 ### Option 2: Private API with a same-origin Next.js proxy
 
@@ -189,3 +255,22 @@ membership and application authentication.
   exact `WEB_URL` and credentials. Do not use a wildcard origin.
 - If requests fail, check API availability, machine sleep, tailnet permissions,
   frontend build settings, and proxy runtime connectivity before changing CORS.
+- The login message "Is the backend running?" can also indicate CORS, DNS, TLS, or
+  mixed-content failures. In browser DevTools, inspect Network and Console:
+  the login request should be `POST https://<funnel-origin>/api/v1/auth/login`.
+  A localhost/private-IP target on the public deployment indicates incorrect
+  frontend build settings; a CORS error indicates a mismatched `WEB_URL`; HTTP
+  401 from login means the API is reachable but the credentials were rejected.
+- Check CORS without sending login credentials (replace both example origins):
+
+  ```sh
+  curl -i -X OPTIONS https://backend.example-tailnet.ts.net/api/v1/auth/login \
+    -H 'Origin: https://app.example.com' \
+    -H 'Access-Control-Request-Method: POST' \
+    -H 'Access-Control-Request-Headers: content-type'
+  ```
+
+  The response must include `Access-Control-Allow-Origin` matching the requested
+  frontend origin. Repeat for `http://localhost:3100` and your Vercel origin if
+  used. Curl does not enforce CORS; a successful curl alone does not prove the
+  browser will allow access. Test Funnel from outside the tailnet as well.

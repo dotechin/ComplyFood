@@ -58,6 +58,30 @@ describe('AuthService', () => {
     );
   });
 
+  it('uses the first allowed frontend origin for development reset links', async () => {
+    process.env.WEB_URL = ' https://app.example.com ,https://project.vercel.app,http://localhost:3100';
+    usersService.findByEmail.mockResolvedValue({ id: 'user-1', email: 'admin@demo.com' });
+    usersService.setPasswordResetToken.mockResolvedValue(undefined);
+
+    const result = await service.requestPasswordReset('admin@demo.com');
+
+    expect(result.resetUrl).toBe(
+      `https://app.example.com/reset-password?token=${result.resetToken}`,
+    );
+  });
+
+  it('does not disclose reset tokens or links in production with multiple origins', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.WEB_URL = 'https://app.example.com,http://localhost:3100';
+    usersService.findByEmail.mockResolvedValue({ id: 'user-1', email: 'admin@demo.com' });
+    usersService.setPasswordResetToken.mockResolvedValue(undefined);
+
+    const result = await service.requestPasswordReset('admin@demo.com');
+
+    expect(result.resetToken).toBeUndefined();
+    expect(result.resetUrl).toBeUndefined();
+  });
+
   it('updates the password for a valid reset token', async () => {
     usersService.findByPasswordResetTokenHash.mockResolvedValue({ id: 'user-1' });
     usersService.updatePassword.mockResolvedValue(undefined);

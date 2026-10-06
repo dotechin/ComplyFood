@@ -93,7 +93,8 @@ export class AuthService {
     };
 
     if (process.env.NODE_ENV !== 'production') {
-      const webUrl = process.env.WEB_URL || 'http://localhost:3000';
+      const webUrl = process.env.WEB_URL?.split(',').map((url) => url.trim()).find(Boolean)
+        || 'http://localhost:3000';
       response.resetToken = token;
       response.resetUrl = `${webUrl}/reset-password?token=${encodeURIComponent(token)}`;
     }
