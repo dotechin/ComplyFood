@@ -1,5 +1,5 @@
 import { DocumentCategory } from '@complyfood/shared';
-import { ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, PayloadTooLargeException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, PayloadTooLargeException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
@@ -217,6 +217,13 @@ export class DocumentsService implements OnModuleDestroy {
     if (!doc) throw new NotFoundException('Document not found');
     if (role !== UserRole.ADMIN && doc.uploadedBy !== userId) {
       throw new ForbiddenException('Only organization admins or the uploader can delete this document');
+    }
+    const linkedHistoricalLogs = await this.repo.manager.query(
+      'SELECT id FROM log_entries WHERE org_id = $1 AND source_document_id = $2 LIMIT 1',
+      [orgId, id],
+    );
+    if (linkedHistoricalLogs.length > 0) {
+      throw new ConflictException('This PDF is the source for historical log records and cannot be deleted');
     }
     try {
       if (this.storageDriver === 's3' && this.s3Client) {

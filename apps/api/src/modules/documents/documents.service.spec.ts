@@ -1,7 +1,7 @@
 import { DocumentCategory } from '@complyfood/shared';
 import { DocumentsService } from './documents.service';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { ForbiddenException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { UserRole } from '../../common/decorators/roles.decorator';
 import { MAX_DOCUMENT_BYTES } from './pdf-parsing.service';
 
@@ -13,6 +13,7 @@ describe('DocumentsService', () => {
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
     delete: jest.fn(),
+    manager: { query: jest.fn().mockResolvedValue([]) },
   };
   const parser = { parse: jest.fn() };
 
@@ -21,6 +22,7 @@ describe('DocumentsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     parser.parse.mockReset();
+    repo.manager.query.mockResolvedValue([]);
     service = new DocumentsService(repo as any, parser as any);
     (service as any).ensureBucketExists = jest.fn().mockResolvedValue(undefined);
     (service as any).s3Client = {
@@ -270,6 +272,14 @@ describe('DocumentsService', () => {
   it('rejects deletion by non-uploaders without touching storage', async () => {
     repo.findOne.mockResolvedValue(doc);
     await expect(service.delete('org-1', doc.id, 'other-user', UserRole.STAFF)).rejects.toThrow(ForbiddenException);
+    expect((service as any).s3Client.send).not.toHaveBeenCalled();
+    expect(repo.delete).not.toHaveBeenCalled();
+  });
+
+  it('preserves PDFs referenced by historical log records', async () => {
+    repo.findOne.mockResolvedValue(doc);
+    repo.manager.query.mockResolvedValue([{ id: 'log-1' }]);
+    await expect(service.delete('org-1', doc.id, 'user-1', UserRole.ADMIN)).rejects.toThrow(ConflictException);
     expect((service as any).s3Client.send).not.toHaveBeenCalled();
     expect(repo.delete).not.toHaveBeenCalled();
   });

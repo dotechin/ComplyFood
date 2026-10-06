@@ -12,11 +12,32 @@ function valueLabel(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+function outcomeLabel(log: LogEntry) {
+  const temperature = log.fields?.['Measured temperature'] ?? log.fields?.value ?? log.fields?.temperature;
+  if (temperature !== undefined && temperature !== null && temperature !== '') {
+    return valueLabel(temperature);
+  }
+  if (log.fields?.['Original form outcome']) return valueLabel(log.fields['Original form outcome']);
+  if (log.type === 'cleaning') {
+    const count = Object.keys(log.fields ?? {}).filter((name) => name.startsWith('Cleaning outcome — ')).length;
+    return count ? `${count} source outcomes` : '—';
+  }
+  return '—';
+}
+
 export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheetProps) {
   const months = new Map<string, { date: Date; entries: LogEntry[] }>();
-  for (const log of [...logs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())) {
-    const date = new Date(log.createdAt);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const sourcePeriodDate = (log: LogEntry) => {
+    const period = log.recordOrigin === 'historical_transcription' ? log.fields?.['Source month'] : null;
+    return typeof period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
+      ? new Date(`${period}-01T00:00:00.000Z`)
+      : null;
+  };
+  const occurredDate = (log: LogEntry) => new Date(log.measuredAt ?? log.occurredAt ?? log.createdAt);
+  const displayDate = (log: LogEntry) => sourcePeriodDate(log) ?? occurredDate(log);
+  for (const log of [...logs].sort((a, b) => displayDate(a).getTime() - displayDate(b).getTime())) {
+    const date = displayDate(log);
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
     const month = months.get(key) ?? { date, entries: [] };
     month.entries.push(log);
     months.set(key, month);
@@ -32,11 +53,11 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
         <div key={key} className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full text-left text-sm">
             <caption className="p-3 text-left font-semibold text-foreground">
-              {month.date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              {month.date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
             </caption>
             <thead className="border-y bg-muted text-foreground">
               <tr>
-                {['Day', 'Unit', '°C', 'Critical limit', 'Status', 'Details', 'Actions'].map((heading) => (
+                {['Date / source period', 'Unit / category', '°C / outcome', 'Critical limit', 'Status', 'Details', 'Actions'].map((heading) => (
                   <th key={heading} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">{heading}</th>
                 ))}
               </tr>
@@ -44,12 +65,16 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
             <tbody>
               {month.entries.map((log) => (
                 <tr key={log.id} className="border-b last:border-0">
-                  <td className="px-3 py-2 align-top tabular-nums">{new Date(log.createdAt).getDate()}</td>
+                  <td className="px-3 py-2 align-top tabular-nums">
+                    {sourcePeriodDate(log)
+                      ? `${log.fields['Source month']} · Week ${log.fields['Source week']}`
+                      : occurredDate(log).getUTCDate()}
+                  </td>
                   <th scope="row" className="px-3 py-2 align-top font-medium">
-                    {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item)}
+                    {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item ?? (log.type === 'cleaning' ? 'Weekly cleaning check' : null))}
                   </th>
                   <td className="whitespace-nowrap px-3 py-2 align-top tabular-nums">
-                    {valueLabel(log.fields?.['Measured temperature'] ?? log.fields?.value ?? log.fields?.temperature)}
+                    {outcomeLabel(log)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 align-top">{valueLabel(log.fields?.['Target (critical limit)'] ?? log.fields?.haccpRange)}</td>
                   <td className="px-3 py-2 align-top">

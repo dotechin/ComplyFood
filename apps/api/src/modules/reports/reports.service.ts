@@ -78,7 +78,7 @@ export class ReportsService {
   ) {
     const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
     const header =
-      'id,type,status,locationId,submittedBy,submittedAt,createdAt,occurredAt,measuredAt,isException,exceptionReason,fields\n';
+      'id,type,status,locationId,submittedBy,submittedAt,createdAt,occurredAt,measuredAt,isException,exceptionReason,recordOrigin,sourceDocumentId,sourcePage,fields\n';
     const rows = logs
       .map((log) =>
         [
@@ -93,6 +93,9 @@ export class ReportsService {
           log.measuredAt?.toISOString?.() ?? '',
           log.isException ? 'yes' : 'no',
           (log.exceptionReason ?? '').replace(/"/g, '""'),
+          log.recordOrigin ?? '',
+          log.sourceDocumentId ?? '',
+          log.sourcePage ?? '',
           JSON.stringify(log.fields).replace(/"/g, '""'),
         ]
           .map((value) => `"${String(value)}"`)
@@ -129,9 +132,13 @@ export class ReportsService {
       ...Object.entries(summary.overridesByField).map(([key, value]) => `- ${key}: ${value}`),
       '',
       'Recent logs:',
-      ...summary.recentLogs.map(
-        (log) => `${log.type} | ${log.status} | ${log.createdAt.toISOString?.() ?? log.createdAt}`,
-      ),
+      ...summary.recentLogs.map((log) => {
+        const sourcePeriod = log.fields?.['Source month']
+          ? `${log.fields['Source month']} week ${log.fields['Source week']}`
+          : null;
+        const recordDate = sourcePeriod ?? log.measuredAt ?? log.occurredAt ?? log.createdAt;
+        return `${log.type} | ${log.status} | ${recordDate}`;
+      }),
     ];
 
     return this.buildPdf(lines);

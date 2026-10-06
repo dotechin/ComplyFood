@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsEnum, IsIn, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsIn, IsISO8601, IsInt, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -70,6 +71,71 @@ class BackfillLogDto {
   status?: LogStatus;
 }
 
+class HistoricalTemperatureRecordDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date: string;
+
+  @IsIn([
+    'Banco Refrigerato Bar (n.1)',
+    'Banco Refrigerato Bar (n.2)',
+    'Banco Refrigerato Bar (n.3)',
+    'Pozzetto Freezer Cucina (n.4)',
+  ])
+  unit: string;
+
+  @IsIn(['C', 'NC'])
+  outcome: 'C' | 'NC';
+
+  @IsInt()
+  @Min(1)
+  page: number;
+}
+
+class HistoricalTemperatureImportDto {
+  @IsUUID()
+  sourceDocumentId: string;
+
+  @IsArray()
+  @ArrayMaxSize(400)
+  @ValidateNested({ each: true })
+  @Type(() => HistoricalTemperatureRecordDto)
+  records: HistoricalTemperatureRecordDto[];
+}
+
+class HistoricalCleaningRecordDto {
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/)
+  period: string;
+
+  @IsIn([1, 2, 3, 4, 5])
+  week: number;
+
+  @IsInt()
+  @Min(1)
+  page: number;
+
+  @IsArray()
+  @ArrayMinSize(11)
+  @ArrayMaxSize(11)
+  @IsIn(['C', 'A', 'NC'], { each: true })
+  outcomes: Array<'C' | 'A' | 'NC'>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  correctiveAction?: string;
+}
+
+class HistoricalCleaningImportDto {
+  @IsUUID()
+  sourceDocumentId: string;
+
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => HistoricalCleaningRecordDto)
+  records: HistoricalCleaningRecordDto[];
+}
+
 class FindLogsQueryDto {
   @IsOptional()
   @IsEnum(LogType)
@@ -133,6 +199,28 @@ export class LogsController {
       createdAt: new Date(dto.createdAt),
       status: dto.status,
     });
+  }
+
+  @Post('historical-temperature-import')
+  @Roles(UserRole.ADMIN)
+  importHistoricalTemperatures(@CurrentUser() user: any, @Body() dto: HistoricalTemperatureImportDto) {
+    return this.logsService.importHistoricalTemperatures(
+      user.orgId,
+      user.id,
+      dto.sourceDocumentId,
+      dto.records,
+    );
+  }
+
+  @Post('historical-cleaning-import')
+  @Roles(UserRole.ADMIN)
+  importHistoricalCleaning(@CurrentUser() user: any, @Body() dto: HistoricalCleaningImportDto) {
+    return this.logsService.importHistoricalCleaning(
+      user.orgId,
+      user.id,
+      dto.sourceDocumentId,
+      dto.records,
+    );
   }
 
   @Post('reset')

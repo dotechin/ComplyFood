@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 import { TemperatureSheet } from './temperature-sheet';
-import { KITCHEN_FRIDGE_5, TemperatureLog } from './temperature-log';
+import { HistoricalTemperatureImport } from './historical-temperature-import';
+import { HistoricalCleaningImport } from './historical-cleaning-import';
+import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
   [LogType.TEMPERATURE]: 'Temperature',
@@ -41,7 +43,17 @@ type FieldDef = {
 
 const FIELD_DEFS: Record<LogType, FieldDef[]> = {
   [LogType.TEMPERATURE]: [
-    { name: 'unit', label: 'Workstation / unit', displayLabel: 'Unit', type: 'text', placeholder: 'e.g. Bar fridge 1', required: true },
+    {
+      name: 'unit',
+      label: 'Workstation / unit',
+      displayLabel: 'Unit',
+      type: 'select',
+      options: [
+        { value: '', label: 'Select equipment' },
+        ...TEMPERATURE_UNITS.map(({ value, label }) => ({ value, label })),
+      ],
+      required: true,
+    },
     {
       name: 'target',
       label: 'Target (critical limit)',
@@ -65,27 +77,53 @@ const FIELD_DEFS: Record<LogType, FieldDef[]> = {
     },
   ],
   [LogType.CLEANING]: [
-    { name: 'area', label: 'Area / item', type: 'text', placeholder: 'e.g. Pastry work surfaces', required: true },
+    ...[
+      'Machinery and equipment',
+      'Work surfaces',
+      'Sinks',
+      'Walls and ceilings',
+      'Floors',
+      'Dishwashing area and utensils',
+      'Fridges and freezers',
+      'Waste containers',
+      'Personal hygiene',
+      'Staff facilities',
+      'Shelves and cupboards',
+    ].map((category, index) => ({
+      name: `cleaning-${index}`,
+      label: `Cleaning outcome — ${category}`,
+      displayLabel: category,
+      type: 'select' as const,
+      options: [
+        { value: '', label: 'Select outcome' },
+        { value: 'C', label: 'C — Compliant' },
+        { value: 'A', label: 'A — Acceptable' },
+        { value: 'NC', label: 'NC — Non-compliant' },
+      ],
+      required: true,
+    })),
     {
-      name: 'frequency',
-      label: 'Frequency',
+      name: 'week',
+      label: 'Weekly check',
       type: 'select',
       options: [
-        { value: 'Daily', label: 'Daily (D)' },
-        { value: 'Twice weekly', label: 'Twice weekly (TW)' },
-        { value: 'Weekly', label: 'Weekly (W)' },
-        { value: 'Monthly', label: 'Monthly (M)' },
+        { value: '', label: 'Select week' },
+        { value: '1', label: 'Week 1' },
+        { value: '2', label: 'Week 2' },
+        { value: '3', label: 'Week 3' },
+        { value: '4', label: 'Week 4' },
+        { value: '5', label: 'Week 5' },
       ],
+      required: true,
     },
     {
-      name: 'method',
-      label: 'Cleaning method & chemicals',
+      name: 'corrective',
+      label: 'Corrective action',
       type: 'textarea',
-      placeholder: 'e.g. Wash with hot detergent, rinse, apply EN 1276 sanitizer',
+      placeholder: 'Required when any category is marked NC',
       full: true,
     },
-    { name: 'responsibility', label: 'Responsibility', type: 'text', placeholder: 'e.g. Pastry chef' },
-    { name: 'completed', label: 'Task completed', type: 'checkbox' },
+    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
   ],
   [LogType.RECEIVING]: [
     { name: 'supplier', label: 'Supplier', type: 'text', placeholder: 'e.g. Fresh Dairy Co.', required: true },
@@ -247,6 +285,7 @@ export default function LogsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [temperatureYear, setTemperatureYear] = useState(new Date().getFullYear());
   const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
   const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [error, setError] = useState('');
@@ -301,6 +340,14 @@ export default function LogsPage() {
   };
 
   const setFieldValue = (name: string, value: string | boolean) => {
+    if (activeType === LogType.TEMPERATURE && name === 'unit') {
+      setFormValues((prev) => ({
+        ...prev,
+        unit: value,
+        target: value === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C',
+      }));
+      return;
+    }
     setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -311,6 +358,13 @@ export default function LogsPage() {
       setError('');
       setMessage('');
       const fields = buildFields(activeDefs, formValues);
+      if (
+        activeType === LogType.CLEANING &&
+        Object.entries(fields).some(([name, value]) => name.startsWith('Cleaning outcome — ') && value === 'NC') &&
+        !String(fields['Corrective action'] ?? '').trim()
+      ) {
+        throw new Error('A corrective action is required when any cleaning category is non-compliant.');
+      }
       await apiPost<LogEntry>('/logs', {
         type: activeType,
         fields: activeType === LogType.TEMPERATURE ? { Reading: readingStamp(), ...fields } : fields,
@@ -381,16 +435,37 @@ export default function LogsPage() {
       </div>
 
       {activeType === LogType.TEMPERATURE && (
-        <TemperatureLog
-          logs={logs}
-          year={new Date().getFullYear()}
-          loading={loading}
-          onRecord={() => {
-            setFormValues({ ...emptyValues(FIELD_DEFS[LogType.TEMPERATURE]), unit: KITCHEN_FRIDGE_5 });
-            document.getElementById('field-temperature')?.focus();
-          }}
-        />
+        <>
+          <div className="flex items-center gap-2">
+            <label htmlFor="temperature-year" className="text-sm font-medium">Year</label>
+            <select
+              id="temperature-year"
+              value={temperatureYear}
+              onChange={(event) => setTemperatureYear(Number(event.target.value))}
+              className="rounded-md border border-input bg-card px-3 py-2 text-sm"
+            >
+              {Array.from({ length: new Date().getFullYear() - 2019 }, (_, index) => 2020 + index).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          <TemperatureLog
+            logs={logs}
+            year={temperatureYear}
+            loading={loading}
+            onRecord={(unit) => {
+              setFormValues({
+                ...emptyValues(FIELD_DEFS[LogType.TEMPERATURE]),
+                unit,
+                target: unit === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C',
+              });
+              document.getElementById('field-temperature')?.focus();
+            }}
+          />
+          <HistoricalTemperatureImport />
+        </>
       )}
+      {activeType === LogType.CLEANING && <HistoricalCleaningImport />}
 
       <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
         <div>
@@ -401,6 +476,11 @@ export default function LogsPage() {
           {activeType === LogType.TEMPERATURE && (
             <p className="mt-1 text-xs text-muted-foreground">
               Time recorded on save.
+            </p>
+          )}
+          {activeType === LogType.CLEANING && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Record one weekly check. Sunday is excluded by the business schedule; the signed-in user is recorded as responsible.
             </p>
           )}
         </div>
@@ -480,6 +560,9 @@ export default function LogsPage() {
                     onChange={(e) => setFieldValue(def.name, e.target.value)}
                     className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
                   >
+                    {!def.options?.some((option) => option.value === '') && (
+                      <option value="">Select an option</option>
+                    )}
                     {def.options?.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}

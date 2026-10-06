@@ -4,6 +4,7 @@ import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
 import LogsPage from './page';
 import { TemperatureSheet } from './temperature-sheet';
+import { TEMPERATURE_UNITS } from './temperature-log';
 
 jest.mock('../../../lib/api', () => ({
   apiGet: jest.fn(),
@@ -30,6 +31,9 @@ const reading: LogEntry = {
   presetId: null,
   occurredAt: null,
   measuredAt: null,
+  recordOrigin: null,
+  sourceDocumentId: null,
+  sourcePage: null,
   isException: false,
   exceptionReason: null,
   exceptionBy: null,
@@ -57,6 +61,23 @@ describe('Temperature logs UI', () => {
     expect(html).toContain('<option value="Hot holding ≥ 63°C">Hot holding ≥ 63°C</option>');
     expect(html).toContain('<option value="Cooking core ≥ 75°C for 30s">Cooking ≥ 75°C for 30s</option>');
     expect(html).not.toMatch(/Phone camera|Coming soon|European standard package/);
+  });
+
+  it('renders all weekly cleaning status and corrective-action fields', () => {
+    jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => [
+      initial === LogType.TEMPERATURE ? LogType.CLEANING : typeof initial === 'function' ? initial() : initial,
+      jest.fn(),
+    ]);
+    jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
+    jest.spyOn(React, 'useEffect').mockImplementation(() => {});
+    const html = renderToStaticMarkup(<LogsPage />);
+    expect(html).toContain('Weekly check');
+    expect(html).toContain('Week 1');
+    expect(html).toContain('>Machinery and equipment<span');
+    expect(html).toContain('C — Compliant');
+    expect(html).toContain('A — Acceptable');
+    expect(html).toContain('NC — Non-compliant');
+    expect(html).toContain('Corrective action');
   });
 
   it('groups readings into English monthly tables with chronological days', () => {
@@ -87,6 +108,44 @@ describe('Temperature logs UI', () => {
     expect(html).toContain('Cancel</button>');
     expect(html).toContain('Status tracks review, not temperature compliance.');
     expect(html).not.toMatch(/>C<|>NC</);
+  });
+
+  it('shows original historical outcomes and cleaning source periods without assigning exact days', () => {
+    const tempHtml = renderSheet([{
+      ...reading,
+      status: LogStatus.CONFIRMED,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'pdf-1',
+      sourcePage: 1,
+      occurredAt: '2020-11-02T00:00:00.000Z',
+      fields: {
+        'Original form outcome': 'C',
+        'Source PDF': 'Temp 2020.pdf',
+        'Source page': 1,
+      },
+    }]);
+    expect(tempHtml).toContain('>C</td>');
+    expect(tempHtml).toContain('Temp 2020.pdf');
+    expect(tempHtml).toContain('November 2020');
+
+    const cleaningHtml = renderSheet([{
+      ...reading,
+      type: LogType.CLEANING,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'cleaning-pdf',
+      sourcePage: 11,
+      occurredAt: null,
+      measuredAt: null,
+      fields: {
+        'Source month': '2020-11',
+        'Source week': 2,
+        'Source PDF': 'pulizie 2020.pdf',
+        'Cleaning outcome — Floors': 'NC',
+      },
+    }]);
+    expect(cleaningHtml).toContain('2020-11 · Week 2');
+    expect(cleaningHtml).toContain('1 source outcomes');
+    expect(cleaningHtml).toContain('pulizie 2020.pdf');
   });
 
   it('preserves exceptions and custom fields while hiding pending actions for reviewed entries', () => {
@@ -130,7 +189,7 @@ describe('Temperature logs UI', () => {
     jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
       let value = typeof initial === 'function' ? initial() : initial;
       if (value && typeof value === 'object' && 'unit' in value) {
-        value = { unit: 'Bar fridge 1', target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
+        value = { unit: TEMPERATURE_UNITS[0].value, target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
       }
       return [value, jest.fn()];
     });
@@ -149,7 +208,7 @@ describe('Temperature logs UI', () => {
       type: LogType.TEMPERATURE,
       fields: {
         Reading: expect.any(String),
-        'Workstation / unit': 'Bar fridge 1',
+        'Workstation / unit': TEMPERATURE_UNITS[0].value,
         'Target (critical limit)': 'Chilled ≤ 4°C',
         'Measured temperature': '0 °C',
         'Corrective action / comments': 'Checked seal',
