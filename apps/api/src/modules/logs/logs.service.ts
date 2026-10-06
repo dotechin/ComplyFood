@@ -191,6 +191,82 @@ export class LogsService {
       throw new NotFoundException('Source PDF not found');
     }
 
+    async importHistoricalCleaning(
+      orgId: string,
+      userId: string,
+      sourceDocumentId: string,
+      records: Array<{
+        period: string;
+        week: number;
+        page: number;
+        outcomes: Array<'C' | 'A' | 'NC'>;
+        correctiveAction?: string;
+      }>,
+    ) {
+      const source = await this.documents.findOne({ where: { id: sourceDocumentId, orgId } });
+      if (!source || (source.mimeType !== 'application/pdf' && !source.name.toLowerCase().endsWith('.pdf'))) {
+        throw new NotFoundException('Source PDF not found');
+      }
+
+      const existing = await this.repo.find({ where: { orgId, sourceDocumentId } });
+      const existingKeys = new Set(existing.map((entry) =>
+        `${entry.sourcePage}|${entry.fields['Source month']}|${entry.fields['Source week']}`,
+      ));
+      const uniqueRecords = new Map<string, (typeof records)[number]>();
+      for (const record of records) {
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(record.period)) {
+          throw new BadRequestException('Cleaning source periods must use YYYY-MM format');
+        }
+        if (!Number.isInteger(record.week) || record.week < 1 || record.week > 5 || record.outcomes.length !== CLEANING_OUTCOME_FIELDS.length ||
+          record.outcomes.some((outcome) => !['C', 'A', 'NC'].includes(outcome))) {
+          throw new BadRequestException('Each source week must include one C/A/NC outcome for every cleaning category');
+        }
+        const key = `${record.page}|${record.period}|${record.week}`;
+        if (!uniqueRecords.has(key)) uniqueRecords.set(key, record);
+      }
+      const entries = [...uniqueRecords.entries()]
+        .filter(([key]) => !existingKeys.has(key))
+        .map(([, record]) => {
+          const fields: Record<string, any> = {
+            'Record origin': 'Historical transcription',
+            'Source PDF': source.name,
+            'Source page': record.page,
+            'Source month': record.period,
+            'Source week': record.week,
+          };
+          CLEANING_OUTCOME_FIELDS.forEach((category, index) => {
+            fields[`Cleaning outcome — ${category}`] = record.outcomes[index];
+          });
+          if (record.correctiveAction?.trim()) fields['Corrective action'] = record.correctiveAction.trim();
+          return this.repo.create({
+            orgId,
+            locationId: null,
+            type: LogType.CLEANING,
+            fields,
+            status: LogStatus.CONFIRMED,
+            submittedBy: userId,
+            submittedAt: new Date(),
+            presetId: null,
+            occurredAt: null,
+            measuredAt: null,
+            recordOrigin: 'historical_transcription',
+            sourceDocumentId,
+            sourcePage: record.page,
+            isException: false,
+            exceptionReason: null,
+            exceptionBy: null,
+            exceptionAt: null,
+          });
+        });
+
+      if (entries.length > 0) {
+        await this.repo.manager.transaction(async (manager) => {
+          await manager.save(LogEntry, entries);
+        });
+      }
+      return { imported: entries.length, duplicates: uniqueRecords.size - entries.length };
+    }
+
     const now = new Date();
     const uniqueRecords = new Map<string, { date: string; unit: string; outcome: 'C' | 'NC'; page: number }>();
     let skippedSundays = 0;

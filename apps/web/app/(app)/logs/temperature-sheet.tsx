@@ -14,9 +14,16 @@ function valueLabel(value: unknown): string {
 
 export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheetProps) {
   const months = new Map<string, { date: Date; entries: LogEntry[] }>();
+  const sourcePeriodDate = (log: LogEntry) => {
+    const period = log.recordOrigin === 'historical_transcription' ? log.fields?.['Source month'] : null;
+    return typeof period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
+      ? new Date(`${period}-01T00:00:00.000Z`)
+      : null;
+  };
   const occurredDate = (log: LogEntry) => new Date(log.measuredAt ?? log.occurredAt ?? log.createdAt);
-  for (const log of [...logs].sort((a, b) => occurredDate(a).getTime() - occurredDate(b).getTime())) {
-    const date = occurredDate(log);
+  const displayDate = (log: LogEntry) => sourcePeriodDate(log) ?? occurredDate(log);
+  for (const log of [...logs].sort((a, b) => displayDate(a).getTime() - displayDate(b).getTime())) {
+    const date = displayDate(log);
     const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
     const month = months.get(key) ?? { date, entries: [] };
     month.entries.push(log);
@@ -37,7 +44,7 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
             </caption>
             <thead className="border-y bg-muted text-foreground">
               <tr>
-                {['Day', 'Unit', '°C', 'Critical limit', 'Status', 'Details', 'Actions'].map((heading) => (
+                {['Date / source period', 'Unit / category', '°C / outcome', 'Critical limit', 'Status', 'Details', 'Actions'].map((heading) => (
                   <th key={heading} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">{heading}</th>
                 ))}
               </tr>
@@ -45,7 +52,11 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
             <tbody>
               {month.entries.map((log) => (
                 <tr key={log.id} className="border-b last:border-0">
-                  <td className="px-3 py-2 align-top tabular-nums">{occurredDate(log).getUTCDate()}</td>
+                  <td className="px-3 py-2 align-top tabular-nums">
+                    {sourcePeriodDate(log)
+                      ? `${log.fields['Source month']} · Week ${log.fields['Source week']}`
+                      : occurredDate(log).getUTCDate()}
+                  </td>
                   <th scope="row" className="px-3 py-2 align-top font-medium">
                     {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item)}
                   </th>

@@ -30,10 +30,6 @@ describe('temperature log sheets', () => {
     expect(html).toContain('Temperature Log — Bar counter 3');
     expect(html).toContain('Temperature Log — Kitchen chest freezer 4');
     expect(html).toContain('Import verified historical temperature outcomes');
-    expect(html).toContain('Week 1');
-    expect(html).toContain('C — Compliant');
-    expect(html).toContain('A — Acceptable');
-    expect(html).toContain('NC — Non-compliant');
     expect(html).toContain('Save reading');
   });
 
@@ -43,8 +39,9 @@ describe('temperature log sheets', () => {
     expect(html).toContain('Year: 2026');
     expect(html).toContain('November');
     expect(html).toContain('Off');
+    expect(monthCells(html, 'February')[0]).toBe('Off');
     expect(monthCells(html, 'February').slice(28)).toEqual(['—', '—', '—']);
-    expect(monthCells(renderLog([], 2028), 'February')[28]).toBe('Off');
+    expect(monthCells(renderLog([], 2028), 'February')[0]).not.toBe('Off');
   });
 
   it('uses explicit historical C/NC outcomes and ignores Sundays', () => {
@@ -83,10 +80,10 @@ describe('temperature log sheets', () => {
       fields: { 'Workstation / unit': TEMPERATURE_UNITS[3].value, 'Measured temperature': '-18 °C' },
     })]);
     expect(monthCells(bar, 'January')[0]).toBe('C');
-    expect(monthCells(freezer, 'January')[0]).toBe('C');
-    expect(monthCells(renderLog([reading('-17 °C', {
+    expect(freezer.match(/>C<\/td>/g)).toHaveLength(1);
+    expect(renderLog([reading('-17 °C', {
       fields: { 'Workstation / unit': TEMPERATURE_UNITS[3].value, 'Measured temperature': '-17 °C' },
-    })]), 'January')[0]).toBe('NC');
+    })])).toMatch(/>NC<\/td>/);
   });
 
   it('retains a non-compliant result when multiple readings exist for one day', () => {

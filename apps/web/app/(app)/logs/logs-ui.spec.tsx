@@ -52,7 +52,7 @@ describe('Temperature logs UI', () => {
     const html = renderToStaticMarkup(<LogsPage />);
     expect(html).toContain('Daily Logs');
     expect(html).toContain('Temperature Log · CCP 2/3');
-    expect(html).toContain('>Unit</label>');
+    expect(html).toContain('>Unit<span');
     expect(html).toContain('>Critical limit</label>');
     expect(html).toContain('>Temperature<span');
     expect(html).toContain('Save reading');
@@ -61,6 +61,23 @@ describe('Temperature logs UI', () => {
     expect(html).toContain('<option value="Hot holding ≥ 63°C">Hot holding ≥ 63°C</option>');
     expect(html).toContain('<option value="Cooking core ≥ 75°C for 30s">Cooking ≥ 75°C for 30s</option>');
     expect(html).not.toMatch(/Phone camera|Coming soon|European standard package/);
+  });
+
+  it('renders all weekly cleaning status and corrective-action fields', () => {
+    jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => [
+      initial === LogType.TEMPERATURE ? LogType.CLEANING : typeof initial === 'function' ? initial() : initial,
+      jest.fn(),
+    ]);
+    jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
+    jest.spyOn(React, 'useEffect').mockImplementation(() => {});
+    const html = renderToStaticMarkup(<LogsPage />);
+    expect(html).toContain('Weekly check');
+    expect(html).toContain('Week 1');
+    expect(html).toContain('>Machinery and equipment<span');
+    expect(html).toContain('C — Compliant');
+    expect(html).toContain('A — Acceptable');
+    expect(html).toContain('NC — Non-compliant');
+    expect(html).toContain('Corrective action');
   });
 
   it('groups readings into English monthly tables with chronological days', () => {

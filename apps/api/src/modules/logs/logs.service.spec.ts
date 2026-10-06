@@ -32,33 +32,6 @@ describe('LogsService', () => {
       fields: { item: 'Fridge', temperature: '4' },
     });
 
-    it('requires all weekly cleaning outcomes and corrective action for NC', async () => {
-      const fields = Object.fromEntries([
-        'Machinery and equipment',
-        'Work surfaces',
-        'Sinks',
-        'Walls and ceilings',
-        'Floors',
-        'Dishwashing area and utensils',
-        'Fridges and freezers',
-        'Waste containers',
-        'Personal hygiene',
-        'Staff facilities',
-        'Shelves and cupboards',
-      ].map((category) => [`Cleaning outcome — ${category}`, 'C']));
-      fields['Weekly check'] = '1';
-
-      await expect(service.create('org-1', 'user-1', {
-        type: LogType.CLEANING,
-        fields: { ...fields, 'Cleaning outcome — Floors': 'NC' },
-      })).rejects.toBeInstanceOf(BadRequestException);
-
-      await expect(service.create('org-1', 'user-1', {
-        type: LogType.CLEANING,
-        fields: { ...fields, 'Cleaning outcome — Floors': 'NC', 'Corrective action': 'Re-cleaned floor' },
-      })).resolves.toEqual(expect.objectContaining({ type: LogType.CLEANING }));
-    });
-
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: 'org-1',
@@ -67,6 +40,33 @@ describe('LogsService', () => {
       }),
     );
     expect(result.status).toBe(LogStatus.PENDING);
+  });
+
+  it('requires all weekly cleaning outcomes and corrective action for NC', async () => {
+    const fields: Record<string, string> = Object.fromEntries([
+      'Machinery and equipment',
+      'Work surfaces',
+      'Sinks',
+      'Walls and ceilings',
+      'Floors',
+      'Dishwashing area and utensils',
+      'Fridges and freezers',
+      'Waste containers',
+      'Personal hygiene',
+      'Staff facilities',
+      'Shelves and cupboards',
+    ].map((category) => [`Cleaning outcome — ${category}`, 'C']));
+    fields['Weekly check'] = '1';
+
+    expect(() => service.create('org-1', 'user-1', {
+      type: LogType.CLEANING,
+      fields: { ...fields, 'Cleaning outcome — Floors': 'NC' },
+    })).toThrow(BadRequestException);
+
+    await expect(service.create('org-1', 'user-1', {
+      type: LogType.CLEANING,
+      fields: { ...fields, 'Cleaning outcome — Floors': 'NC', 'Corrective action': 'Re-cleaned floor' },
+    })).resolves.toEqual(expect.objectContaining({ type: LogType.CLEANING }));
   });
 
   it('confirms a log entry', async () => {
@@ -138,6 +138,44 @@ describe('LogsService', () => {
     await expect(service.importHistoricalTemperatures('org-1', 'admin-1', 'pdf-1', [
       { date: '2020-02-30', unit: 'Banco Refrigerato Bar (n.1)', outcome: 'C', page: 1 },
     ])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('imports weekly cleaning marks without inventing an exact source day or corrective action', async () => {
+    documents.findOne.mockResolvedValue({
+      id: 'cleaning-pdf',
+      orgId: 'org-1',
+      name: 'pulizie 2020.pdf',
+      mimeType: 'application/pdf',
+    });
+    repo.find.mockResolvedValue([]);
+    const outcomes: Array<'C' | 'A' | 'NC'> = Array(11).fill('C');
+    outcomes[4] = 'NC';
+
+    const result = await service.importHistoricalCleaning('org-1', 'admin-1', 'cleaning-pdf', [{
+      period: '2020-11',
+      week: 2,
+      page: 11,
+      outcomes,
+    }]);
+
+    expect(result).toEqual({ imported: 1, duplicates: 0 });
+    const [entry] = transactionSave.mock.calls[0][1];
+    expect(entry).toEqual(expect.objectContaining({
+      type: LogType.CLEANING,
+      status: LogStatus.CONFIRMED,
+      submittedBy: 'admin-1',
+      occurredAt: null,
+      measuredAt: null,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'cleaning-pdf',
+      sourcePage: 11,
+    }));
+    expect(entry.fields).toEqual(expect.objectContaining({
+      'Source month': '2020-11',
+      'Source week': 2,
+      'Cleaning outcome — Floors': 'NC',
+    }));
+    expect(entry.fields).not.toHaveProperty('Corrective action');
   });
 
   it('does not permit edits to historical source transcriptions', async () => {

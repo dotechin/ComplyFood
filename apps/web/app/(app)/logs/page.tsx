@@ -5,6 +5,7 @@ import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 import { TemperatureSheet } from './temperature-sheet';
 import { HistoricalTemperatureImport } from './historical-temperature-import';
+import { HistoricalCleaningImport } from './historical-cleaning-import';
 import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -464,6 +465,7 @@ export default function LogsPage() {
           <HistoricalTemperatureImport />
         </>
       )}
+      {activeType === LogType.CLEANING && <HistoricalCleaningImport />}
 
       <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
         <div>
