@@ -12,6 +12,19 @@ function valueLabel(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+function outcomeLabel(log: LogEntry) {
+  const temperature = log.fields?.['Measured temperature'] ?? log.fields?.value ?? log.fields?.temperature;
+  if (temperature !== undefined && temperature !== null && temperature !== '') {
+    return valueLabel(temperature);
+  }
+  if (log.fields?.['Original form outcome']) return valueLabel(log.fields['Original form outcome']);
+  if (log.type === 'cleaning') {
+    const count = Object.keys(log.fields ?? {}).filter((name) => name.startsWith('Cleaning outcome — ')).length;
+    return count ? `${count} source outcomes` : '—';
+  }
+  return '—';
+}
+
 export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheetProps) {
   const months = new Map<string, { date: Date; entries: LogEntry[] }>();
   const sourcePeriodDate = (log: LogEntry) => {
@@ -58,10 +71,10 @@ export function TemperatureSheet({ logs, onConfirm, onCancel }: TemperatureSheet
                       : occurredDate(log).getUTCDate()}
                   </td>
                   <th scope="row" className="px-3 py-2 align-top font-medium">
-                    {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item)}
+                    {valueLabel(log.fields?.['Workstation / unit'] ?? log.fields?.item ?? (log.type === 'cleaning' ? 'Weekly cleaning check' : null))}
                   </th>
                   <td className="whitespace-nowrap px-3 py-2 align-top tabular-nums">
-                    {valueLabel(log.fields?.['Measured temperature'] ?? log.fields?.value ?? log.fields?.temperature)}
+                    {outcomeLabel(log)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 align-top">{valueLabel(log.fields?.['Target (critical limit)'] ?? log.fields?.haccpRange)}</td>
                   <td className="px-3 py-2 align-top">

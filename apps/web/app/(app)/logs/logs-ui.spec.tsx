@@ -110,6 +110,44 @@ describe('Temperature logs UI', () => {
     expect(html).not.toMatch(/>C<|>NC</);
   });
 
+  it('shows original historical outcomes and cleaning source periods without assigning exact days', () => {
+    const tempHtml = renderSheet([{
+      ...reading,
+      status: LogStatus.CONFIRMED,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'pdf-1',
+      sourcePage: 1,
+      occurredAt: '2020-11-02T00:00:00.000Z',
+      fields: {
+        'Original form outcome': 'C',
+        'Source PDF': 'Temp 2020.pdf',
+        'Source page': 1,
+      },
+    }]);
+    expect(tempHtml).toContain('>C</td>');
+    expect(tempHtml).toContain('Temp 2020.pdf');
+    expect(tempHtml).toContain('November 2020');
+
+    const cleaningHtml = renderSheet([{
+      ...reading,
+      type: LogType.CLEANING,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'cleaning-pdf',
+      sourcePage: 11,
+      occurredAt: null,
+      measuredAt: null,
+      fields: {
+        'Source month': '2020-11',
+        'Source week': 2,
+        'Source PDF': 'pulizie 2020.pdf',
+        'Cleaning outcome — Floors': 'NC',
+      },
+    }]);
+    expect(cleaningHtml).toContain('2020-11 · Week 2');
+    expect(cleaningHtml).toContain('1 source outcomes');
+    expect(cleaningHtml).toContain('pulizie 2020.pdf');
+  });
+
   it('preserves exceptions and custom fields while hiding pending actions for reviewed entries', () => {
     const html = renderSheet([{
       ...reading,

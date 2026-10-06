@@ -127,6 +127,25 @@ describe('LogsService', () => {
       'Source PDF': 'Temp 2020.pdf',
     }));
     expect(entries[0].fields).not.toHaveProperty('Measured temperature');
+    repo.find.mockResolvedValue(entries);
+    await expect(service.importHistoricalTemperatures('org-1', 'admin-1', 'pdf-1', [
+      { date: '2020-11-02', unit: 'Banco Refrigerato Bar (n.1)', outcome: 'C', page: 1 },
+      { date: '2020-11-03', unit: 'Banco Refrigerato Bar (n.1)', outcome: 'NC', page: 1 },
+    ])).resolves.toEqual({ imported: 0, skippedSundays: 0, duplicates: 2 });
+    expect(transactionSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects conflicting source outcomes for the same temperature/day/unit', async () => {
+    documents.findOne.mockResolvedValue({
+      id: 'pdf-1',
+      orgId: 'org-1',
+      name: 'Temp 2020.pdf',
+      mimeType: 'application/pdf',
+    });
+    await expect(service.importHistoricalTemperatures('org-1', 'admin-1', 'pdf-1', [
+      { date: '2020-11-02', unit: 'Banco Refrigerato Bar (n.1)', outcome: 'C', page: 1 },
+      { date: '2020-11-02', unit: 'Banco Refrigerato Bar (n.1)', outcome: 'NC', page: 1 },
+    ])).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects invalid historical dates and files from another organization', async () => {
