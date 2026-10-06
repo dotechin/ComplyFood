@@ -1,5 +1,25 @@
 const path = require('path');
 
+const apiProxyUrl = process.env.API_PROXY_URL;
+let apiProxyOrigin;
+if (apiProxyUrl) {
+  const url = new URL(apiProxyUrl);
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('API_PROXY_URL must be an HTTP(S) origin without credentials, path, query, or fragment');
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    throw new Error('Unset NEXT_PUBLIC_API_URL when using API_PROXY_URL');
+  }
+  apiProxyOrigin = url.origin;
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
@@ -9,12 +29,10 @@ const nextConfig = {
     // build bundles everything the server needs.
     outputFileTracingRoot: path.join(__dirname, '../../'),
   },
-  // When API_PROXY_URL is set (e.g. a Tailscale Funnel URL), proxy /api/v1/* to the
-  // backend so the browser talks same-origin to app.photonhq.net (no CORS needed).
   async rewrites() {
-    const target = process.env.API_PROXY_URL?.replace(/\/+$/, '');
-    if (!target) return [];
-    return [{ source: '/api/v1/:path*', destination: `${target}/api/v1/:path*` }];
+    return apiProxyOrigin
+      ? [{ source: '/api/v1/:path*', destination: `${apiProxyOrigin}/api/v1/:path*` }]
+      : [];
   },
 };
 
