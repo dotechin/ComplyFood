@@ -1,4 +1,40 @@
 services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the backend .env}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U complyfood -d complyfood']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    extends:
+      file: infra/docker-compose.prod.yml
+      service: api
+    build:
+      context: .
+    command: ['pnpm', 'exec', 'typeorm', 'migration:run', '-d', 'dist/database/data-source.js']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
   api:
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the backend .env}
+      PASSWORD_RESET_TOKEN_SALT: ${PASSWORD_RESET_TOKEN_SALT:?Set PASSWORD_RESET_TOKEN_SALT in the backend .env}
+      WEB_URL: ${WEB_URL:?Set WEB_URL to the allowed frontend origins}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
     ports:
       - '127.0.0.1:4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - api_storage:/app/apps/api/storage
+
+volumes:
+  api_storage:
