@@ -142,6 +142,8 @@ Traffic: **browser → public frontend `/api/v1/*` → Next.js server → tailne
    setting, and set `API_PROXY_URL=https://backend.example-tailnet.ts.net`.
    The Next.js server forwards only `/api/v1/*`, preserving the API prefix.
    Authentication headers, query strings, uploads, and downloads use the proxy.
+   These API paths bypass the frontend's page-login redirect; the backend still
+   enforces authentication and authorization on protected endpoints.
    The target must be an HTTP(S) origin with no credentials, path, query, or
    fragment; conflicting direct/proxy settings fail configuration loading.
 5. Rebuild and deploy the frontend. For a standalone image, use the Docker build

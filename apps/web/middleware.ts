@@ -5,6 +5,10 @@ const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-passwor
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // API authentication is enforced by the backend, including proxied requests.
+  if (pathname === '/api/v1' || pathname.startsWith('/api/v1/')) {
+    return NextResponse.next();
+  }
   const token = request.cookies.get('auth_token')?.value;
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
