@@ -275,7 +275,7 @@ describe('DocumentsService', () => {
     repo.findOne.mockResolvedValue(doc);
     await expect(service.delete('org-1', doc.id, 'other-user', UserRole.STAFF)).rejects.toThrow(ForbiddenException);
     expect((service as any).s3Client.send).not.toHaveBeenCalled();
-    expect(repo.delete).not.toHaveBeenCalled();
+    expect(repo.manager.transaction).not.toHaveBeenCalled();
   });
 
   it('preserves PDFs referenced by historical log records', async () => {
