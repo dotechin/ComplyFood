@@ -87,13 +87,13 @@ export const ACTION_BASE_CLASSES =
   'group relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60';
 
 const TOOLTIP_CLASSES =
-  'pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100';
+  'pointer-events-none absolute top-full left-1/2 z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100';
 
 export function actionClasses(variant: Variant = 'default') {
   return `${ACTION_BASE_CLASSES} ${VARIANT_CLASSES[variant]}`;
 }
 
-/** Hover/focus label shown above an icon-only control. */
+/** Hover/focus label shown below an icon-only control. */
 export function HoverLabel({ children }: { children: ReactNode }) {
   return <span className={TOOLTIP_CLASSES}>{children}</span>;
 }

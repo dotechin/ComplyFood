@@ -1,4 +1,5 @@
 import { ComplianceSection } from './compliance-section';
+import { HaccpPackage } from './haccp-package';
 
 export default function CompliancePage() {
   return (
@@ -9,6 +10,7 @@ export default function CompliancePage() {
           Official EU food hygiene documentation, public downloads, and national guidance for your selected language.
         </p>
       </div>
+      <HaccpPackage />
       <ComplianceSection />
     </div>
   );
