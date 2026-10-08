@@ -97,6 +97,22 @@ describe('LogsService', () => {
     })).resolves.toEqual(expect.objectContaining({ type: LogType.CLEANING }));
   });
 
+  it('accepts Cleaning & Disinfection Schedule ticks with an area and a calendar date', async () => {
+    await expect(service.create('org-1', 'user-1', {
+      type: LogType.CLEANING,
+      fields: { 'Area / Item': 'Ice Machine (Bar)', 'Cleaning date': '2026-10-05' },
+    })).resolves.toEqual(expect.objectContaining({ type: LogType.CLEANING }));
+
+    expect(() => service.create('org-1', 'user-1', {
+      type: LogType.CLEANING,
+      fields: { 'Area / Item': ' ', 'Cleaning date': '2026-10-05' },
+    })).toThrow(BadRequestException);
+    expect(() => service.create('org-1', 'user-1', {
+      type: LogType.CLEANING,
+      fields: { 'Area / Item': 'Ice Machine (Bar)', 'Cleaning date': '05/10/2026' },
+    })).toThrow(BadRequestException);
+  });
+
   it('confirms a log entry', async () => {
     repo.findOne.mockResolvedValue({
       id: 'log-1',

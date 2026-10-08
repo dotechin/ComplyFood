@@ -1,6 +1,6 @@
 import type { Document, DocumentMetadata, LogEntry, User } from '@complyfood/shared';
 import { CATEGORY_LABELS, canDeleteDocument, isPdfDocument } from '../../../lib/documents/rules';
-import { ActionButton, DownloadIcon, EyeIcon, FileIcon, TrashIcon } from './actions';
+import { ActionButton, DownloadIcon, EyeIcon, FileIcon, PrintIcon, ShareIcon, TrashIcon } from '../../../components/icon-button';
 
 const PROCESSING_LABELS: Record<Document['processingStatus'], string> = {
   pending: 'Text indexing in progress',
@@ -16,9 +16,13 @@ export interface DocumentListProps {
   downloadingIds: ReadonlySet<string>;
   previewId: string | null;
   previewLoading: boolean;
+  printingId?: string | null;
+  sharingId?: string | null;
   emptyMessage: string;
   onShow: (doc: Document) => void;
   onDownload: (doc: Document) => void;
+  onPrint?: (doc: Document) => void;
+  onShare?: (doc: Document) => void;
   onDelete: (doc: Document) => void;
 }
 
@@ -30,9 +34,13 @@ export function DocumentList({
   downloadingIds,
   previewId,
   previewLoading,
+  printingId = null,
+  sharingId = null,
   emptyMessage,
   onShow,
   onDownload,
+  onPrint,
+  onShare,
   onDelete,
 }: DocumentListProps) {
   if (docs.length === 0) {
@@ -77,13 +85,33 @@ export function DocumentList({
             <div role="group" aria-label={`Actions for ${doc.name}`} className="flex flex-wrap gap-2 sm:shrink-0">
               <ActionButton
                 icon={<EyeIcon />}
-                label="Show"
+                label="View"
                 busyLabel="Loading…"
                 busy={isPreviewing && previewLoading}
-                aria-label={`Show ${doc.name}`}
+                aria-label={`View ${doc.name}`}
                 aria-pressed={isPreviewing}
                 onClick={() => onShow(doc)}
               />
+              {onPrint && (
+                <ActionButton
+                  icon={<PrintIcon />}
+                  label="Print"
+                  busyLabel="Preparing…"
+                  busy={printingId === doc.id}
+                  aria-label={`Print ${doc.name}`}
+                  onClick={() => onPrint(doc)}
+                />
+              )}
+              {onShare && (
+                <ActionButton
+                  icon={<ShareIcon />}
+                  label="Share"
+                  busyLabel="Sharing…"
+                  busy={sharingId === doc.id}
+                  aria-label={`Share ${doc.name}`}
+                  onClick={() => onShare(doc)}
+                />
+              )}
               <ActionButton
                 icon={<DownloadIcon />}
                 label="Download"

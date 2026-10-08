@@ -3,8 +3,9 @@ import React from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
 import LogsPage from './page';
-import { TemperatureSheet } from './temperature-sheet';
-import { TEMPERATURE_UNITS } from './temperature-log';
+import { CLEANING_SCHEDULE, CleaningSchedule, weekStartOf } from './cleaning-schedule';
+import { IncidentLog } from './incident-log';
+import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 jest.mock('../../../lib/api', () => ({
   apiGet: jest.fn(),
@@ -13,18 +14,12 @@ jest.mock('../../../lib/api', () => ({
   apiDelete: jest.fn(),
 }));
 
-const reading: LogEntry = {
-  id: 'reading-1',
+const base: LogEntry = {
+  id: 'log-1',
   orgId: 'org-1',
   locationId: null,
-  type: LogType.TEMPERATURE,
-  fields: {
-    'Workstation / unit': 'Bar fridge 1',
-    'Measured temperature': '4 °C',
-    'Target (critical limit)': 'Chilled ≤ 4°C',
-    'Corrective action / comments': 'Checked seal',
-    Reading: '08:00 (AM)',
-  },
+  type: LogType.CLEANING,
+  fields: {},
   status: LogStatus.PENDING,
   submittedBy: null,
   submittedAt: null,
@@ -38,166 +33,139 @@ const reading: LogEntry = {
   exceptionReason: null,
   exceptionBy: null,
   exceptionAt: null,
-  createdAt: '2026-02-03T12:00:00.000Z',
+  createdAt: '2026-10-06T12:00:00.000Z',
 };
 
-function renderSheet(logs: LogEntry[]) {
-  return renderToStaticMarkup(<TemperatureSheet logs={logs} onConfirm={jest.fn()} onCancel={jest.fn()} />);
+function renderPageAs(type: LogType) {
+  jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => [
+    initial === LogType.TEMPERATURE ? type : typeof initial === 'function' ? initial() : initial,
+    jest.fn(),
+  ]);
+  jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
+  jest.spyOn(React, 'useEffect').mockImplementation(() => {});
+  return renderToStaticMarkup(<LogsPage />);
 }
 
-describe('Temperature logs UI', () => {
+describe('Daily Logs UI', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('uses short English labels and retains all critical-limit defaults', () => {
+  it('shows one Temperature Log sheet with a log selector and no historical import or entry-mode choices', () => {
     const html = renderToStaticMarkup(<LogsPage />);
     expect(html).toContain('Daily Logs');
-    expect(html).toContain('Temperature Log · CCP 2/3');
-    expect(html).toContain('>Unit<span');
-    expect(html).toContain('>Critical limit</label>');
-    expect(html).toContain('>Temperature<span');
-    expect(html).toContain('Save reading');
-    expect(html).toContain('<option value="Chilled ≤ 4°C" selected="">Chilled ≤ 4°C</option>');
-    expect(html).toContain('<option value="Frozen ≤ -18°C">Frozen ≤ -18°C</option>');
-    expect(html).toContain('<option value="Hot holding ≥ 63°C">Hot holding ≥ 63°C</option>');
-    expect(html).toContain('<option value="Cooking core ≥ 75°C for 30s">Cooking ≥ 75°C for 30s</option>');
-    expect(html).not.toMatch(/Phone camera|Coming soon|European standard package/);
+    expect(html).toContain('>Temperature Log</h2>');
+    expect(html).not.toContain('CCP 2/3');
+    expect(html.match(/aria-label="Temperature log"/g)).toHaveLength(1);
+    for (const unit of TEMPERATURE_UNITS) expect(html).toContain(`>${unit.label}</option>`);
+    expect(html).toContain('aria-label="Save reading"');
+    expect(html).not.toMatch(/Import verified historical|Phone camera|Coming soon|Manual entry/);
   });
 
-  it('renders all weekly cleaning status and corrective-action fields', () => {
+  it('renders the selected temperature log as a blank sheet', () => {
+    const html = renderToStaticMarkup(
+      <TemperatureLog unit={TEMPERATURE_UNITS[3].value} year={2025} onUnitChange={jest.fn()} onYearChange={jest.fn()} />,
+    );
+    expect(html).toContain(`<option value="${TEMPERATURE_UNITS[3].value}" selected="">`);
+    expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025 (blank sheet)');
+    expect(html).not.toContain('<table');
+  });
+
+  it('renders the Cleaning & Disinfection Schedule with the legend, columns and areas', () => {
+    const html = renderPageAs(LogType.CLEANING);
+    expect(html).toContain('Cleaning &amp; Disinfection Schedule');
+    expect(html).not.toContain('Sheet 3');
+    expect(html).toContain('D = Daily, W = Weekly, M = Monthly, TW = Twice Weekly');
+    for (const heading of ['Area / Item', 'Freq.', 'Cleaning Method &amp; Chemicals Used', 'Responsibility']) {
+      expect(html).toContain(heading);
+    }
+    for (const row of CLEANING_SCHEDULE) expect(html).toContain(row.responsibility);
+    expect(html).not.toMatch(/Import verified historical|Weekly check|Phone camera/);
+  });
+
+  it('marks completed days, allows undo only while pending and disables future days', () => {
+    const weekStart = weekStartOf(new Date(2026, 9, 7));
+    const html = renderToStaticMarkup(
+      <CleaningSchedule
+        logs={[
+          { ...base, fields: { 'Area / Item': 'Ice Machine (Bar)', 'Cleaning date': '2026-10-05' } },
+          { ...base, id: 'log-2', status: LogStatus.CONFIRMED, fields: { 'Area / Item': 'Barista', 'Cleaning date': '2026-10-06' } },
+          { ...base, id: 'log-3', status: LogStatus.CONFIRMED, fields: { 'Area / Item': 'Handwash Stations & Soap Dispensers', 'Cleaning date': '2026-10-06' } },
+        ]}
+        weekStart={weekStart}
+        today="2026-10-07"
+        busyKey={null}
+        onWeekChange={jest.fn()}
+        onTick={jest.fn()}
+        onUndo={jest.fn()}
+      />,
+    );
+    expect(html).toContain('Ice Machine (Bar) — Monday 2026-10-05: done (pending review, click to undo)');
+    expect(html).toContain('Handwash Stations &amp; Soap Dispensers — Tuesday 2026-10-06: done"');
+    expect(html.match(/✓/g)).toHaveLength(2);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Ice Machine \(Bar\) — Thursday 2026-10-08: mark as done"/);
+  });
+
+  it('records a cleaning tick through the schedule API format', async () => {
+    (apiGet as jest.Mock).mockResolvedValue([]);
+    (apiPost as jest.Mock).mockResolvedValue(base);
     jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => [
       initial === LogType.TEMPERATURE ? LogType.CLEANING : typeof initial === 'function' ? initial() : initial,
       jest.fn(),
     ]);
     jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
-    const html = renderToStaticMarkup(<LogsPage />);
-    expect(html).toContain('Weekly check');
-    expect(html).toContain('Week 1');
-    expect(html).toContain('>Machinery and equipment<span');
-    expect(html).toContain('C — Compliant');
-    expect(html).toContain('A — Acceptable');
-    expect(html).toContain('NC — Non-compliant');
-    expect(html).toContain('Corrective action');
-    expect(html).not.toMatch(/Sunday is excluded|signed-in user is recorded/);
-  });
 
-  it('groups readings into English monthly tables with chronological days', () => {
-    const logs = [
-      { ...reading, id: 'later', createdAt: '2026-02-28T12:00:00.000Z' },
-      { ...reading, id: 'previous', createdAt: '2026-01-31T12:00:00.000Z' },
-      reading,
-    ];
-    const html = renderSheet(logs);
-    expect(html.match(/<table /g)).toHaveLength(2);
-    expect(html.indexOf('February 2026')).toBeLessThan(html.indexOf('January 2026'));
-    expect(html.indexOf('>3</td>')).toBeLessThan(html.indexOf('>28</td>'));
-    expect(html).toContain('scope="col"');
-    expect(html).toContain('scope="row"');
-    expect(html).toContain('overflow-x-auto');
-    expect(logs[0].id).toBe('later');
-  });
+    const page = LogsPage();
+    const schedule = (page.props.children as React.ReactElement[]).find((child) => child?.type === CleaningSchedule)!;
+    schedule.props.onTick('Ice Machine (Bar)', '2026-10-05');
+    await new Promise((resolve) => setImmediate(resolve));
 
-  it('keeps readings, notes, times, and pending actions without inventing compliance', () => {
-    const html = renderSheet([reading]);
-    expect(html).toContain('Bar fridge 1');
-    expect(html).toContain('4 °C');
-    expect(html).toContain('Chilled ≤ 4°C');
-    expect(html).toContain('Checked seal');
-    expect(html).toContain('08:00 (AM)');
-    expect(html).toContain('<details>');
-    expect(html).toContain('Confirm</button>');
-    expect(html).toContain('Cancel</button>');
-    expect(html).toContain('Status tracks review, not temperature compliance.');
-    expect(html).not.toMatch(/>C<|>NC</);
-  });
-
-  it('shows original historical outcomes and cleaning source periods without assigning exact days', () => {
-    const tempHtml = renderSheet([{
-      ...reading,
-      status: LogStatus.CONFIRMED,
-      recordOrigin: 'historical_transcription',
-      sourceDocumentId: 'pdf-1',
-      sourcePage: 1,
-      occurredAt: '2020-11-02T00:00:00.000Z',
-      fields: {
-        'Original form outcome': 'C',
-        'Source PDF': 'Temp 2020.pdf',
-        'Source page': 1,
-      },
-    }]);
-    expect(tempHtml).toContain('>C</td>');
-    expect(tempHtml).toContain('Temp 2020.pdf');
-    expect(tempHtml).toContain('November 2020');
-
-    const cleaningHtml = renderSheet([{
-      ...reading,
+    expect(apiPost).toHaveBeenCalledWith('/logs', {
       type: LogType.CLEANING,
-      recordOrigin: 'historical_transcription',
-      sourceDocumentId: 'cleaning-pdf',
-      sourcePage: 11,
-      occurredAt: null,
-      measuredAt: null,
-      fields: {
-        'Source month': '2020-11',
-        'Source week': 2,
-        'Source PDF': 'pulizie 2020.pdf',
-        'Cleaning outcome — Floors': 'NC',
-      },
-    }]);
-    expect(cleaningHtml).toContain('2020-11 · Week 2');
-    expect(cleaningHtml).toContain('1 source outcomes');
-    expect(cleaningHtml).toContain('pulizie 2020.pdf');
+      fields: { 'Area / Item': 'Ice Machine (Bar)', 'Cleaning date': '2026-10-05' },
+    });
   });
 
-  it('preserves exceptions and custom fields while hiding pending actions for reviewed entries', () => {
-    const html = renderSheet([{
-      ...reading,
-      status: LogStatus.OVERRIDDEN,
-      isException: true,
-      exceptionReason: 'Late reading',
-      occurredAt: '2026-02-03T10:00:00.000Z',
-      measuredAt: '2026-02-03T10:05:00.000Z',
-      fields: { ...reading.fields, Notes: '<script>alert("test")</script>', Checked: true },
-    }]);
-    expect(html).toContain('overridden');
-    expect(html).toContain('Exception');
-    expect(html).toContain('Late reading');
-    expect(html).toContain('Occurred');
-    expect(html).toContain('Measured');
-    expect(html).toContain('Yes');
+  it('renders the Corrective Action & Deviation Log sheet with an inline entry row', () => {
+    const html = renderToStaticMarkup(
+      <IncidentLog
+        logs={[{
+          ...base,
+          type: LogType.INCIDENT,
+          fields: {
+            'Description of deviation / problem': 'Walk-in fridge at 9°C',
+            'Immediate correction taken': 'Moved stock',
+            'Product disposition': 'Retained',
+            'Preventative action to avoid repeat': '<script>x</script>',
+          },
+        }]}
+        saving={false}
+        onCreate={jest.fn()}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+    for (const column of ['Date / Time', 'Deviation / Problem Detected', 'Immediate Correction Taken', 'Product Disposition', 'Preventative Action', 'Verified By']) {
+      expect(html).toContain(column);
+    }
+    expect(html).toContain('Walk-in fridge at 9°C');
+    expect(html).toContain('aria-label="Add entry"');
+    expect(html).toContain('aria-label="Confirm"');
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
-    expect(html).not.toMatch(/Confirm<\/button>|Cancel<\/button>/);
-    expect(renderSheet([{ ...reading, status: LogStatus.CONFIRMED }])).not.toContain('Confirm</button>');
   });
 
-  it('supports generated and older temperature field names, including zero readings', () => {
-    const html = renderSheet([{ ...reading, fields: { item: 'Freezer 1', value: '-18°C', haccpRange: '-25°C – -18°C' } }]);
-    expect(html).toContain('Freezer 1');
-    expect(html).toContain('-18°C');
-    expect(html).toContain('-25°C – -18°C');
-    expect(renderSheet([{ ...reading, fields: { item: 'Fridge 2', temperature: 0 } }])).toMatch(/tabular-nums">0<\/td>/);
-  });
-
-  it('handles missing fields and empty filtered results', () => {
-    expect(renderSheet([{ ...reading, fields: {} }])).toContain('—');
-    const html = renderSheet([]);
-    expect(html).toContain('No temperature readings match the filters.');
-    expect(html).not.toContain('<table');
-  });
-
-  it('saves short-labeled inputs using the unchanged stored field names and values', async () => {
+  it('saves a temperature reading for the selected log with unchanged stored field names', async () => {
     jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
       let value = typeof initial === 'function' ? initial() : initial;
-      if (value && typeof value === 'object' && 'unit' in value) {
-        value = { unit: TEMPERATURE_UNITS[0].value, target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
+      if (value && typeof value === 'object' && 'temperature' in value) {
+        value = { target: 'Chilled ≤ 4°C', temperature: '0', corrective: 'Checked seal' };
       }
       return [value, jest.fn()];
     });
     jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
     (apiGet as jest.Mock).mockResolvedValue([]);
-    (apiPost as jest.Mock).mockResolvedValue(reading);
+    (apiPost as jest.Mock).mockResolvedValue(base);
 
     const page = LogsPage();
     const form = (page.props.children as React.ReactElement[]).find((child) => child?.type === 'form')!;

@@ -11,6 +11,9 @@ import {
   type User,
 } from '@complyfood/shared';
 import { apiDownload, apiGet } from '../../../lib/api';
+import { ActionButton, FileIcon, TableIcon } from '../../../components/icon-button';
+
+const FILTER_CLASSES = 'h-9 w-full min-w-0 rounded-md border border-input bg-card px-3 text-sm text-foreground';
 
 function buildQuery(params: Record<string, string>) {
   const searchParams = new URLSearchParams();
@@ -87,61 +90,66 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Compliance Reports</h1>
-          <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and exception activity.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">All log types</option>
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-md border border-input px-3 py-2 text-sm"
-          >
-            <option value="">All statuses</option>
-            {Object.values(LogStatus).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-md border border-input px-3 py-2 text-sm"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-md border border-input px-3 py-2 text-sm"
-          />
-          <button
-            onClick={() => void apiDownload(`/reports/export/csv${query}`, 'compliance-report.csv')}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={() => void apiDownload(`/reports/export/pdf${query}`, 'compliance-report.pdf')}
-            className="rounded-md border border-blue-200 bg-card px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-          >
-            Export PDF
-          </button>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-foreground">Compliance Reports</h1>
+        <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and exception activity.</p>
+      </div>
+      <div
+        role="group"
+        aria-label="Compliance report filters"
+        className="mb-6 grid grid-cols-[repeat(4,minmax(0,1fr))_auto_auto] items-center gap-2 rounded-lg border bg-card p-3 shadow-card"
+      >
+        <select
+          aria-label="Log type"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className={FILTER_CLASSES}
+        >
+          <option value="">All log types</option>
+          {Object.values(LogType).map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Status"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={FILTER_CLASSES}
+        >
+          <option value="">All statuses</option>
+          {Object.values(LogStatus).map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          aria-label="From date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className={FILTER_CLASSES}
+        />
+        <input
+          type="date"
+          aria-label="To date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className={FILTER_CLASSES}
+        />
+        <ActionButton
+          icon={<TableIcon />}
+          label="Export CSV"
+          variant="primary"
+          onClick={() => void apiDownload(`/reports/export/csv${query}`, 'compliance-report.csv')}
+        />
+        <ActionButton
+          icon={<FileIcon />}
+          label="Export PDF"
+          onClick={() => void apiDownload(`/reports/export/pdf${query}`, 'compliance-report.pdf')}
+        />
       </div>
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
       {summary && (
