@@ -25,10 +25,10 @@ const CRITICAL_LIMITS = [
 ];
 
 const RECORDS = [
-  { name: 'Goods Receipt', href: '/logs', text: 'Supplier, product, batch and delivery temperature.' },
-  { name: 'Temperature Log', href: '/logs', text: 'Daily readings for every fridge, freezer and hot-holding unit.' },
-  { name: 'Cleaning & Disinfection Schedule', href: '/logs', text: 'Areas, frequency, method, chemicals and responsibility.' },
-  { name: 'Corrective Action & Deviation Log', href: '/logs', text: 'Deviations, immediate correction, product disposition and prevention.' },
+  { name: 'Goods Receipt', href: '/logs?type=receiving', text: 'Supplier, product, batch and delivery temperature.' },
+  { name: 'Temperature Log', href: '/logs?type=temperature', text: 'Daily readings for every fridge, freezer and hot-holding unit.' },
+  { name: 'Cleaning & Disinfection Schedule', href: '/logs?type=cleaning', text: 'Areas, frequency, method, chemicals and responsibility.' },
+  { name: 'Corrective Action & Deviation Log', href: '/logs?type=incident', text: 'Deviations, immediate correction, product disposition and prevention.' },
   { name: 'Daily Hygiene Checklist', href: '/checklists', text: 'Opening and closing prerequisite checks.' },
 ];
 

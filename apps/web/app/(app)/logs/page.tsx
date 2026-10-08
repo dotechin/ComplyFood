@@ -179,6 +179,11 @@ function defaultTarget(unit: string) {
 
 const FIELD_CLASSES = 'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground';
 
+export function logTypeFromSearch(search: string): LogType | null {
+  const type = new URLSearchParams(search).get('type');
+  return Object.values(LogType).includes(type as LogType) ? type as LogType : null;
+}
+
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -250,6 +255,17 @@ export default function LogsPage() {
     setError('');
     setMessage('');
   };
+
+  useEffect(() => {
+    const requestedType = logTypeFromSearch(window.location.search);
+    if (!requestedType) return;
+    setActiveType(requestedType);
+    setFormValues(
+      requestedType === LogType.TEMPERATURE
+        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value) }
+        : emptyValues(FIELD_DEFS[requestedType]),
+    );
+  }, []);
 
   const selectTemperatureUnit = (unit: string) => {
     setTemperatureUnit(unit);

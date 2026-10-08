@@ -2,7 +2,7 @@
 
 import { ActionButton, PrintIcon } from '../../../components/icon-button';
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const CHECKLIST_SECTIONS = [
   {
@@ -45,14 +45,16 @@ export default function ChecklistsPage() {
             <span className="font-semibold">Instructions:</span> tick each day once the check is satisfied; record any failure in the Corrective Action &amp; Deviation Log.
           </p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full border-collapse text-left text-sm" aria-label="Daily Opening & Closing Hygiene Checklist">
             <thead className="bg-sidebar text-white">
               <tr>
                 <th scope="col" className="border border-border px-3 py-2 text-center font-semibold">Check</th>
                 <th scope="col" className="border border-border px-3 py-2 text-center font-semibold">Standard / Requirement</th>
                 {DAYS.map((day, index) => (
-                  <th key={index} scope="col" className="w-10 border border-border px-1 py-2 text-center font-semibold">{day}</th>
+                  <th key={index} scope="col" className="w-10 border border-border px-1 py-2 text-center font-semibold">
+                    <abbr title={day}>{day[0]}</abbr>
+                  </th>
                 ))}
               </tr>
             </thead>

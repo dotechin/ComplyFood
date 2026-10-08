@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
-import LogsPage from './page';
+import ChecklistsPage from '../checklists/page';
+import { HaccpPackage } from '../compliance/haccp-package';
+import AppLayout from '../layout';
+import LogsPage, { logTypeFromSearch } from './page';
 import { CLEANING_SCHEDULE, CleaningSchedule, weekStartOf } from './cleaning-schedule';
 import { IncidentLog } from './incident-log';
 import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
@@ -13,6 +16,9 @@ jest.mock('../../../lib/api', () => ({
   apiPatch: jest.fn(),
   apiDelete: jest.fn(),
 }));
+
+jest.mock('../sidebar-nav', () => ({ SidebarNav: () => <aside>Sidebar</aside> }));
+jest.mock('../logout-button', () => ({ LogoutButton: () => <button>Logout</button> }));
 
 const base: LogEntry = {
   id: 'log-1',
@@ -48,6 +54,36 @@ function renderPageAs(type: LogType) {
 
 describe('Daily Logs UI', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  it('prints the checklist with full weekday names available to assistive technology', () => {
+    const html = renderToStaticMarkup(<ChecklistsPage />);
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+      expect(html).toContain(`<abbr title="${day}">`);
+    }
+    expect(html).toContain('print:hidden');
+    expect(html).toContain('print:overflow-visible');
+  });
+
+  it('removes the application shell and restores overflow when printing', () => {
+    const html = renderToStaticMarkup(<AppLayout><p>Checklist content</p></AppLayout>);
+    expect(html).toContain('<div class="print:hidden"><aside>Sidebar</aside></div>');
+    expect(html).toContain('print:block print:h-auto print:overflow-visible');
+    expect(html).toContain('print:max-w-none');
+    expect(html).toContain('print:overflow-visible print:px-0 print:py-0');
+  });
+
+  it('links each HACCP package record to its matching log category', () => {
+    const html = renderToStaticMarkup(<HaccpPackage />);
+    for (const type of ['receiving', 'temperature', 'cleaning', 'incident']) {
+      expect(html).toContain(`href="/logs?type=${type}"`);
+    }
+  });
+
+  it('resolves valid log category query parameters and ignores unknown values', () => {
+    expect(logTypeFromSearch('?type=receiving')).toBe(LogType.RECEIVING);
+    expect(logTypeFromSearch('?type=incident')).toBe(LogType.INCIDENT);
+    expect(logTypeFromSearch('?type=unknown')).toBeNull();
+  });
 
   it('shows one Temperature Log sheet with a log selector and no historical import or entry-mode choices', () => {
     const html = renderToStaticMarkup(<LogsPage />);
@@ -137,6 +173,11 @@ describe('Daily Logs UI', () => {
             'Product disposition': 'Retained',
             'Preventative action to avoid repeat': '<script>x</script>',
           },
+        }, {
+          ...base,
+          id: 'confirmed-incident',
+          type: LogType.INCIDENT,
+          status: LogStatus.CONFIRMED,
         }]}
         saving={false}
         onCreate={jest.fn()}
@@ -144,9 +185,10 @@ describe('Daily Logs UI', () => {
         onCancel={jest.fn()}
       />,
     );
-    for (const column of ['Date / Time', 'Deviation / Problem Detected', 'Immediate Correction Taken', 'Product Disposition', 'Preventative Action', 'Verified By']) {
+    for (const column of ['Date / Time', 'Deviation / Problem Detected', 'Immediate Correction Taken', 'Product Disposition', 'Preventative Action', 'Status']) {
       expect(html).toContain(column);
     }
+    expect(html).toContain('confirmed');
     expect(html).toContain('Walk-in fridge at 9°C');
     expect(html).toContain('aria-label="Add entry"');
     expect(html).toContain('aria-label="Confirm"');

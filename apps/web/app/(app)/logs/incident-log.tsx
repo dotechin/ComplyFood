@@ -19,7 +19,7 @@ const COLUMNS = [
   'Immediate Correction Taken',
   'Product Disposition',
   'Preventative Action',
-  'Verified By',
+  'Status',
 ];
 
 const INPUT_CLASSES = 'w-full rounded-md border border-input bg-card px-2 py-1.5 text-sm text-foreground';
