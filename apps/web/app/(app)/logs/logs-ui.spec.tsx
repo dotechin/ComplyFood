@@ -106,7 +106,7 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('aria-label="Add temperature unit"');
     expect(html).toContain('aria-label="Unit type"');
     expect(html).toContain('aria-label="Delete Bar counter 1"');
-    expect(html).toContain('aria-label="Save reading"');
+    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Save reading"/);
     expect(html).not.toMatch(/Import verified historical|Phone camera|Coming soon|Manual entry/);
   });
 
@@ -249,6 +249,12 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('aria-label="Confirm"');
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
+  });
+
+  it('centers the checklist completion checkbox and create-entry action', () => {
+    const html = renderPageAs(LogType.CHECKLIST);
+    expect(html).toMatch(/<label[^>]*class="[^"]*col-span-full[^"]*justify-center[^"]*"[^>]*><input[^>]*type="checkbox"/);
+    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Create checklist entry"/);
   });
 
   it('saves a temperature reading for the selected log with unchanged stored field names', async () => {
