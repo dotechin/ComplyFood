@@ -318,7 +318,7 @@ export default function LogsPage() {
     setActiveType(requestedType);
     setFormValues(
       requestedType === LogType.TEMPERATURE
-        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }
+        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value, TEMPERATURE_UNITS) }
         : emptyValues(FIELD_DEFS[requestedType]),
     );
   }, []);
