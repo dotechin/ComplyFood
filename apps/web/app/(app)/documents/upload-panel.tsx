@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentCategory, type LogEntry, type User } from '@complyfood/shared';
 import type { UploadResult } from '../../../lib/documents/library';
 import { CATEGORY_LABELS, MAX_UPLOAD_MB, getUploadCategoryOptions } from '../../../lib/documents/rules';
-import { ActionButton, CloseIcon, UploadIcon } from './actions';
+import { ActionButton, CloseIcon, UploadIcon } from '../../../components/icon-button';
 
 export interface UploadPanelProps {
   user: User | null;

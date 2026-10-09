@@ -10,6 +10,9 @@ const HISTORICAL_TEMPERATURE_UNITS = new Set([
   'Banco Refrigerato Bar (n.3)',
   'Pozzetto Freezer Cucina (n.4)',
 ]);
+const CLEANING_SCHEDULE_AREA_FIELD = 'Area / Item';
+const CLEANING_SCHEDULE_DATE_FIELD = 'Cleaning date';
+
 const CLEANING_OUTCOME_FIELDS = [
   'Machinery and equipment',
   'Work surfaces',
@@ -53,7 +56,7 @@ export class LogsService {
   ) {}
 
   create(orgId: string, userId: string | null, data: CreateLogInput) {
-    if (data.type === LogType.CLEANING) this.validateCleaningFields(data.fields);
+    const occurredAt = data.type === LogType.CLEANING ? this.validateCleaningFields(data.fields) : null;
     return this.repo.save(
       this.repo.create({
         orgId,
@@ -64,7 +67,7 @@ export class LogsService {
         submittedBy: null,
         submittedAt: null,
         status: LogStatus.PENDING,
-        occurredAt: null,
+        occurredAt,
         measuredAt: null,
         isException: false,
         exceptionReason: null,
@@ -393,7 +396,10 @@ export class LogsService {
     return date;
   }
 
-  private validateCleaningFields(fields: Record<string, any>) {
+  private validateCleaningFields(fields: Record<string, any>): Date | null {
+    if (Object.prototype.hasOwnProperty.call(fields, CLEANING_SCHEDULE_AREA_FIELD)) {
+      return this.validateCleaningScheduleFields(fields);
+    }
     for (const category of CLEANING_OUTCOME_FIELDS) {
       const outcome = fields[`Cleaning outcome — ${category}`];
       if (!['C', 'A', 'NC'].includes(outcome)) {
@@ -409,6 +415,27 @@ export class LogsService {
     ) {
       throw new BadRequestException('A corrective action is required when any cleaning category is non-compliant');
     }
+    return null;
+  }
+
+  /** A single tick on the Cleaning & Disinfection Schedule: one area/item cleaned on one calendar day. */
+  private validateCleaningScheduleFields(fields: Record<string, any>) {
+    const area = fields[CLEANING_SCHEDULE_AREA_FIELD];
+    if (typeof area !== 'string' || !area.trim()) {
+      throw new BadRequestException('Select the area or item that was cleaned');
+    }
+    const date = fields[CLEANING_SCHEDULE_DATE_FIELD];
+    const parsedDate = typeof date === 'string' ? new Date(`${date}T00:00:00.000Z`) : null;
+    if (
+      typeof date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      !parsedDate ||
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== date
+    ) {
+      throw new BadRequestException('Cleaning date must use YYYY-MM-DD format');
+    }
+    return parsedDate;
   }
 
   async reset(orgId: string, scope: 'generated' | 'all'): Promise<{ deleted: number }> {

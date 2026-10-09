@@ -40,6 +40,8 @@ function renderList(overrides: Partial<DocumentListProps> = {}) {
       emptyMessage="Nothing here"
       onShow={jest.fn()}
       onDownload={jest.fn()}
+      onPrint={jest.fn()}
+      onShare={jest.fn()}
       onDelete={jest.fn()}
       {...overrides}
     />,
@@ -47,18 +49,20 @@ function renderList(overrides: Partial<DocumentListProps> = {}) {
 }
 
 const visibleLabels = (html: string) =>
-  Array.from(html.matchAll(/<button[^>]*>(?:<svg[\s\S]*?<\/svg>)<span>([^<]+)<\/span><\/button>/g)).map((m) => m[1]);
+  Array.from(html.matchAll(/<button[^>]*>(?:<svg[\s\S]*?<\/svg>)<span[^>]*>([^<]+)<\/span><\/button>/g)).map((m) => m[1]);
 
 describe('Documents UI', () => {
-  it('renders labeled icon actions with Show before Download and a destructive Delete', () => {
+  it('renders icon-only actions with hover labels: View, Print, Share, Download and a destructive Delete', () => {
     const html = renderList();
 
-    expect(visibleLabels(html)).toEqual(['Show', 'Download', 'Delete']);
-    expect(html).toContain('aria-label="Show permit.pdf"');
+    expect(visibleLabels(html)).toEqual(['View', 'Print', 'Share', 'Download', 'Delete']);
+    expect(html).toContain('aria-label="View permit.pdf"');
+    expect(html).toContain('aria-label="Print permit.pdf"');
+    expect(html).toContain('aria-label="Share permit.pdf"');
     expect(html).toContain('aria-label="Download permit.pdf"');
     expect(html).toContain('aria-label="Delete permit.pdf"');
     expect(html).toMatch(/<button[^>]*class="[^"]*text-danger[^"]*"[^>]*aria-label="Delete permit.pdf"/);
-    // Icons are decorative; the visible text is the label.
+    // Icons are decorative; the hover label is the accessible name.
     expect(html.match(/<svg[^>]*aria-hidden="true"/g)?.length).toBeGreaterThanOrEqual(4);
   });
 

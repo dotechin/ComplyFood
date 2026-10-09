@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LogTable } from '@complyfood/ui';
 import type { LogEntry, ReminderEvent } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { ActionButton, CheckIcon } from '../../../components/icon-button';
 
 interface DashboardSnapshot {
   pendingLogs: LogEntry[];
@@ -153,13 +154,7 @@ export default function DashboardPage() {
                         <span className="capitalize">{reminder.type}</span> · {new Date(reminder.scheduledFor).toLocaleString()}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void acknowledgeReminder(reminder.id)}
-                      className="shrink-0 rounded-md border border-primary/30 bg-card px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-accent"
-                    >
-                      Acknowledge
-                    </button>
+                    <ActionButton icon={<CheckIcon />} label="Acknowledge" onClick={() => void acknowledgeReminder(reminder.id)} />
                   </div>
                 ))}
               </div>

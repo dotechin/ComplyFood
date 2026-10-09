@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
-import { TemperatureSheet } from './temperature-sheet';
-import { HistoricalTemperatureImport } from './historical-temperature-import';
-import { HistoricalCleaningImport } from './historical-cleaning-import';
+import { ActionButton, CheckIcon, CloseIcon, SaveIcon } from '../../../components/icon-button';
+import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, weekStartOf } from './cleaning-schedule';
+import { IncidentLog, type IncidentInput } from './incident-log';
+import { logTypeFromSearch } from './log-type-from-search';
 import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -19,11 +20,11 @@ const TYPE_LABELS: Record<LogType, string> = {
 // Each tab maps to a sheet of the HACCP European standard package
 // (EC 852/2004 & Codex Alimentarius General Principles of Food Hygiene).
 const TYPE_STANDARDS: Record<LogType, string> = {
-  [LogType.TEMPERATURE]: 'Temperature Log · CCP 2/3',
-  [LogType.CLEANING]: 'Sheet 3 — Master Cleaning & Disinfection Schedule',
+  [LogType.TEMPERATURE]: 'Temperature Log',
+  [LogType.CLEANING]: 'Cleaning & Disinfection Schedule',
   [LogType.RECEIVING]: 'Sheet 1 — Goods Receipt prerequisite check',
   [LogType.CHECKLIST]: 'Prerequisite hygiene checklist',
-  [LogType.INCIDENT]: 'Sheet 4 — Corrective Action & Deviation Log',
+  [LogType.INCIDENT]: 'Corrective Action & Deviation Log',
 };
 
 type FieldOption = { value: string; label: string };
@@ -43,17 +44,6 @@ type FieldDef = {
 
 const FIELD_DEFS: Record<LogType, FieldDef[]> = {
   [LogType.TEMPERATURE]: [
-    {
-      name: 'unit',
-      label: 'Workstation / unit',
-      displayLabel: 'Unit',
-      type: 'select',
-      options: [
-        { value: '', label: 'Select equipment' },
-        ...TEMPERATURE_UNITS.map(({ value, label }) => ({ value, label })),
-      ],
-      required: true,
-    },
     {
       name: 'target',
       label: 'Target (critical limit)',
@@ -76,55 +66,7 @@ const FIELD_DEFS: Record<LogType, FieldDef[]> = {
       full: true,
     },
   ],
-  [LogType.CLEANING]: [
-    ...[
-      'Machinery and equipment',
-      'Work surfaces',
-      'Sinks',
-      'Walls and ceilings',
-      'Floors',
-      'Dishwashing area and utensils',
-      'Fridges and freezers',
-      'Waste containers',
-      'Personal hygiene',
-      'Staff facilities',
-      'Shelves and cupboards',
-    ].map((category, index) => ({
-      name: `cleaning-${index}`,
-      label: `Cleaning outcome — ${category}`,
-      displayLabel: category,
-      type: 'select' as const,
-      options: [
-        { value: '', label: 'Select outcome' },
-        { value: 'C', label: 'C — Compliant' },
-        { value: 'A', label: 'A — Acceptable' },
-        { value: 'NC', label: 'NC — Non-compliant' },
-      ],
-      required: true,
-    })),
-    {
-      name: 'week',
-      label: 'Weekly check',
-      type: 'select',
-      options: [
-        { value: '', label: 'Select week' },
-        { value: '1', label: 'Week 1' },
-        { value: '2', label: 'Week 2' },
-        { value: '3', label: 'Week 3' },
-        { value: '4', label: 'Week 4' },
-        { value: '5', label: 'Week 5' },
-      ],
-      required: true,
-    },
-    {
-      name: 'corrective',
-      label: 'Corrective action',
-      type: 'textarea',
-      placeholder: 'Required when any category is marked NC',
-      full: true,
-    },
-    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
-  ],
+  [LogType.CLEANING]: [],
   [LogType.RECEIVING]: [
     { name: 'supplier', label: 'Supplier', type: 'text', placeholder: 'e.g. Fresh Dairy Co.', required: true },
     { name: 'product', label: 'Product', type: 'text', placeholder: 'e.g. Pasteurised cream', required: true },
@@ -172,55 +114,10 @@ const FIELD_DEFS: Record<LogType, FieldDef[]> = {
     { name: 'completed', label: 'All items completed', type: 'checkbox' },
     { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
   ],
-  [LogType.INCIDENT]: [
-    {
-      name: 'description',
-      label: 'Description of deviation / problem',
-      type: 'textarea',
-      placeholder: 'e.g. Walk-in fridge reading 9°C at opening',
-      required: true,
-      full: true,
-    },
-    {
-      name: 'correction',
-      label: 'Immediate correction taken',
-      type: 'textarea',
-      placeholder: 'e.g. Moved stock to backup unit, called maintenance',
-      full: true,
-    },
-    {
-      name: 'disposition',
-      label: 'Product disposition',
-      type: 'select',
-      options: [
-        { value: 'Retained', label: 'Retained' },
-        { value: 'Discarded', label: 'Discarded' },
-        { value: 'N/A', label: 'Not applicable' },
-      ],
-    },
-    {
-      name: 'severity',
-      label: 'Severity',
-      type: 'select',
-      options: [
-        { value: 'low', label: 'Low' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'high', label: 'High' },
-      ],
-    },
-    {
-      name: 'preventative',
-      label: 'Preventative action to avoid repeat',
-      type: 'textarea',
-      placeholder: 'e.g. Add hourly temperature checks during service',
-      full: true,
-    },
-  ],
+  [LogType.INCIDENT]: [],
 };
 
 type FieldValues = Record<string, string | boolean>;
-
-type InsertionMethod = 'manual' | 'camera';
 
 function emptyValues(defs: FieldDef[]): FieldValues {
   const values: FieldValues = {};
@@ -277,6 +174,12 @@ function readingStamp(date = new Date()) {
   return `${time} (${date.getHours() < 12 ? 'AM' : 'PM'})`;
 }
 
+function defaultTarget(unit: string) {
+  return unit === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C';
+}
+
+const FIELD_CLASSES = 'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground';
+
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,17 +188,22 @@ export default function LogsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [temperatureUnit, setTemperatureUnit] = useState<string>(TEMPERATURE_UNITS[0].value);
   const [temperatureYear, setTemperatureYear] = useState(new Date().getFullYear());
-  const [insertionMethod, setInsertionMethod] = useState<InsertionMethod>('manual');
+  const [cleaningWeek, setCleaningWeek] = useState(() => weekStartOf(new Date()));
+  const [cleaningBusy, setCleaningBusy] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   const activeDefs = FIELD_DEFS[activeType];
+  const hasEntryList = activeType === LogType.RECEIVING || activeType === LogType.CHECKLIST;
 
   const filters = useMemo(
-    () => ({ type: activeType, status: filterStatus, dateFrom, dateTo }),
-    [activeType, dateFrom, dateTo, filterStatus],
+    () => (hasEntryList
+      ? { type: activeType, status: filterStatus, dateFrom, dateTo }
+      : { type: activeType, status: '', dateFrom: '', dateTo: '' }),
+    [activeType, dateFrom, dateTo, filterStatus, hasEntryList],
   );
 
   const refreshLogs = async () => {
@@ -334,74 +242,125 @@ export default function LogsPage() {
 
   const selectType = (type: LogType) => {
     setActiveType(type);
-    setFormValues(emptyValues(FIELD_DEFS[type]));
+    setLogs([]);
+    setFormValues(
+      type === LogType.TEMPERATURE
+        ? { ...emptyValues(FIELD_DEFS[type]), target: defaultTarget(temperatureUnit) }
+        : emptyValues(FIELD_DEFS[type]),
+    );
     setError('');
     setMessage('');
   };
 
+  useEffect(() => {
+    const requestedType = logTypeFromSearch(window.location.search);
+    if (!requestedType) return;
+    setActiveType(requestedType);
+    setFormValues(
+      requestedType === LogType.TEMPERATURE
+        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value) }
+        : emptyValues(FIELD_DEFS[requestedType]),
+    );
+  }, []);
+
+  const selectTemperatureUnit = (unit: string) => {
+    setTemperatureUnit(unit);
+    setFormValues((prev) => ({ ...prev, target: defaultTarget(unit) }));
+  };
+
   const setFieldValue = (name: string, value: string | boolean) => {
-    if (activeType === LogType.TEMPERATURE && name === 'unit') {
-      setFormValues((prev) => ({
-        ...prev,
-        unit: value,
-        target: value === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C',
-      }));
-      return;
-    }
     setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const run = async (action: () => Promise<void>, success: string, failure: string) => {
+    try {
+      setError('');
+      setMessage('');
+      await action();
+      await refreshLogs();
+      setMessage(success);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : failure);
+      return false;
+    }
   };
 
   const createLog = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setSaving(true);
-      setError('');
-      setMessage('');
-      const fields = buildFields(activeDefs, formValues);
-      if (
-        activeType === LogType.CLEANING &&
-        Object.entries(fields).some(([name, value]) => name.startsWith('Cleaning outcome — ') && value === 'NC') &&
-        !String(fields['Corrective action'] ?? '').trim()
-      ) {
-        throw new Error('A corrective action is required when any cleaning category is non-compliant.');
-      }
-      await apiPost<LogEntry>('/logs', {
-        type: activeType,
-        fields: activeType === LogType.TEMPERATURE ? { Reading: readingStamp(), ...fields } : fields,
-      });
-      await refreshLogs();
-      setFormValues(emptyValues(activeDefs));
-      setMessage(`${TYPE_LABELS[activeType]} entry created.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create log entry');
-    } finally {
-      setSaving(false);
+    setSaving(true);
+    const created = await run(
+      async () => {
+        const fields = buildFields(activeDefs, formValues);
+        await apiPost<LogEntry>('/logs', {
+          type: activeType,
+          fields:
+            activeType === LogType.TEMPERATURE
+              ? { Reading: readingStamp(), 'Workstation / unit': temperatureUnit, ...fields }
+              : fields,
+        });
+      },
+      `${TYPE_LABELS[activeType]} entry created.`,
+      'Unable to create log entry',
+    );
+    if (created) {
+      setFormValues(
+        activeType === LogType.TEMPERATURE
+          ? { ...emptyValues(activeDefs), target: defaultTarget(temperatureUnit) }
+          : emptyValues(activeDefs),
+      );
     }
+    setSaving(false);
   };
 
-  const confirmLog = async (id: string) => {
-    try {
-      setError('');
-      setMessage('');
-      await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
-      await refreshLogs();
-      setMessage('Log entry confirmed.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
+  const createIncident = async (fields: IncidentInput) => {
+    if (!fields['Description of deviation / problem'].trim()) {
+      setError('Describe the deviation or problem.');
+      return false;
     }
+    setSaving(true);
+    const trimmed = Object.fromEntries(
+      Object.entries(fields)
+        .map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value),
+    );
+    const created = await run(
+      async () => {
+        await apiPost<LogEntry>('/logs', { type: LogType.INCIDENT, fields: trimmed });
+      },
+      'Deviation recorded.',
+      'Unable to record the deviation',
+    );
+    setSaving(false);
+    return created;
   };
 
-  const cancelLog = async (id: string) => {
-    try {
-      setError('');
-      setMessage('');
-      await apiDelete(`/logs/${id}`);
-      await refreshLogs();
-      setMessage('Pending entry cancelled.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to cancel log entry');
-    }
+  const tickCleaning = async (area: string, date: string) => {
+    setCleaningBusy(`${area}|${date}`);
+    await run(
+      async () => {
+        await apiPost<LogEntry>('/logs', {
+          type: LogType.CLEANING,
+          fields: { [CLEANING_AREA_FIELD]: area, [CLEANING_DATE_FIELD]: date },
+        });
+      },
+      `${area} marked as done.`,
+      'Unable to save the cleaning check',
+    );
+    setCleaningBusy(null);
   };
+
+  const undoCleaning = async (entry: LogEntry) => {
+    setCleaningBusy(`${entry.fields[CLEANING_AREA_FIELD]}|${entry.fields[CLEANING_DATE_FIELD]}`);
+    await run(() => apiDelete(`/logs/${entry.id}`), 'Cleaning check removed.', 'Unable to remove the cleaning check');
+    setCleaningBusy(null);
+  };
+
+  const confirmLog = (id: string) =>
+    void run(() => apiPatch<LogEntry>(`/logs/${id}/confirm`, {}).then(() => undefined), 'Log entry confirmed.', 'Unable to confirm log entry');
+
+  const cancelLog = (id: string) =>
+    void run(() => apiDelete(`/logs/${id}`), 'Pending entry cancelled.', 'Unable to cancel log entry');
 
   return (
     <div className="space-y-4">
@@ -435,278 +394,202 @@ export default function LogsPage() {
       </div>
 
       {activeType === LogType.TEMPERATURE && (
-        <>
-          <div className="flex items-center gap-2">
-            <label htmlFor="temperature-year" className="text-sm font-medium">Year</label>
-            <select
-              id="temperature-year"
-              value={temperatureYear}
-              onChange={(event) => setTemperatureYear(Number(event.target.value))}
-              className="rounded-md border border-input bg-card px-3 py-2 text-sm"
-            >
-              {Array.from({ length: new Date().getFullYear() - 2019 }, (_, index) => 2020 + index).map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
-          <TemperatureLog
-            logs={logs}
-            year={temperatureYear}
-            loading={loading}
-            onRecord={(unit) => {
-              setFormValues({
-                ...emptyValues(FIELD_DEFS[LogType.TEMPERATURE]),
-                unit,
-                target: unit === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C',
-              });
-              document.getElementById('field-temperature')?.focus();
-            }}
-          />
-          <HistoricalTemperatureImport onImported={refreshLogs} />
-        </>
+        <TemperatureLog
+          unit={temperatureUnit}
+          year={temperatureYear}
+          onUnitChange={selectTemperatureUnit}
+          onYearChange={setTemperatureYear}
+        />
       )}
-      {activeType === LogType.CLEANING && <HistoricalCleaningImport onImported={refreshLogs} />}
 
-      <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
-        <div>
+      {!hasEntryList && activeType !== LogType.TEMPERATURE && loading && (
+        <p role="status" className="text-sm text-muted-foreground">Loading…</p>
+      )}
+
+      {activeType === LogType.CLEANING && (
+        <CleaningSchedule
+          logs={logs}
+          weekStart={cleaningWeek}
+          today={todayIso()}
+          busyKey={cleaningBusy}
+          onWeekChange={setCleaningWeek}
+          onTick={(area, date) => void tickCleaning(area, date)}
+          onUndo={(entry) => void undoCleaning(entry)}
+        />
+      )}
+
+      {activeType === LogType.INCIDENT && (
+        <IncidentLog logs={logs} saving={saving} onCreate={createIncident} onConfirm={confirmLog} onCancel={cancelLog} />
+      )}
+
+      {activeDefs.length > 0 && (
+        <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
           <h2 className="text-lg font-semibold text-foreground">
-            {activeType === LogType.TEMPERATURE ? TYPE_STANDARDS[activeType] : `New ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+            {activeType === LogType.TEMPERATURE ? 'Record a reading' : `New ${TYPE_LABELS[activeType].toLowerCase()} entry`}
           </h2>
-          {activeType !== LogType.TEMPERATURE && <p className="mt-1 text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>}
-          {activeType === LogType.TEMPERATURE && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Time recorded on save.
-            </p>
-          )}
-          {activeType === LogType.CLEANING && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Record one weekly check.
-            </p>
-          )}
-        </div>
+          {activeType !== LogType.TEMPERATURE && <p className="text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>}
 
-        {activeType !== LogType.TEMPERATURE && <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => setInsertionMethod('manual')}
-            aria-pressed={insertionMethod === 'manual'}
-            className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
-              insertionMethod === 'manual'
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-input text-foreground hover:bg-accent'
-            }`}
-          >
-            Manual entry
-          </button>
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            title="Camera acquisition is coming soon"
-            className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-input px-4 py-2 text-sm font-medium text-muted-foreground opacity-70"
-          >
-            Phone camera
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-              Coming soon
-            </span>
-          </button>
-        </div>}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid flex-1 gap-3 md:grid-cols-3">
+              {activeDefs.map((def) => {
+                const fieldId = `field-${def.name}`;
+                const isFull = def.full || def.type === 'textarea';
 
-        <div className={`grid gap-3 ${activeType === LogType.TEMPERATURE ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-          {activeDefs.map((def) => {
-            const fieldId = `field-${def.name}`;
-            const isFull = def.full || def.type === 'textarea';
+                if (def.type === 'checkbox') {
+                  return (
+                    <label key={def.name} htmlFor={fieldId} className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <input
+                        id={fieldId}
+                        type="checkbox"
+                        checked={Boolean(formValues[def.name])}
+                        onChange={(e) => setFieldValue(def.name, e.target.checked)}
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                      />
+                      {def.displayLabel ?? def.label}
+                    </label>
+                  );
+                }
 
-            if (def.type === 'checkbox') {
-              return (
-                <label
-                  key={def.name}
-                  htmlFor={fieldId}
-                  className={`flex items-center gap-2 text-sm font-medium text-foreground ${isFull ? 'md:col-span-2' : ''}`}
-                >
-                  <input
-                    id={fieldId}
-                    type="checkbox"
-                    checked={Boolean(formValues[def.name])}
-                    onChange={(e) => setFieldValue(def.name, e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                  />
-                  {def.displayLabel ?? def.label}
-                </label>
-              );
-            }
+                return (
+                  <div key={def.name} className={isFull ? 'md:col-span-3' : ''}>
+                    <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
+                      {def.displayLabel ?? def.label}
+                      {def.required && <span className="ml-0.5 text-danger">*</span>}
+                    </label>
 
-            return (
-              <div key={def.name} className={isFull ? (activeType === LogType.TEMPERATURE ? 'md:col-span-3' : 'md:col-span-2') : ''}>
-                <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
-                  {def.displayLabel ?? def.label}
-                  {def.required && <span className="ml-0.5 text-danger">*</span>}
-                </label>
-
-                {def.type === 'textarea' && (
-                  <textarea
-                    id={fieldId}
-                    value={String(formValues[def.name] ?? '')}
-                    onChange={(e) => setFieldValue(def.name, e.target.value)}
-                    placeholder={def.placeholder}
-                    className={`${activeType === LogType.TEMPERATURE ? 'h-16' : 'h-24'} w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground`}
-                  />
-                )}
-
-                {def.type === 'select' && (
-                  <select
-                    id={fieldId}
-                    value={String(formValues[def.name] ?? '')}
-                    onChange={(e) => setFieldValue(def.name, e.target.value)}
-                    className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-                  >
-                    {!def.options?.some((option) => option.value === '') && (
-                      <option value="">Select an option</option>
+                    {def.type === 'textarea' && (
+                      <textarea
+                        id={fieldId}
+                        value={String(formValues[def.name] ?? '')}
+                        onChange={(e) => setFieldValue(def.name, e.target.value)}
+                        placeholder={def.placeholder}
+                        className={`h-16 ${FIELD_CLASSES}`}
+                      />
                     )}
-                    {def.options?.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+
+                    {def.type === 'select' && (
+                      <select
+                        id={fieldId}
+                        value={String(formValues[def.name] ?? '')}
+                        onChange={(e) => setFieldValue(def.name, e.target.value)}
+                        className={FIELD_CLASSES}
+                      >
+                        {!def.options?.some((option) => option.value === '') && (
+                          <option value="">Select an option</option>
+                        )}
+                        {def.options?.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {(def.type === 'text' || def.type === 'number') && (
+                      <div className="relative">
+                        <input
+                          id={fieldId}
+                          type={def.type === 'number' ? 'number' : 'text'}
+                          step={def.type === 'number' ? 'any' : undefined}
+                          value={String(formValues[def.name] ?? '')}
+                          onChange={(e) => setFieldValue(def.name, e.target.value)}
+                          placeholder={def.placeholder}
+                          className={`${FIELD_CLASSES} ${def.unit ? 'pr-12' : ''}`}
+                        />
+                        {def.unit && (
+                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                            {def.unit}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {def.help && <p className="mt-1 text-xs text-muted-foreground">{def.help}</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <ActionButton
+              type="submit"
+              variant="primary"
+              icon={<SaveIcon />}
+              label={activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+              busy={saving}
+              busyLabel="Saving…"
+            />
+          </div>
+        </form>
+      )}
+
+      {hasEntryList && (
+        <>
+          <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-3">
+            <div>
+              <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
+                Status
+              </label>
+              <select id="filterStatus" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={FIELD_CLASSES}>
+                <option value="">All statuses</option>
+                {Object.values(LogStatus)
+                  .filter((status) => status !== LogStatus.OVERRIDDEN)
+                  .map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-foreground">
+                From
+              </label>
+              <input id="dateFrom" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={FIELD_CLASSES} />
+            </div>
+            <div>
+              <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-foreground">
+                To
+              </label>
+              <input id="dateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={FIELD_CLASSES} />
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <div className="space-y-4">
+              {logs.map((log) => (
+                <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="font-semibold text-foreground">{TYPE_LABELS[log.type as LogType] ?? log.type}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleString()} · {log.status}
+                        {log.isException ? ' · exception mode' : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {log.isException && (
+                        <span className="rounded-full bg-warning/10 px-2 py-1 text-xs font-medium text-warning">
+                          Exception
+                        </span>
+                      )}
+                      {log.status === LogStatus.PENDING && (
+                        <>
+                          <ActionButton icon={<CheckIcon />} label="Confirm" onClick={() => confirmLog(log.id)} />
+                          <ActionButton icon={<CloseIcon />} label="Cancel entry" variant="danger" onClick={() => cancelLog(log.id)} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <dl className="mt-3 grid gap-2 rounded-md bg-muted p-3 text-sm">
+                    {Object.entries(log.fields ?? {}).map(([key, value]) => (
+                      <div key={key} className="grid gap-1 md:grid-cols-[180px_1fr]">
+                        <dt className="font-medium text-foreground">{key}</dt>
+                        <dd className="text-muted-foreground">{formatValue(value)}</dd>
+                      </div>
                     ))}
-                  </select>
-                )}
-
-                {(def.type === 'text' || def.type === 'number') && (
-                  <div className="relative">
-                    <input
-                      id={fieldId}
-                      type={def.type === 'number' ? 'number' : 'text'}
-                      step={def.type === 'number' ? 'any' : undefined}
-                      value={String(formValues[def.name] ?? '')}
-                      onChange={(e) => setFieldValue(def.name, e.target.value)}
-                      placeholder={def.placeholder}
-                      className={`w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground ${
-                        def.unit ? 'pr-12' : ''
-                      }`}
-                    />
-                    {def.unit && (
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
-                        {def.unit}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {def.help && <p className="mt-1 text-xs text-muted-foreground">{def.help}</p>}
-              </div>
-            );
-          })}
-        </div>
-
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
-        </button>
-      </form>
-
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-3">
-        <div>
-          <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
-            Status
-          </label>
-          <select
-            id="filterStatus"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-          >
-            <option value="">All statuses</option>
-            {Object.values(LogStatus)
-              .filter((status) => status !== LogStatus.OVERRIDDEN)
-              .map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-foreground">
-            From
-          </label>
-          <input
-            id="dateFrom"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-          />
-        </div>
-        <div>
-          <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-foreground">
-            To
-          </label>
-          <input
-            id="dateTo"
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : activeType === LogType.TEMPERATURE ? (
-        <TemperatureSheet logs={logs} onConfirm={confirmLog} onCancel={cancelLog} />
-      ) : (
-        <div className="space-y-4">
-          {logs.map((log) => (
-            <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-foreground">{TYPE_LABELS[log.type as LogType] ?? log.type}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(log.createdAt).toLocaleString()} · {log.status}
-                    {log.isException ? ' · exception mode' : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {log.isException && (
-                    <span className="rounded-full bg-warning/10 px-2 py-1 text-xs font-medium text-warning">
-                      Exception
-                    </span>
-                  )}
-                  {log.status === LogStatus.PENDING && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void confirmLog(log.id)}
-                        className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void cancelLog(log.id)}
-                        className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-danger/10 hover:text-danger"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <dl className="mt-3 grid gap-2 rounded-md bg-muted p-3 text-sm">
-                {Object.entries(log.fields ?? {}).map(([key, value]) => (
-                  <div key={key} className="grid gap-1 md:grid-cols-[180px_1fr]">
-                    <dt className="font-medium text-foreground">{key}</dt>
-                    <dd className="text-muted-foreground">{formatValue(value)}</dd>
-                  </div>
-                ))}
-                {Object.keys(log.fields ?? {}).length === 0 && <p className="text-muted-foreground">No fields recorded.</p>}
-                {(log.occurredAt || log.measuredAt || log.exceptionReason) && (
-                  <>
+                    {Object.keys(log.fields ?? {}).length === 0 && <p className="text-muted-foreground">No fields recorded.</p>}
                     {log.occurredAt && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
                         <dt className="font-medium text-foreground">Occurred at</dt>
@@ -725,18 +608,18 @@ export default function LogsPage() {
                         <dd className="text-muted-foreground">{log.exceptionReason}</dd>
                       </div>
                     )}
-                  </>
-                )}
-              </dl>
-            </div>
-          ))}
+                  </dl>
+                </div>
+              ))}
 
-          {logs.length === 0 && (
-            <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
-              No {TYPE_LABELS[activeType].toLowerCase()} entries match the selected filters.
+              {logs.length === 0 && (
+                <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
+                  No {TYPE_LABELS[activeType].toLowerCase()} entries match the selected filters.
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

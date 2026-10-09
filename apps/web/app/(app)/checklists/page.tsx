@@ -1,129 +1,88 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { UserRole, type ChecklistTemplate, type LogEntry, type User } from '@complyfood/shared';
-import { apiGet, apiPost } from '../../../lib/api';
+import { ActionButton, PrintIcon } from '../../../components/icon-button';
 
-function parseJson<T>(value: string): T {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    throw new Error('Enter valid JSON before saving the checklist.');
-  }
-}
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const CHECKLIST_SECTIONS = [
+  {
+    title: 'Opening checks',
+    items: [
+      { check: 'Staff fitness to work', standard: 'No symptoms of illness reported; cuts covered with blue detectable plasters.' },
+      { check: 'Personal hygiene & clothing', standard: 'Clean uniform, hair covered, no jewellery; hands washed on entry.' },
+      { check: 'Handwash stations', standard: 'Hot water, liquid soap and paper towels available at every basin.' },
+      { check: 'Fridges & freezers', standard: 'Chilled ≤ 4°C, frozen ≤ -18°C; readings recorded in the Temperature Log.' },
+      { check: 'Food storage', standard: 'Covered, labelled and dated; raw stored below ready-to-eat; FIFO respected.' },
+      { check: 'Pest control', standard: 'No signs of pests; doors, screens and bait points intact.' },
+    ],
+  },
+  {
+    title: 'Closing checks',
+    items: [
+      { check: 'Food put away', standard: 'Leftovers cooled, covered, labelled and refrigerated; out-of-date stock discarded.' },
+      { check: 'Surfaces & equipment', standard: 'Cleaned and disinfected per the Cleaning & Disinfection Schedule.' },
+      { check: 'Waste', standard: 'Bins emptied, lids closed, waste area clean.' },
+      { check: 'Allergen information', standard: 'Allergen matrix (Reg. (EU) 1169/2011) current for tomorrow’s menu.' },
+    ],
+  },
+] as const;
 
 export default function ChecklistsPage() {
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [name, setName] = useState('Opening checklist');
-  const [type, setType] = useState('opening');
-  const [fieldsConfig, setFieldsConfig] = useState('{"items":["Wash hands","Check fridge temperature","Review cleaning supplies"]}');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    Promise.all([apiGet<User>('/users/me'), apiGet<ChecklistTemplate[]>('/checklists')])
-      .then(([me, data]) => {
-        setUser(me);
-        setTemplates(data);
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const createTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setError('');
-      setMessage('');
-      const template = await apiPost<ChecklistTemplate>('/checklists', {
-        name,
-        type,
-        fieldsConfig: parseJson<Record<string, unknown>>(fieldsConfig),
-      });
-      setTemplates((prev) => [template, ...prev]);
-      setMessage('Checklist template created.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create template');
-    }
-  };
-
-  const generateTask = async (id: string) => {
-    try {
-      setError('');
-      setMessage('');
-      await apiPost<LogEntry>(`/checklists/${id}/generate`, {});
-      setMessage('Checklist task created in daily logs.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create checklist task');
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Checklist Templates</h1>
-        <p className="text-sm text-muted-foreground">Create reusable checklist templates and turn them into daily tasks.</p>
-        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-        {message && <p className="mt-2 text-sm text-success">{message}</p>}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Checklists</h1>
+          <p className="text-sm text-muted-foreground">Daily prerequisite hygiene checklist.</p>
+        </div>
+        <ActionButton icon={<PrintIcon />} label="Print checklist" onClick={() => window.print()} />
       </div>
 
-      {user?.role === UserRole.ADMIN && (
-        <form onSubmit={createTemplate} className="rounded-lg border bg-card p-6 shadow-card">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">New checklist template</h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Checklist name"
-            />
-            <input
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="rounded-md border border-input px-3 py-2 text-sm"
-              placeholder="Checklist type"
-            />
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Save template
-            </button>
-          </div>
-          <textarea
-            value={fieldsConfig}
-            onChange={(e) => setFieldsConfig(e.target.value)}
-            className="mt-3 h-28 w-full rounded-md border border-input px-3 py-2 text-sm"
-          />
-        </form>
-      )}
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => (
-            <div key={template.id} className="rounded-lg border bg-card p-4 shadow-card">
-              <h3 className="font-semibold text-foreground">{template.name}</h3>
-              {template.type && <p className="text-xs capitalize text-muted-foreground">{template.type}</p>}
-              <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                {JSON.stringify(template.fieldsConfig, null, 2)}
-              </pre>
-              {user?.role === UserRole.ADMIN && (
-                <button
-                  type="button"
-                  onClick={() => void generateTask(template.id)}
-                  className="mt-3 rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
-                >
-                  Create daily task
-                </button>
-              )}
-            </div>
-          ))}
-          {templates.length === 0 && (
-            <p className="text-muted-foreground">No templates yet. Ask your admin to create one.</p>
-          )}
+      <section aria-labelledby="checklist-heading" className="space-y-3 rounded-lg border bg-card p-4 shadow-card">
+        <div>
+          <h2 id="checklist-heading" className="text-xl font-bold text-foreground">Daily Opening &amp; Closing Hygiene Checklist</h2>
+          <p className="mt-1 text-sm text-foreground">
+            <span className="font-semibold">Instructions:</span> tick each day once the check is satisfied; record any failure in the Corrective Action &amp; Deviation Log.
+          </p>
         </div>
-      )}
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full border-collapse text-left text-sm" aria-label="Daily Opening & Closing Hygiene Checklist">
+            <thead className="bg-sidebar text-white">
+              <tr>
+                <th scope="col" className="border border-border px-3 py-2 text-center font-semibold">Check</th>
+                <th scope="col" className="border border-border px-3 py-2 text-center font-semibold">Standard / Requirement</th>
+                {DAYS.map((day, index) => (
+                  <th key={index} scope="col" className="w-10 border border-border px-1 py-2 text-center font-semibold">
+                    <abbr title={day}>{day[0]}</abbr>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {CHECKLIST_SECTIONS.map((section) => (
+              <tbody key={section.title}>
+                <tr>
+                  <th scope="rowgroup" colSpan={2 + DAYS.length} className="border border-border bg-accent px-3 py-1.5 text-left font-semibold text-accent-foreground">
+                    {section.title}
+                  </th>
+                </tr>
+                {section.items.map((item, index) => (
+                  <tr key={item.check} className={index % 2 ? 'bg-muted/40' : ''}>
+                    <th scope="row" className="border border-border px-3 py-3 align-top font-semibold text-foreground">{item.check}</th>
+                    <td className="border border-border px-3 py-3 align-top text-foreground">{item.standard}</td>
+                    {DAYS.map((_, dayIndex) => (
+                      <td key={dayIndex} className="h-12 border border-border" />
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+        <div className="grid gap-3 pt-2 text-sm text-foreground sm:grid-cols-2">
+          <p>Week commencing: <span className="inline-block w-40 border-b border-border" /></p>
+          <p>Manager sign-off: <span className="inline-block w-40 border-b border-border" /></p>
+        </div>
+      </section>
     </div>
   );
 }

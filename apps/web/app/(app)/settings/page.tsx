@@ -12,6 +12,7 @@ import {
   type User,
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { ActionButton, PlusIcon, RefreshIcon, SaveIcon } from '../../../components/icon-button';
 
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
@@ -257,9 +258,9 @@ export default function SettingsPage() {
               placeholder="Business category"
             />
           </div>
-          <button className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            Save organization
-          </button>
+          <div className="mt-4">
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save organization" />
+          </div>
         </form>
       ) : null}
 
@@ -279,9 +280,7 @@ export default function SettingsPage() {
               className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location address"
             />
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Add location
-            </button>
+            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add location" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {(organization?.locations ?? []).map((location) => (
@@ -295,13 +294,7 @@ export default function SettingsPage() {
         <div className="rounded-lg border bg-card p-6 shadow-card">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-foreground">Users</h2>
-            <button
-              type="button"
-              onClick={() => void generateDailyTasks()}
-              className="rounded-md border border-primary/30 px-3 py-2 text-sm text-primary hover:bg-accent"
-            >
-              Generate today&apos;s tasks
-            </button>
+            <ActionButton icon={<RefreshIcon />} label="Generate today's tasks" onClick={() => void generateDailyTasks()} />
           </div>
           <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
             <div className="space-y-1">
@@ -350,9 +343,7 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Add user
-            </button>
+            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add user" />
           </form>
           <div className="space-y-3">
             {users.map((user) => (
@@ -398,9 +389,7 @@ export default function SettingsPage() {
               onChange={(e) => setPresetSchedule(e.target.value)}
               className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Save preset
-            </button>
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save preset" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {presets.map((preset) => (
@@ -433,9 +422,7 @@ export default function SettingsPage() {
               className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Cron expression"
             />
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Save reminder
-            </button>
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save reminder" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {reminders.map((reminder) => (

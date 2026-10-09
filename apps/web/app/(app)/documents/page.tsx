@@ -5,8 +5,8 @@ import type { Document, DocumentCategory, LogEntry, User } from '@complyfood/sha
 import { apiDelete, apiDownload, apiFetchBlob, apiGet, apiUpload } from '../../../lib/api';
 import { createDocumentLibrary, type DocumentLibrary, type LibraryState } from '../../../lib/documents/library';
 import { createPreviewController, type PreviewController, type PreviewState } from '../../../lib/documents/preview';
-import { CATEGORY_LABELS, CATEGORY_OPTIONS, canDeleteDocument } from '../../../lib/documents/rules';
-import { ActionButton, RefreshIcon, UploadIcon } from './actions';
+import { CATEGORY_LABELS, CATEGORY_OPTIONS, canDeleteDocument, isPdfDocument } from '../../../lib/documents/rules';
+import { ActionButton, RefreshIcon, UploadIcon } from '../../../components/icon-button';
 import { DocumentList } from './document-list';
 import { PreviewPanel } from './preview-panel';
 import { UploadPanel } from './upload-panel';
@@ -15,6 +15,7 @@ import { UploadPanel } from './upload-panel';
 const FOCUS_REFRESH_MIN_AGE_MS = 5_000;
 const INITIAL_LIBRARY: LibraryState = { docs: [], status: 'loading', refreshing: false, error: '', lastLoadedAt: null };
 const IDLE_PREVIEW: PreviewState = { status: 'idle' };
+const PRINTABLE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
 const noopSubscribe = () => () => undefined;
 
 function useStoreState<S>(store: { getState: () => S; subscribe: (listener: () => void) => () => void } | null, initial: S) {
@@ -39,6 +40,8 @@ export default function DocumentsPage() {
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [downloadingIds, setDownloadingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
@@ -131,6 +134,67 @@ export default function DocumentsPage() {
     }
   };
 
+  const handlePrint = async (doc: Document) => {
+    if (printingId) return;
+    const type = isPdfDocument(doc) ? 'application/pdf' : PRINTABLE_IMAGE_TYPES.find((t) => t === doc.mimeType);
+    if (!type) {
+      setActionError(`"${doc.name}" cannot be printed from the browser. Download it to print.`);
+      return;
+    }
+    setActionError('');
+    setPrintingId(doc.id);
+    try {
+      // Re-type the blob so only PDF/raster content is rendered in the same-origin print frame.
+      const blob = new Blob([await apiFetchBlob(`/documents/${doc.id}/download`)], { type });
+      const url = URL.createObjectURL(blob);
+      const frame = document.createElement('iframe');
+      frame.style.position = 'fixed';
+      frame.style.width = '0';
+      frame.style.height = '0';
+      frame.style.border = '0';
+      frame.setAttribute('aria-hidden', 'true');
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        window.setTimeout(() => {
+          frame.remove();
+          URL.revokeObjectURL(url);
+        }, 60_000);
+      };
+      frame.src = url;
+      document.body.appendChild(frame);
+    } catch {
+      setActionError(`Could not print "${doc.name}". Please try again.`);
+    } finally {
+      setPrintingId(null);
+    }
+  };
+
+  const handleShare = async (doc: Document) => {
+    if (sharingId) return;
+    setActionError('');
+    if (typeof navigator.share !== 'function') {
+      setActionError('Sharing is not supported in this browser. Download the file to share it.');
+      return;
+    }
+    setSharingId(doc.id);
+    try {
+      const blob = await apiFetchBlob(`/documents/${doc.id}/download`);
+      const file = new File([blob], doc.name, { type: doc.mimeType || blob.type });
+      if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [file] })) {
+        setActionError('This browser cannot share files. Download the file to share it.');
+        return;
+      }
+      await navigator.share({ files: [file], title: doc.name });
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setActionError(`Could not share "${doc.name}". Please try again.`);
+      }
+    } finally {
+      setSharingId(null);
+    }
+  };
+
   const handleDelete = async (doc: Document) => {
     if (!library || !canDeleteDocument(user, doc)) return;
     if (!window.confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
@@ -167,7 +231,7 @@ export default function DocumentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Documents</h1>
           <p className="text-sm text-muted-foreground">
-            Your organization&apos;s compliance files. Show previews a PDF here; Download saves the original file.
+            Your organization&apos;s compliance files. Upload, view, print and share your compliance files.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -216,6 +280,8 @@ export default function DocumentsPage() {
           onClose={preview.close}
           onRetry={(doc) => void preview.show(doc)}
           onDownload={(doc) => void handleDownload(doc)}
+          onPrint={(doc) => void handlePrint(doc)}
+          onShare={(doc) => void handleShare(doc)}
         />
       )}
 
@@ -263,6 +329,8 @@ export default function DocumentsPage() {
               downloadingIds={downloadingIds}
               previewId={previewState.status === 'idle' ? null : previewState.doc.id}
               previewLoading={previewState.status === 'loading'}
+              printingId={printingId}
+              sharingId={sharingId}
               emptyMessage={
                 filterCategory
                   ? `No ${CATEGORY_LABELS[filterCategory]} documents.`
@@ -270,6 +338,8 @@ export default function DocumentsPage() {
               }
               onShow={handleShow}
               onDownload={(doc) => void handleDownload(doc)}
+              onPrint={(doc) => void handlePrint(doc)}
+              onShare={(doc) => void handleShare(doc)}
               onDelete={(doc) => void handleDelete(doc)}
             />
           </>

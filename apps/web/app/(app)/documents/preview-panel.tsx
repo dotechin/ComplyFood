@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Document } from '@complyfood/shared';
 import type { PreviewState } from '../../../lib/documents/preview';
-import { ActionButton, CloseIcon, DownloadIcon, ExternalIcon, RefreshIcon, SpinnerIcon, actionClasses } from './actions';
+import { ActionButton, ActionLink, CloseIcon, DownloadIcon, ExternalIcon, PrintIcon, RefreshIcon, ShareIcon, SpinnerIcon } from '../../../components/icon-button';
 
 export interface PreviewPanelProps {
   state: Exclude<PreviewState, { status: 'idle' }>;
@@ -9,9 +9,11 @@ export interface PreviewPanelProps {
   onClose: () => void;
   onRetry: (doc: Document) => void;
   onDownload: (doc: Document) => void;
+  onPrint?: (doc: Document) => void;
+  onShare?: (doc: Document) => void;
 }
 
-export function PreviewPanel({ state, downloading, onClose, onRetry, onDownload }: PreviewPanelProps) {
+export function PreviewPanel({ state, downloading, onClose, onRetry, onDownload, onPrint, onShare }: PreviewPanelProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const { doc } = state;
 
@@ -28,10 +30,13 @@ export function PreviewPanel({ state, downloading, onClose, onRetry, onDownload 
         </h2>
         <div className="flex flex-wrap gap-2">
           {state.status === 'ready' && (
-            <a href={state.url} target="_blank" rel="noopener noreferrer" className={actionClasses()}>
-              <ExternalIcon />
-              <span>Open in new tab</span>
-            </a>
+            <ActionLink href={state.url} target="_blank" rel="noopener noreferrer" icon={<ExternalIcon />} label="Open in new tab" />
+          )}
+          {onPrint && (
+            <ActionButton icon={<PrintIcon />} label="Print" aria-label={`Print ${doc.name}`} onClick={() => onPrint(doc)} />
+          )}
+          {onShare && (
+            <ActionButton icon={<ShareIcon />} label="Share" aria-label={`Share ${doc.name}`} onClick={() => onShare(doc)} />
           )}
           <ActionButton
             icon={<DownloadIcon />}
