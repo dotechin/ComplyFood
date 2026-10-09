@@ -43,11 +43,21 @@ const base: LogEntry = {
   createdAt: '2026-10-06T12:00:00.000Z',
 };
 
-function renderPageAs(type: LogType) {
-  jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => [
-    initial === LogType.TEMPERATURE ? type : typeof initial === 'function' ? initial() : initial,
-    jest.fn(),
-  ]);
+function renderPageAs(type: LogType, feedback = { message: '', cleaningMessage: '' }) {
+  let stateIndex = 0;
+  jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
+    const index = stateIndex++;
+    const value = index === 3
+      ? type
+      : index === 15
+        ? feedback.message
+        : index === 16
+          ? feedback.cleaningMessage
+          : typeof initial === 'function'
+            ? initial()
+            : initial;
+    return [value, jest.fn()];
+  });
   jest.spyOn(React, 'useMemo').mockImplementation((factory) => factory());
   jest.spyOn(React, 'useEffect').mockImplementation(() => {});
   return renderToStaticMarkup(<LogsPage />);
@@ -145,6 +155,17 @@ describe('Daily Logs UI', () => {
     }
     for (const row of CLEANING_SCHEDULE) expect(html).toContain(row.responsibility);
     expect(html).not.toMatch(/Import verified historical|Weekly check|Phone camera/);
+  });
+
+  it('routes success feedback to the live region for the operation that produced it', () => {
+    const feedback = { message: 'Goods receipt saved.', cleaningMessage: 'Cleaning check saved.' };
+    const cleaningHtml = renderPageAs(LogType.CLEANING, feedback);
+    expect(cleaningHtml).toContain('Cleaning check saved.');
+    expect(cleaningHtml).not.toContain('Goods receipt saved.');
+
+    const receivingHtml = renderPageAs(LogType.RECEIVING, feedback);
+    expect(receivingHtml).toContain('Goods receipt saved.');
+    expect(receivingHtml).not.toContain('Cleaning check saved.');
   });
 
   it('marks completed days, allows undo only while pending and disables future days', () => {
