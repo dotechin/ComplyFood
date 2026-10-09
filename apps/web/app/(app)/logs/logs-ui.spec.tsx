@@ -251,6 +251,12 @@ describe('Daily Logs UI', () => {
     expect(html).not.toContain('<script>');
   });
 
+  it('centers the checklist completion checkbox and create-entry action', () => {
+    const html = renderPageAs(LogType.CHECKLIST);
+    expect(html).toMatch(/<label[^>]*class="[^"]*col-span-full[^"]*justify-center[^"]*"[^>]*><input[^>]*type="checkbox"/);
+    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Create checklist entry"/);
+  });
+
   it('saves a temperature reading for the selected log with unchanged stored field names', async () => {
     jest.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
       let value = typeof initial === 'function' ? initial() : initial;

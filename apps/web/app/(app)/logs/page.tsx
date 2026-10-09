@@ -521,7 +521,11 @@ export default function LogsPage() {
 
                 if (def.type === 'checkbox') {
                   return (
-                    <label key={def.name} htmlFor={fieldId} className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <label
+                      key={def.name}
+                      htmlFor={fieldId}
+                      className={`flex items-center gap-2 text-sm font-medium text-foreground ${activeType === LogType.CHECKLIST ? 'col-span-full justify-center' : ''}`}
+                    >
                       <input
                         id={fieldId}
                         type="checkbox"
@@ -593,7 +597,7 @@ export default function LogsPage() {
                 );
               })}
             </div>
-            <div className={activeType === LogType.TEMPERATURE ? 'basis-full flex justify-center' : ''}>
+            <div className={activeType === LogType.TEMPERATURE || activeType === LogType.CHECKLIST ? 'basis-full flex justify-center' : ''}>
               <ActionButton
                 type="submit"
                 variant="primary"
