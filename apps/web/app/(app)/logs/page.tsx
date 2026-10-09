@@ -6,6 +6,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 import { ActionButton, CheckIcon, CloseIcon, SaveIcon } from '../../../components/icon-button';
 import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, weekStartOf } from './cleaning-schedule';
 import { IncidentLog, type IncidentInput } from './incident-log';
+import { logTypeFromSearch } from './log-type-from-search';
 import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -178,11 +179,6 @@ function defaultTarget(unit: string) {
 }
 
 const FIELD_CLASSES = 'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground';
-
-export function logTypeFromSearch(search: string): LogType | null {
-  const type = new URLSearchParams(search).get('type');
-  return Object.values(LogType).includes(type as LogType) ? type as LogType : null;
-}
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
