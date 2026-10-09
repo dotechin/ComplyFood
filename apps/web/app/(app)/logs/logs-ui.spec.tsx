@@ -106,7 +106,7 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('aria-label="Add temperature unit"');
     expect(html).toContain('aria-label="Unit type"');
     expect(html).toContain('aria-label="Delete Bar counter 1"');
-    expect(html).toContain('aria-label="Save reading"');
+    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Save reading"/);
     expect(html).not.toMatch(/Import verified historical|Phone camera|Coming soon|Manual entry/);
   });
 

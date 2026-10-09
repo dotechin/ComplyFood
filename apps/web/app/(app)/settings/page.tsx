@@ -300,52 +300,52 @@ export default function SettingsPage() {
           </div>
           <form onSubmit={createUser} className="mb-4">
             <div className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-1">
-              <label htmlFor="newUserEmail" className="block text-sm font-medium text-foreground">
-                User email
-              </label>
-              <input
-                id="newUserEmail"
-                type="email"
-                required
-                value={newUserEmail}
-                onChange={(e) => setNewUserEmail(e.target.value)}
-                className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                placeholder="User email"
-              />
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="newUserPassword" className="block text-sm font-medium text-foreground">
-                Password
-              </label>
-              <input
-                id="newUserPassword"
-                type="password"
-                required
-                minLength={8}
-                value={newUserPassword}
-                onChange={(e) => setNewUserPassword(e.target.value)}
-                className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                placeholder="Password"
-              />
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="newUserRole" className="block text-sm font-medium text-foreground">
-                Role
-              </label>
-              <select
-                id="newUserRole"
-                value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                className="w-full rounded-md border border-input px-3 py-2 text-sm"
-              >
-                {Object.values(UserRole).map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="space-y-1">
+                <label htmlFor="newUserEmail" className="block text-sm font-medium text-foreground">
+                  User email
+                </label>
+                <input
+                  id="newUserEmail"
+                  type="email"
+                  required
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                  placeholder="User email"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="newUserPassword" className="block text-sm font-medium text-foreground">
+                  Password
+                </label>
+                <input
+                  id="newUserPassword"
+                  type="password"
+                  required
+                  minLength={8}
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                  placeholder="Password"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="newUserRole" className="block text-sm font-medium text-foreground">
+                  Role
+                </label>
+                <select
+                  id="newUserRole"
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                >
+                  {Object.values(UserRole).map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="mt-4 flex justify-end">
               <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add user" />
