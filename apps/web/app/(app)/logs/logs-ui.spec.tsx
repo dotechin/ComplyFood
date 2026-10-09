@@ -168,6 +168,8 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('Handwash Stations &amp; Soap Dispensers — Tuesday 2026-10-06: done"');
     expect(html.match(/✓/g)).toHaveLength(2);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Ice Machine \(Bar\) — Thursday 2026-10-08: mark as done"/);
+    expect(html).not.toContain('title="Done');
+    expect(html).not.toContain('title="Mark as done"');
   });
 
   it('records a cleaning tick through the schedule API format', async () => {

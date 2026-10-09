@@ -1,76 +1,101 @@
 # ComplyFood
 
-## English
+ComplyFood is a web-based HACCP compliance platform for food businesses. It helps teams manage daily operational checks, maintain an auditable record of compliance activity, and prepare reports.
 
-### What it is
-**ComplyFood** is a web-based HACCP compliance automation platform focused on independent food businesses, with the current MVP beta centred on Italian restaurants and trattorie. It helps operators digitise daily checks, maintain compliance logs, generate audit-ready reports, and track manual overrides of automated entries.
+## Features
 
-### Why it exists
-Manual HACCP paperwork is time-consuming, error-prone, and hard to audit. ComplyFood reduces that burden by pre-filling routine entries, sending reminders, and keeping a full traceable history of every record — including corrections.
+- Daily logs for temperature, cleaning, receiving, and incidents
+- Reusable checklists, reminders, and automation presets
+- Role-based access, audit history, and documented overrides
+- Compliance reports and organization document storage
+- PDF upload, preview, download, and asynchronous text extraction
 
-### MVP features
-- Business profile and location setup
-- Role-based access (Admin / Staff / Auditor)
-- Daily operational logs (temperature, cleaning, receiving, incidents)
-- Reusable checklist templates and daily task generation
-- Automation presets and reminders
-- Override system with mandatory reason and full audit trail
-- Compliance reporting: PDF / CSV export
-- Document storage, PDF text reading, and authorized document deletion
+## Technology
 
-### Tech stack
 | Layer | Technology |
-|-------|------------|
-| Frontend | Next.js + TypeScript + Tailwind CSS |
-| Backend | Node.js (NestJS) |
+| --- | --- |
+| Web | Next.js, TypeScript, Tailwind CSS |
+| API | NestJS, Node.js |
 | Database | PostgreSQL |
-| Auth | JWT / role-based |
-| Storage | S3-compatible |
-| Reports | PDF generation + CSV export |
-| Infra | Docker + cloud hosting |
+| Storage | Local filesystem or S3-compatible storage |
+| Development and deployment | pnpm workspaces, Docker Compose |
 
-### Repository structure
-```
-ComplyFood/
-├─ apps/
-│  ├─ web/          # Frontend (Next.js)
-│  └─ api/          # Backend API
-├─ packages/
-│  ├─ ui/           # Shared UI components
-│  ├─ shared/       # Shared types and utilities
-│  └─ config/       # Shared configuration
-├─ docs/
-│  ├─ product/      # Product specs and plans
-│  └─ architecture/ # Technical architecture docs
-├─ infra/           # Infrastructure configuration
-├─ scripts/         # Utility scripts
-├─ tests/           # Integration and e2e tests
-└─ README.md
+## Local Deployment
+
+### Requirements
+
+- Git
+- Docker Engine/Desktop with Docker Compose
+
+Run commands from the repository root. To update and start the local staging stack:
+
+```bash
+git pull
+docker compose -f infra/docker-compose.staging.yml up -d
+bash scripts/staging-up.sh
 ```
 
-### Roadmap
-1. **Phase 1 – Rebaseline and Foundation Completion:** align docs and status reporting with verified implementation evidence
-2. **Phase 2 – Core Operations Workflow:** keep daily logs, checklists, and override workflows covered by automated regression tests
-3. **Phase 3 – Automation Execution:** keep presets, generated daily forms, reminders, and dashboard flows covered by automated regression tests
-4. **Phase 4 – Reporting and Storage Completion:** keep exports, filters, incident summaries, and document storage covered by automated regression tests
-5. **Phase 5 – Release Readiness Proof:** execute staging validation, record performance evidence, and complete beta onboarding only after the proof gates pass
+The staging stack builds the web and API images, starts PostgreSQL, runs database migrations, and stores uploaded files in a local Docker volume. The default configuration is intended for local use; it includes development credentials and must not be exposed to the public internet.
 
-### Current status
-- Monorepo, NestJS API, and Next.js web app are implemented and wired together
-- Core modules include authentication/bootstrap, organization and user setup, daily logs, checklists, overrides, reports, documents, audit, reminders, automation, and HACCP manual workflows
-- CI runs install, lint, build, and test through GitHub Actions
-- Backend automated coverage includes unit tests, pg-mem-backed integration tests, and API end-to-end smoke coverage
-- The product is a working MVP foundation, but release readiness still depends on captured staging validation evidence, performance results, and live beta onboarding outcomes
+When the stack is ready:
 
-### PDF documents
-- Run database migrations before deploying: `cd apps/api && pnpm exec typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts`.
-- PDF uploads are queued for asynchronous text extraction. `GET /api/v1/documents/:id/extract` returns cached full text, page text, basic heading/list detection, and metadata; document lists include `metadata` and `processingStatus`. This is a backend API capability; the Documents page no longer shows extracted text.
-- The Documents page is a single library list with a category filter, a collapsible **Upload** panel (category, notes, optional linked log entry, multi-file), and a **Refresh** button. Each row has labeled icon actions:
-  - **Show** opens an in-app preview of the original stored PDF (an authenticated fetch rendered as an `application/pdf` object URL), so scanned/image-only PDFs display too. Other file types show a "preview unavailable" message instead of being rendered.
-  - **Download** saves the original file under its stored name. It is separate from Show.
-  - **Delete** is shown only to the uploader or an organization admin, and it asks for confirmation. `DELETE /api/v1/documents/:id` removes storage and the database record. Linked log entries are preserved.
-- The list refreshes after uploads and deletes, when the window regains focus, and on **Refresh**. It polls briefly while PDFs are still being indexed. Out-of-order responses cannot restore deleted rows or drop new uploads.
-- `GET /api/v1/documents/:id/download` is organization-scoped. It returns `application/pdf` for recognized PDFs and `application/octet-stream` for everything else, with `X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`. The document list is also served with `no-store`.
-- Uploads are limited to 20 MB; extraction supports up to 1,000 pages and 5 million text characters. Scanned/image-only PDFs return empty text (no OCR); corrupt or password-protected PDFs are marked `failed`. Other file types remain downloadable and return `supported: false` from extraction.
-- The extraction queue runs in the API process and reads files from storage one at a time. Pending documents after a restart can be extracted on demand; successful extraction is cached in PostgreSQL.
-- Focused checks: `pnpm --filter @complyfood/api run test --runInBand documents`, `pnpm --filter @complyfood/api run test:e2e --runInBand`, and `pnpm --filter @complyfood/web run test` (Documents UI, preview, and library-store tests). Jest uses native ESM support for PDF.js.
+- Web app: <http://localhost:3100>
+- API: <http://localhost:4100/api/v1>
+
+Optional local deployment commands:
+
+```bash
+bash scripts/staging-up.sh --seed  # load demo data
+bash scripts/staging-down.sh       # stop the stack and preserve data
+bash scripts/staging-down.sh --volumes  # stop the stack and delete its data
+```
+
+The seed option provides demo accounts `admin@demo.com` and `staff@demo.com`, both with password `password123`. Do not use these credentials outside a local environment. To override staging defaults, create `.env.staging` in the repository root; see `infra/docker-compose.staging.yml` for the supported variables.
+
+## Development
+
+Install workspace dependencies with pnpm 9 or later and Node.js 20 or later:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+The development services use the root `infra/docker-compose.yml` configuration; consult that file and `docs/operations/deployment.md` for the required environment and service setup.
+
+Useful workspace checks:
+
+```bash
+pnpm lint
+pnpm build
+pnpm test
+pnpm test:e2e
+```
+
+CI runs install, lint, build, and test workflows. Web tests can be run independently with `pnpm --filter @complyfood/web run test`; API tests with `pnpm --filter @complyfood/api run test`.
+
+## Repository Layout
+
+```text
+apps/
+  api/       NestJS API and database migrations
+  web/       Next.js web application
+packages/
+  config/    Shared configuration
+  shared/    Shared types and utilities
+  ui/        Shared UI components
+docs/        Product, architecture, user, and operations documentation
+infra/       Docker and deployment configuration
+scripts/     Local staging and database scripts
+tests/       Integration and end-to-end test documentation
+```
+
+## Project Status
+
+ComplyFood is a working MVP foundation. Core workflows include authentication, organization setup, daily logs, checklists, overrides, reports, documents, reminders, automation, and HACCP manual workflows. Release readiness still depends on completing staging validation, performance evidence, and beta onboarding.
+
+## PDF and Documents
+
+The Documents feature stores organization files, supports viewing and downloading PDFs, and extracts text from supported PDFs asynchronously. Scanned/image-only PDFs do not currently receive OCR. The PDF API details and limits are implementation-specific and are maintained alongside the document service and tests rather than as a standalone README section.
+
+For operational and product details, see [`docs/`](docs/), especially [`docs/operations/deployment.md`](docs/operations/deployment.md) and [`docs/operations/user-guide.md`](docs/operations/user-guide.md).
