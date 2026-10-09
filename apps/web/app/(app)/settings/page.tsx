@@ -280,7 +280,6 @@ export default function SettingsPage() {
               className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location address"
             />
-            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add location" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {(organization?.locations ?? []).map((location) => (
@@ -289,6 +288,9 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add location" />
+          </div>
         </form>
 
         <div className="rounded-lg border bg-card p-6 shadow-card">
@@ -296,7 +298,8 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-foreground">Users</h2>
             <ActionButton icon={<RefreshIcon />} label="Generate today's tasks" onClick={() => void generateDailyTasks()} />
           </div>
-          <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
+          <form onSubmit={createUser} className="mb-4">
+            <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <label htmlFor="newUserEmail" className="block text-sm font-medium text-foreground">
                 User email
@@ -313,7 +316,7 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-1">
               <label htmlFor="newUserPassword" className="block text-sm font-medium text-foreground">
-                Temporary password
+                Password
               </label>
               <input
                 id="newUserPassword"
@@ -323,7 +326,7 @@ export default function SettingsPage() {
                 value={newUserPassword}
                 onChange={(e) => setNewUserPassword(e.target.value)}
                 className="w-full rounded-md border border-input px-3 py-2 text-sm"
-                placeholder="Temporary password"
+                placeholder="Password"
               />
             </div>
             <div className="space-y-1">
@@ -343,7 +346,10 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
-            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add user" />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add user" />
+            </div>
           </form>
           <div className="space-y-3">
             {users.map((user) => (
@@ -372,6 +378,9 @@ export default function SettingsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <form onSubmit={createPreset} className="rounded-lg border bg-card p-6 shadow-card">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Automation presets</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Presets create scheduled pending log entries with default values. They do not send reminders.
+          </p>
           <div className="space-y-3">
             <input
               value={presetType}
@@ -389,7 +398,6 @@ export default function SettingsPage() {
               onChange={(e) => setPresetSchedule(e.target.value)}
               className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save preset" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {presets.map((preset) => (
@@ -399,10 +407,16 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save preset" />
+          </div>
         </form>
 
         <form onSubmit={createReminder} className="rounded-lg border bg-card p-6 shadow-card">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Reminders</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Reminders create scheduled dashboard notifications. They do not create log entries.
+          </p>
           <div className="space-y-3">
             <input
               value={reminderType}
@@ -422,7 +436,6 @@ export default function SettingsPage() {
               className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Cron expression"
             />
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save reminder" />
           </div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {reminders.map((reminder) => (
@@ -432,6 +445,9 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save reminder" />
+          </div>
         </form>
       </div>
     </div>

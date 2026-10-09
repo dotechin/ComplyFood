@@ -593,14 +593,16 @@ export default function LogsPage() {
                 );
               })}
             </div>
-            <ActionButton
-              type="submit"
-              variant="primary"
-              icon={<SaveIcon />}
-              label={activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
-              busy={saving}
-              busyLabel="Saving…"
-            />
+            <div className={activeType === LogType.TEMPERATURE ? 'basis-full flex justify-center' : ''}>
+              <ActionButton
+                type="submit"
+                variant="primary"
+                icon={<SaveIcon />}
+                label={activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+                busy={saving}
+                busyLabel="Saving…"
+              />
+            </div>
           </div>
         </form>
       )}
