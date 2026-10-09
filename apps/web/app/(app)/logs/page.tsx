@@ -7,7 +7,7 @@ import { ActionButton, CheckIcon, CloseIcon, SaveIcon } from '../../../component
 import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, weekStartOf } from './cleaning-schedule';
 import { IncidentLog, type IncidentInput } from './incident-log';
 import { logTypeFromSearch } from './log-type-from-search';
-import { TEMPERATURE_UNITS, TemperatureLog } from './temperature-log';
+import { TEMPERATURE_UNITS, TemperatureLog, type TemperatureUnit } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
   [LogType.TEMPERATURE]: 'Temperature',
@@ -174,8 +174,39 @@ function readingStamp(date = new Date()) {
   return `${time} (${date.getHours() < 12 ? 'AM' : 'PM'})`;
 }
 
-function defaultTarget(unit: string) {
-  return unit === TEMPERATURE_UNITS[3].value ? 'Frozen ≤ -18°C' : 'Chilled ≤ 4°C';
+const TEMPERATURE_UNITS_STORAGE_KEY = 'complyfood-temperature-units';
+
+function readTemperatureUnits(value: string | null): TemperatureUnit[] | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    const seen = new Set<string>();
+    const units = parsed.filter((unit): unit is TemperatureUnit => {
+      if (
+        !unit
+        || typeof unit !== 'object'
+        || typeof unit.value !== 'string'
+        || typeof unit.label !== 'string'
+        || (unit.category !== 'fridge' && unit.category !== 'freezer')
+        || !unit.value.trim()
+        || !unit.label.trim()
+      ) return false;
+      const key = unit.value.trim().toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return units.length ? units : null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultTarget(unit: string, units: TemperatureUnit[]) {
+  return units.find((option) => option.value === unit)?.category === 'freezer'
+    ? 'Frozen ≤ -18°C'
+    : 'Chilled ≤ 4°C';
 }
 
 const FIELD_CLASSES = 'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground';
@@ -188,6 +219,8 @@ export default function LogsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [temperatureUnits, setTemperatureUnits] = useState<TemperatureUnit[]>(TEMPERATURE_UNITS);
+  const [temperatureUnitsLoaded, setTemperatureUnitsLoaded] = useState(false);
   const [temperatureUnit, setTemperatureUnit] = useState<string>(TEMPERATURE_UNITS[0].value);
   const [temperatureYear, setTemperatureYear] = useState(new Date().getFullYear());
   const [cleaningWeek, setCleaningWeek] = useState(() => weekStartOf(new Date()));
@@ -198,6 +231,33 @@ export default function LogsPage() {
 
   const activeDefs = FIELD_DEFS[activeType];
   const hasEntryList = activeType === LogType.RECEIVING || activeType === LogType.CHECKLIST;
+  const selectedTemperatureUnit = temperatureUnits.some((option) => option.value === temperatureUnit)
+    ? temperatureUnit
+    : temperatureUnits[0].value;
+
+  useEffect(() => {
+    try {
+      const storedUnits = readTemperatureUnits(window.localStorage.getItem(TEMPERATURE_UNITS_STORAGE_KEY));
+      if (storedUnits) {
+        const selectedUnit = storedUnits[0].value;
+        setTemperatureUnits(storedUnits);
+        setTemperatureUnit(selectedUnit);
+        setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedUnit, storedUnits) }));
+      }
+    } catch {
+      // Keep the default units when browser storage is unavailable.
+    }
+    setTemperatureUnitsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!temperatureUnitsLoaded) return;
+    try {
+      window.localStorage.setItem(TEMPERATURE_UNITS_STORAGE_KEY, JSON.stringify(temperatureUnits));
+    } catch {
+      // Unit management remains available for this session when storage is unavailable.
+    }
+  }, [temperatureUnits, temperatureUnitsLoaded]);
 
   const filters = useMemo(
     () => (hasEntryList
@@ -245,7 +305,7 @@ export default function LogsPage() {
     setLogs([]);
     setFormValues(
       type === LogType.TEMPERATURE
-        ? { ...emptyValues(FIELD_DEFS[type]), target: defaultTarget(temperatureUnit) }
+        ? { ...emptyValues(FIELD_DEFS[type]), target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }
         : emptyValues(FIELD_DEFS[type]),
     );
     setError('');
@@ -258,14 +318,18 @@ export default function LogsPage() {
     setActiveType(requestedType);
     setFormValues(
       requestedType === LogType.TEMPERATURE
-        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value) }
+        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value, TEMPERATURE_UNITS) }
         : emptyValues(FIELD_DEFS[requestedType]),
     );
   }, []);
 
+  useEffect(() => {
+    setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }));
+  }, [selectedTemperatureUnit, temperatureUnits]);
+
   const selectTemperatureUnit = (unit: string) => {
     setTemperatureUnit(unit);
-    setFormValues((prev) => ({ ...prev, target: defaultTarget(unit) }));
+    setFormValues((prev) => ({ ...prev, target: defaultTarget(unit, temperatureUnits) }));
   };
 
   const setFieldValue = (name: string, value: string | boolean) => {
@@ -296,7 +360,7 @@ export default function LogsPage() {
           type: activeType,
           fields:
             activeType === LogType.TEMPERATURE
-              ? { Reading: readingStamp(), 'Workstation / unit': temperatureUnit, ...fields }
+              ? { Reading: readingStamp(), 'Workstation / unit': selectedTemperatureUnit, ...fields }
               : fields,
         });
       },
@@ -306,7 +370,7 @@ export default function LogsPage() {
     if (created) {
       setFormValues(
         activeType === LogType.TEMPERATURE
-          ? { ...emptyValues(activeDefs), target: defaultTarget(temperatureUnit) }
+          ? { ...emptyValues(activeDefs), target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }
           : emptyValues(activeDefs),
       );
     }
@@ -395,8 +459,10 @@ export default function LogsPage() {
 
       {activeType === LogType.TEMPERATURE && (
         <TemperatureLog
-          unit={temperatureUnit}
+          units={temperatureUnits}
+          unit={selectedTemperatureUnit}
           year={temperatureYear}
+          onUnitsChange={setTemperatureUnits}
           onUnitChange={selectTemperatureUnit}
           onYearChange={setTemperatureYear}
         />

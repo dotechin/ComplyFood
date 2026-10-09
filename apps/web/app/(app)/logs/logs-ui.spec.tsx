@@ -93,17 +93,46 @@ describe('Daily Logs UI', () => {
     expect(html).not.toContain('CCP 2/3');
     expect(html.match(/aria-label="Temperature log"/g)).toHaveLength(1);
     for (const unit of TEMPERATURE_UNITS) expect(html).toContain(`>${unit.label}</option>`);
+    expect(html).toContain('aria-label="Add temperature unit"');
+    expect(html).toContain('aria-label="Unit type"');
+    expect(html).toContain('aria-label="Delete Bar counter 1"');
     expect(html).toContain('aria-label="Save reading"');
     expect(html).not.toMatch(/Import verified historical|Phone camera|Coming soon|Manual entry/);
   });
 
   it('renders the selected temperature log as a blank sheet', () => {
     const html = renderToStaticMarkup(
-      <TemperatureLog unit={TEMPERATURE_UNITS[3].value} year={2025} onUnitChange={jest.fn()} onYearChange={jest.fn()} />,
+      <TemperatureLog
+        units={[...TEMPERATURE_UNITS]}
+        unit={TEMPERATURE_UNITS[3].value}
+        year={2025}
+        onUnitsChange={jest.fn()}
+        onUnitChange={jest.fn()}
+        onYearChange={jest.fn()}
+      />,
     );
     expect(html).toContain(`<option value="${TEMPERATURE_UNITS[3].value}" selected="">`);
     expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025 (blank sheet)');
     expect(html).not.toContain('<table');
+  });
+
+  it('supports fridge and freezer unit categories and protects the final unit from deletion', () => {
+    const html = renderToStaticMarkup(
+      <TemperatureLog
+        units={[TEMPERATURE_UNITS[0]]}
+        unit={TEMPERATURE_UNITS[0].value}
+        year={2025}
+        onUnitsChange={jest.fn()}
+        onUnitChange={jest.fn()}
+        onYearChange={jest.fn()}
+      />,
+    );
+    expect(TEMPERATURE_UNITS[0].category).toBe('fridge');
+    expect(TEMPERATURE_UNITS[3].category).toBe('freezer');
+    expect(html).toContain('<option value="fridge" selected="">Fridge</option>');
+    expect(html).toContain('<option value="freezer">Freezer</option>');
+    expect(html).toContain('aria-label="Delete Bar counter 1"');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Delete Bar counter 1"/);
   });
 
   it('renders the Cleaning & Disinfection Schedule with the legend, columns and areas', () => {
