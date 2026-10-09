@@ -431,7 +431,7 @@ export default function LogsPage() {
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-        {message && <p className="mt-2 text-sm text-success">{message}</p>}
+        {message && activeType !== LogType.CLEANING && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
 
       <div className="border-b border-border">
@@ -473,15 +473,20 @@ export default function LogsPage() {
       )}
 
       {activeType === LogType.CLEANING && (
-        <CleaningSchedule
-          logs={logs}
-          weekStart={cleaningWeek}
-          today={todayIso()}
-          busyKey={cleaningBusy}
-          onWeekChange={setCleaningWeek}
-          onTick={(area, date) => void tickCleaning(area, date)}
-          onUndo={(entry) => void undoCleaning(entry)}
-        />
+        <>
+          <CleaningSchedule
+            logs={logs}
+            weekStart={cleaningWeek}
+            today={todayIso()}
+            busyKey={cleaningBusy}
+            onWeekChange={setCleaningWeek}
+            onTick={(area, date) => void tickCleaning(area, date)}
+            onUndo={(entry) => void undoCleaning(entry)}
+          />
+          <p role="status" aria-live="polite" aria-atomic="true" className="h-5 overflow-hidden text-sm leading-5 text-transparent">
+            {message}
+          </p>
+        </>
       )}
 
       {activeType === LogType.INCIDENT && (

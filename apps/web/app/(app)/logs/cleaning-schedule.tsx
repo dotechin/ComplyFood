@@ -162,7 +162,6 @@ export function CleaningSchedule({
                         disabled={date > today || busyKey === key || Boolean(locked)}
                         aria-pressed={Boolean(entry)}
                         aria-label={entry ? `${label}: done${locked ? '' : ' (pending review, click to undo)'}` : `${label}: mark as done`}
-                        title={entry ? (locked ? 'Done' : 'Done — pending review. Click to undo.') : 'Mark as done'}
                         onClick={() => (entry ? onUndo(entry) : onTick(row.area, date))}
                         className={`flex h-14 w-full items-center justify-center text-base font-bold transition disabled:cursor-not-allowed ${
                           entry
