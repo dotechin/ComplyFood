@@ -228,6 +228,7 @@ export default function LogsPage() {
   const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [cleaningMessage, setCleaningMessage] = useState('');
 
   const activeDefs = FIELD_DEFS[activeType];
   const hasEntryList = activeType === LogType.RECEIVING || activeType === LogType.CHECKLIST;
@@ -310,6 +311,7 @@ export default function LogsPage() {
     );
     setError('');
     setMessage('');
+    setCleaningMessage('');
   };
 
   useEffect(() => {
@@ -336,13 +338,18 @@ export default function LogsPage() {
     setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
-  const run = async (action: () => Promise<void>, success: string, failure: string) => {
+  const run = async (
+    action: () => Promise<void>,
+    success: string,
+    failure: string,
+    setSuccessMessage: (value: string) => void = setMessage,
+  ) => {
     try {
       setError('');
-      setMessage('');
+      setSuccessMessage('');
       await action();
       await refreshLogs();
-      setMessage(success);
+      setSuccessMessage(success);
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : failure);
@@ -410,13 +417,19 @@ export default function LogsPage() {
       },
       `${area} marked as done.`,
       'Unable to save the cleaning check',
+      setCleaningMessage,
     );
     setCleaningBusy(null);
   };
 
   const undoCleaning = async (entry: LogEntry) => {
     setCleaningBusy(`${entry.fields[CLEANING_AREA_FIELD]}|${entry.fields[CLEANING_DATE_FIELD]}`);
-    await run(() => apiDelete(`/logs/${entry.id}`), 'Cleaning check removed.', 'Unable to remove the cleaning check');
+    await run(
+      () => apiDelete(`/logs/${entry.id}`),
+      'Cleaning check removed.',
+      'Unable to remove the cleaning check',
+      setCleaningMessage,
+    );
     setCleaningBusy(null);
   };
 
@@ -484,7 +497,7 @@ export default function LogsPage() {
             onUndo={(entry) => void undoCleaning(entry)}
           />
           <p role="status" aria-live="polite" aria-atomic="true" className="h-5 overflow-hidden text-sm leading-5 text-transparent">
-            {message}
+            {cleaningMessage}
           </p>
         </>
       )}

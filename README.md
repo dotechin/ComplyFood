@@ -31,7 +31,6 @@ Run commands from the repository root. To update and start the local staging sta
 
 ```bash
 git pull
-docker compose -f infra/docker-compose.staging.yml up -d
 bash scripts/staging-up.sh
 ```
 
