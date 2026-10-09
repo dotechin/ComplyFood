@@ -183,7 +183,9 @@ describe('Daily Logs UI', () => {
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
 
     const page = LogsPage();
-    const schedule = (page.props.children as React.ReactElement[]).find((child) => child?.type === CleaningSchedule)!;
+    const schedule = (page.props.children as React.ReactElement[])
+      .flatMap((child) => child?.type === React.Fragment ? React.Children.toArray(child.props.children) : [child])
+      .find((child): child is React.ReactElement => React.isValidElement(child) && child.type === CleaningSchedule)!;
     schedule.props.onTick('Ice Machine (Bar)', '2026-10-05');
     await new Promise((resolve) => setImmediate(resolve));
 
