@@ -237,7 +237,10 @@ export default function SettingsPage() {
 
       {organization ? (
         <form onSubmit={updateOrganization} className="rounded-lg border bg-card p-6 shadow-card">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Organization profile</h2>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold text-foreground">Organization profile</h2>
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save organization" />
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
             <input
               value={organization.name}
@@ -257,9 +260,6 @@ export default function SettingsPage() {
               className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Business category"
             />
-          </div>
-          <div className="mt-4">
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save organization" />
           </div>
         </form>
       ) : null}
