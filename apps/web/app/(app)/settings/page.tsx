@@ -83,7 +83,7 @@ export default function SettingsPage() {
       category: organization.category,
     });
     setOrganization(updated);
-    setMessage('Organization saved.');
+    setMessage('Changes saved.');
   };
 
   const addLocation = async (e: React.FormEvent) => {
@@ -196,7 +196,11 @@ export default function SettingsPage() {
       </div>
 
       {organization ? (
-        <form onSubmit={updateOrganization} className="rounded-lg border bg-white p-6 shadow-sm">
+        <form
+          id="organization-settings-form"
+          onSubmit={updateOrganization}
+          className="rounded-lg border bg-white p-6 shadow-sm"
+        >
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Organization profile</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <input
@@ -218,9 +222,6 @@ export default function SettingsPage() {
               placeholder="Business category"
             />
           </div>
-          <button className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            Save organization
-          </button>
         </form>
       ) : null}
 
@@ -360,7 +361,7 @@ export default function SettingsPage() {
               className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
             <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Save preset
+              Create preset
             </button>
           </div>
           <ul className="mt-4 space-y-2 text-sm text-gray-600">
@@ -395,7 +396,7 @@ export default function SettingsPage() {
               placeholder="Cron expression"
             />
             <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Save reminder
+              Create reminder
             </button>
           </div>
           <ul className="mt-4 space-y-2 text-sm text-gray-600">
@@ -408,6 +409,18 @@ export default function SettingsPage() {
           </ul>
         </form>
       </div>
+
+      {organization ? (
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            form="organization-settings-form"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Save changes
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
