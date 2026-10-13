@@ -98,7 +98,7 @@ export default function SettingsPage() {
       category: organization.category,
     });
     setOrganization(updated);
-    setMessage('Organization saved.');
+    setMessage('Changes saved.');
   };
 
   const addLocation = async (e: React.FormEvent) => {
@@ -236,11 +236,12 @@ export default function SettingsPage() {
       </div>
 
       {organization ? (
-        <form onSubmit={updateOrganization} className="rounded-lg border bg-card p-6 shadow-card">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-foreground">Organization profile</h2>
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save organization" />
-          </div>
+        <form
+          id="organization-settings-form"
+          onSubmit={updateOrganization}
+          className="rounded-lg border bg-card p-6 shadow-card"
+        >
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Organization profile</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <input
               value={organization.name}
@@ -408,7 +409,7 @@ export default function SettingsPage() {
             ))}
           </ul>
           <div className="mt-4 flex justify-end">
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save preset" />
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Create preset" />
           </div>
         </form>
 
@@ -446,10 +447,22 @@ export default function SettingsPage() {
             ))}
           </ul>
           <div className="mt-4 flex justify-end">
-            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Save reminder" />
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Create reminder" />
           </div>
         </form>
       </div>
+
+      {organization ? (
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            form="organization-settings-form"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Save changes
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
