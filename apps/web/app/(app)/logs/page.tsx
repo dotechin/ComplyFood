@@ -1,35 +1,165 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  LogStatus,
-  LogType,
-  UserRole,
-  type LogEntry,
-  type TemperatureCaptureSuggestion,
-  type User,
-} from '@complyfood/shared';
-import { apiGet, apiPatch, apiPost, apiUpload } from '../../../lib/api';
+import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { ActionButton, CheckIcon, CloseIcon, SaveIcon } from '../../../components/icon-button';
+import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, weekStartOf } from './cleaning-schedule';
+import { IncidentLog, type IncidentInput } from './incident-log';
+import { logTypeFromSearch } from './log-type-from-search';
+import { TEMPERATURE_UNITS, TemperatureLog, type TemperatureUnit } from './temperature-log';
+
+const TYPE_LABELS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Temperature',
+  [LogType.CLEANING]: 'Cleaning',
+  [LogType.RECEIVING]: 'Goods Receipt',
+  [LogType.CHECKLIST]: 'Checklist',
+  [LogType.INCIDENT]: 'Incident',
+};
+
+// Each tab maps to a sheet of the HACCP European standard package
+// (EC 852/2004 & Codex Alimentarius General Principles of Food Hygiene).
+const TYPE_STANDARDS: Record<LogType, string> = {
+  [LogType.TEMPERATURE]: 'Temperature Log',
+  [LogType.CLEANING]: 'Cleaning & Disinfection Schedule',
+  [LogType.RECEIVING]: 'Sheet 1 — Goods Receipt prerequisite check',
+  [LogType.CHECKLIST]: 'Prerequisite hygiene checklist',
+  [LogType.INCIDENT]: 'Corrective Action & Deviation Log',
+};
+
+type FieldOption = { value: string; label: string };
+
+type FieldDef = {
+  name: string;
+  label: string;
+  displayLabel?: string;
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox';
+  placeholder?: string;
+  required?: boolean;
+  options?: FieldOption[];
+  unit?: string;
+  help?: string;
+  full?: boolean;
+};
+
+const FIELD_DEFS: Record<LogType, FieldDef[]> = {
+  [LogType.TEMPERATURE]: [
+    {
+      name: 'target',
+      label: 'Target (critical limit)',
+      displayLabel: 'Critical limit',
+      type: 'select',
+      options: [
+        { value: 'Chilled ≤ 4°C', label: 'Chilled ≤ 4°C' },
+        { value: 'Frozen ≤ -18°C', label: 'Frozen ≤ -18°C' },
+        { value: 'Hot holding ≥ 63°C', label: 'Hot holding ≥ 63°C' },
+        { value: 'Cooking core ≥ 75°C for 30s', label: 'Cooking ≥ 75°C for 30s' },
+      ],
+    },
+    { name: 'temperature', label: 'Measured temperature', displayLabel: 'Temperature', type: 'number', unit: '°C', placeholder: '4', required: true },
+    {
+      name: 'corrective',
+      label: 'Corrective action / comments',
+      displayLabel: 'Corrective action / notes',
+      type: 'textarea',
+      placeholder: 'If outside the critical limit',
+      full: true,
+    },
+  ],
+  [LogType.CLEANING]: [],
+  [LogType.RECEIVING]: [
+    { name: 'supplier', label: 'Supplier', type: 'text', placeholder: 'e.g. Fresh Dairy Co.', required: true },
+    { name: 'product', label: 'Product', type: 'text', placeholder: 'e.g. Pasteurised cream', required: true },
+    { name: 'batch', label: 'Batch / lot number', type: 'text', placeholder: 'e.g. LOT-2291' },
+    {
+      name: 'temperature',
+      label: 'Delivery temperature',
+      type: 'number',
+      unit: '°C',
+      placeholder: '4',
+      help: 'Chilled ≤ 5°C · Frozen ≤ -18°C',
+    },
+    {
+      name: 'condition',
+      label: 'Packaging condition',
+      type: 'select',
+      options: [
+        { value: 'Acceptable', label: 'Acceptable' },
+        { value: 'Damaged packaging', label: 'Damaged packaging' },
+        { value: 'Rejected', label: 'Rejected' },
+      ],
+    },
+  ],
+  [LogType.CHECKLIST]: [
+    {
+      name: 'checklist',
+      label: 'Checklist',
+      type: 'select',
+      options: [
+        { value: 'Opening', label: 'Opening' },
+        { value: 'Mid-service', label: 'Mid-service' },
+        { value: 'Closing', label: 'Closing' },
+        { value: 'Weekly', label: 'Weekly' },
+      ],
+    },
+    {
+      name: 'shift',
+      label: 'Shift',
+      type: 'select',
+      options: [
+        { value: 'AM', label: 'AM' },
+        { value: 'PM', label: 'PM' },
+      ],
+    },
+    { name: 'completed', label: 'All items completed', type: 'checkbox' },
+    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
+  ],
+  [LogType.INCIDENT]: [],
+};
+
+type FieldValues = Record<string, string | boolean>;
+
+function emptyValues(defs: FieldDef[]): FieldValues {
+  const values: FieldValues = {};
+  for (const def of defs) {
+    if (def.type === 'checkbox') {
+      values[def.name] = false;
+    } else if (def.type === 'select') {
+      values[def.name] = def.options?.[0]?.value ?? '';
+    } else {
+      values[def.name] = '';
+    }
+  }
+  return values;
+}
+
+function buildFields(defs: FieldDef[], values: FieldValues) {
+  const fields: Record<string, unknown> = {};
+  for (const def of defs) {
+    const raw = values[def.name];
+    if (def.type === 'checkbox') {
+      fields[def.label] = Boolean(raw);
+      continue;
+    }
+    const str = typeof raw === 'string' ? raw.trim() : '';
+    if (!str) {
+      if (def.required) {
+        throw new Error(`${def.label} is required.`);
+      }
+      continue;
+    }
+    fields[def.label] = def.type === 'number' && def.unit ? `${str} ${def.unit}` : str;
+  }
+  return fields;
+}
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-function parseFields(value: string) {
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Fields JSON must be an object.');
-  }
-  return parsed as Record<string, unknown>;
-}
-
-function buildLogsPath(filters: {
-  type: string;
-  status: string;
-  dateFrom: string;
-  dateTo: string;
-}) {
+function buildLogsPath(filters: { type: string; status: string; dateFrom: string; dateTo: string }) {
   const params = new URLSearchParams();
   if (filters.type) params.set('type', filters.type);
   if (filters.status) params.set('status', filters.status);
@@ -39,47 +169,102 @@ function buildLogsPath(filters: {
   return query ? `/logs?${query}` : '/logs';
 }
 
-function toIso(value: string) {
-  if (!value) return undefined;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString();
+function readingStamp(date = new Date()) {
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${time} (${date.getHours() < 12 ? 'AM' : 'PM'})`;
 }
+
+const TEMPERATURE_UNITS_STORAGE_KEY = 'complyfood-temperature-units';
+
+function readTemperatureUnits(value: string | null): TemperatureUnit[] | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    const seen = new Set<string>();
+    const units = parsed.filter((unit): unit is TemperatureUnit => {
+      if (
+        !unit
+        || typeof unit !== 'object'
+        || typeof unit.value !== 'string'
+        || typeof unit.label !== 'string'
+        || (unit.category !== 'fridge' && unit.category !== 'freezer')
+        || !unit.value.trim()
+        || !unit.label.trim()
+      ) return false;
+      const key = unit.value.trim().toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return units.length ? units : null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultTarget(unit: string, units: TemperatureUnit[]) {
+  return units.find((option) => option.value === unit)?.category === 'freezer'
+    ? 'Frozen ≤ -18°C'
+    : 'Chilled ≤ 4°C';
+}
+
+const FIELD_CLASSES = 'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground';
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [filterType, setFilterType] = useState('');
+  const [activeType, setActiveType] = useState<LogType>(LogType.TEMPERATURE);
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [createType, setCreateType] = useState<LogType>(LogType.TEMPERATURE);
-  const [createFields, setCreateFields] = useState('{"item":"Fridge 1","value":"4°C"}');
-  const [overrideFieldName, setOverrideFieldName] = useState<Record<string, string>>({});
-  const [overrideNewValue, setOverrideNewValue] = useState<Record<string, string>>({});
-  const [overrideReason, setOverrideReason] = useState<Record<string, string>>({});
-  const [exceptionReason, setExceptionReason] = useState<Record<string, string>>({});
-  const [exceptionOccurredAt, setExceptionOccurredAt] = useState<Record<string, string>>({});
-  const [exceptionMeasuredAt, setExceptionMeasuredAt] = useState<Record<string, string>>({});
-  const [exceptionStatus, setExceptionStatus] = useState<Record<string, string>>({});
-  const [captureConsent, setCaptureConsent] = useState(false);
-  const [captureFile, setCaptureFile] = useState<File | null>(null);
-  const [captureItem, setCaptureItem] = useState('Fridge 1');
-  const [captureSuggestion, setCaptureSuggestion] = useState<TemperatureCaptureSuggestion | null>(null);
-  const [captureValue, setCaptureValue] = useState('');
+  const [temperatureUnits, setTemperatureUnits] = useState<TemperatureUnit[]>(TEMPERATURE_UNITS);
+  const [temperatureUnitsLoaded, setTemperatureUnitsLoaded] = useState(false);
+  const [temperatureUnit, setTemperatureUnit] = useState<string>(TEMPERATURE_UNITS[0].value);
+  const [temperatureYear, setTemperatureYear] = useState(new Date().getFullYear());
+  const [cleaningWeek, setCleaningWeek] = useState(() => weekStartOf(new Date()));
+  const [cleaningBusy, setCleaningBusy] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState<FieldValues>(() => emptyValues(FIELD_DEFS[LogType.TEMPERATURE]));
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [cleaningMessage, setCleaningMessage] = useState('');
+
+  const activeDefs = FIELD_DEFS[activeType];
+  const hasEntryList = activeType === LogType.RECEIVING || activeType === LogType.CHECKLIST;
+  const selectedTemperatureUnit = temperatureUnits.some((option) => option.value === temperatureUnit)
+    ? temperatureUnit
+    : temperatureUnits[0].value;
+
+  useEffect(() => {
+    try {
+      const storedUnits = readTemperatureUnits(window.localStorage.getItem(TEMPERATURE_UNITS_STORAGE_KEY));
+      if (storedUnits) {
+        const selectedUnit = storedUnits[0].value;
+        setTemperatureUnits(storedUnits);
+        setTemperatureUnit(selectedUnit);
+        setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedUnit, storedUnits) }));
+      }
+    } catch {
+      // Keep the default units when browser storage is unavailable.
+    }
+    setTemperatureUnitsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!temperatureUnitsLoaded) return;
+    try {
+      window.localStorage.setItem(TEMPERATURE_UNITS_STORAGE_KEY, JSON.stringify(temperatureUnits));
+    } catch {
+      // Unit management remains available for this session when storage is unavailable.
+    }
+  }, [temperatureUnits, temperatureUnitsLoaded]);
 
   const filters = useMemo(
-    () => ({
-      type: filterType,
-      status: filterStatus,
-      dateFrom,
-      dateTo,
-    }),
-    [dateFrom, dateTo, filterStatus, filterType],
+    () => (hasEntryList
+      ? { type: activeType, status: filterStatus, dateFrom, dateTo }
+      : { type: activeType, status: '', dateFrom: '', dateTo: '' }),
+    [activeType, dateFrom, dateTo, filterStatus, hasEntryList],
   );
 
   const refreshLogs = async () => {
@@ -94,13 +279,9 @@ export default function LogsPage() {
     const loadLogs = async () => {
       try {
         setError('');
-        const [entries, me] = await Promise.all([
-          apiGet<LogEntry[]>(buildLogsPath(filters)),
-          apiGet<User>('/users/me'),
-        ]);
+        const entries = await apiGet<LogEntry[]>(buildLogsPath(filters));
         if (active) {
           setLogs(entries);
-          setUser(me);
         }
       } catch (err) {
         if (active) {
@@ -120,550 +301,415 @@ export default function LogsPage() {
     };
   }, [filters]);
 
+  const selectType = (type: LogType) => {
+    setActiveType(type);
+    setLogs([]);
+    setFormValues(
+      type === LogType.TEMPERATURE
+        ? { ...emptyValues(FIELD_DEFS[type]), target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }
+        : emptyValues(FIELD_DEFS[type]),
+    );
+    setError('');
+    setMessage('');
+    setCleaningMessage('');
+  };
+
+  useEffect(() => {
+    const requestedType = logTypeFromSearch(window.location.search);
+    if (!requestedType) return;
+    setActiveType(requestedType);
+    setFormValues(
+      requestedType === LogType.TEMPERATURE
+        ? { ...emptyValues(FIELD_DEFS[requestedType]), target: defaultTarget(TEMPERATURE_UNITS[0].value, TEMPERATURE_UNITS) }
+        : emptyValues(FIELD_DEFS[requestedType]),
+    );
+  }, []);
+
+  useEffect(() => {
+    setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }));
+  }, [selectedTemperatureUnit, temperatureUnits]);
+
+  const selectTemperatureUnit = (unit: string) => {
+    setTemperatureUnit(unit);
+    setFormValues((prev) => ({ ...prev, target: defaultTarget(unit, temperatureUnits) }));
+  };
+
+  const setFieldValue = (name: string, value: string | boolean) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const run = async (
+    action: () => Promise<void>,
+    success: string,
+    failure: string,
+    setSuccessMessage: (value: string) => void = setMessage,
+  ) => {
+    try {
+      setError('');
+      setSuccessMessage('');
+      await action();
+      await refreshLogs();
+      setSuccessMessage(success);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : failure);
+      return false;
+    }
+  };
+
   const createLog = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setSaving(true);
-      setError('');
-      setMessage('');
-      await apiPost<LogEntry>('/logs', {
-        type: createType,
-        fields: parseFields(createFields),
-      });
-      await refreshLogs();
-      setMessage('Log entry created.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create log entry');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmLog = async (id: string) => {
-    try {
-      setError('');
-      setMessage('');
-      await apiPatch<LogEntry>(`/logs/${id}/confirm`, {});
-      await refreshLogs();
-      setMessage('Log entry confirmed.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to confirm log entry');
-    }
-  };
-
-  const submitOverride = async (log: LogEntry) => {
-    const fieldName = overrideFieldName[log.id]?.trim();
-    const reason = overrideReason[log.id]?.trim();
-    if (!fieldName || !reason) {
-      setError('Override field and reason are required.');
-      return;
-    }
-    if (!(fieldName in (log.fields ?? {}))) {
-      setError('Choose an existing field name to override.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      const nextValue = overrideNewValue[log.id] ?? '';
-      await apiPost('/overrides', {
-        logEntryId: log.id,
-        fieldName,
-        originalValue: log.fields[fieldName],
-        newValue: nextValue,
-        reason,
-      });
-      await refreshLogs();
-      setOverrideFieldName((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideNewValue((prev) => ({ ...prev, [log.id]: '' }));
-      setOverrideReason((prev) => ({ ...prev, [log.id]: '' }));
-      setMessage('Override recorded.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save override');
-    }
-  };
-
-  const scanTemperature = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-
-    try {
-      setError('');
-      const form = new FormData();
-      form.append('file', captureFile);
-      const suggestion = await apiUpload<TemperatureCaptureSuggestion>('/logs/temperature/ocr-suggestion', form);
-      setCaptureSuggestion(suggestion);
-      if (suggestion.extractedValue) {
-        setCaptureValue(suggestion.extractedValue);
-      }
-      setMessage('Temperature suggestion ready. Please review before saving.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to process camera capture');
-    }
-  };
-
-  const createTemperatureFromCapture = async () => {
-    if (!captureConsent) {
-      setError('You must confirm capture consent before processing.');
-      return;
-    }
-    if (!captureFile) {
-      setError('Choose a capture image first.');
-      return;
-    }
-    if (!captureValue.trim()) {
-      setError('A confirmed temperature value is required.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      const created = await apiPost<LogEntry>('/logs', {
-        type: LogType.TEMPERATURE,
-        fields: {
-          item: captureItem,
-          value: captureValue,
-          captureSource: 'phone-camera',
-          ocrSuggestion: captureSuggestion?.extractedValue ?? null,
-          ocrConfidence: captureSuggestion?.confidence ?? 0,
-          ocrMethod: captureSuggestion?.source ?? 'none',
-          confirmedByUser: true,
-          retentionPolicy: 'pending-image-upload',
-          imageLinked: false,
-        },
-      });
-
-      try {
-        const upload = new FormData();
-        upload.append('file', captureFile);
-        upload.append('linkedEntryId', created.id);
-        await apiUpload('/documents', upload);
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-retained-with-linked-document',
-            imageLinked: true,
-          },
+    setSaving(true);
+    const created = await run(
+      async () => {
+        const fields = buildFields(activeDefs, formValues);
+        await apiPost<LogEntry>('/logs', {
+          type: activeType,
+          fields:
+            activeType === LogType.TEMPERATURE
+              ? { Reading: readingStamp(), 'Workstation / unit': selectedTemperatureUnit, ...fields }
+              : fields,
         });
-      } catch {
-        await apiPatch(`/logs/${created.id}`, {
-          fields: {
-            ...created.fields,
-            retentionPolicy: 'image-upload-failed',
-            imageLinked: false,
-          },
+      },
+      `${TYPE_LABELS[activeType]} entry created.`,
+      'Unable to create log entry',
+    );
+    if (created) {
+      setFormValues(
+        activeType === LogType.TEMPERATURE
+          ? { ...emptyValues(activeDefs), target: defaultTarget(selectedTemperatureUnit, temperatureUnits) }
+          : emptyValues(activeDefs),
+      );
+    }
+    setSaving(false);
+  };
+
+  const createIncident = async (fields: IncidentInput) => {
+    if (!fields['Description of deviation / problem'].trim()) {
+      setError('Describe the deviation or problem.');
+      return false;
+    }
+    setSaving(true);
+    const trimmed = Object.fromEntries(
+      Object.entries(fields)
+        .map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value),
+    );
+    const created = await run(
+      async () => {
+        await apiPost<LogEntry>('/logs', { type: LogType.INCIDENT, fields: trimmed });
+      },
+      'Deviation recorded.',
+      'Unable to record the deviation',
+    );
+    setSaving(false);
+    return created;
+  };
+
+  const tickCleaning = async (area: string, date: string) => {
+    setCleaningBusy(`${area}|${date}`);
+    await run(
+      async () => {
+        await apiPost<LogEntry>('/logs', {
+          type: LogType.CLEANING,
+          fields: { [CLEANING_AREA_FIELD]: area, [CLEANING_DATE_FIELD]: date },
         });
-        throw new Error('Capture saved but image upload failed. Please retry document upload from Documents.');
-      }
-
-      await refreshLogs();
-      setCaptureFile(null);
-      setCaptureSuggestion(null);
-      setCaptureValue('');
-      setCaptureConsent(false);
-      setMessage('Temperature log created with linked capture image.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save camera temperature log');
-    }
+      },
+      `${area} marked as done.`,
+      'Unable to save the cleaning check',
+      setCleaningMessage,
+    );
+    setCleaningBusy(null);
   };
 
-  const applyException = async (logId: string) => {
-    const reason = exceptionReason[logId]?.trim();
-    if (!reason) {
-      setError('Exception reason is required.');
-      return;
-    }
-
-    try {
-      setError('');
-      setMessage('');
-      await apiPatch(`/logs/${logId}/exception`, {
-        reason,
-        occurredAt: toIso(exceptionOccurredAt[logId] ?? ''),
-        measuredAt: toIso(exceptionMeasuredAt[logId] ?? ''),
-        unlockToStatus: (exceptionStatus[logId] as LogStatus | undefined) || undefined,
-      });
-      await refreshLogs();
-      setMessage('Exception mode action applied and audited.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to apply exception');
-    }
+  const undoCleaning = async (entry: LogEntry) => {
+    setCleaningBusy(`${entry.fields[CLEANING_AREA_FIELD]}|${entry.fields[CLEANING_DATE_FIELD]}`);
+    await run(
+      () => apiDelete(`/logs/${entry.id}`),
+      'Cleaning check removed.',
+      'Unable to remove the cleaning check',
+      setCleaningMessage,
+    );
+    setCleaningBusy(null);
   };
+
+  const confirmLog = (id: string) =>
+    void run(() => apiPatch<LogEntry>(`/logs/${id}/confirm`, {}).then(() => undefined), 'Log entry confirmed.', 'Unable to confirm log entry');
+
+  const cancelLog = (id: string) =>
+    void run(() => apiDelete(`/logs/${id}`), 'Pending entry cancelled.', 'Unable to cancel log entry');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Daily Logs</h1>
-        <p className="text-sm text-gray-500">Create, filter, review, confirm, and override daily log entries.</p>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {message && activeType !== LogType.CLEANING && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
 
-      <form onSubmit={createLog} className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-[0.9fr_1.6fr_auto]">
-        <div>
-          <label htmlFor="createType" className="mb-1 block text-sm font-medium text-gray-700">
-            Log type
-          </label>
-          <select
-            id="createType"
-            value={createType}
-            onChange={(e) => setCreateType(e.target.value as LogType)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="createFields" className="mb-1 block text-sm font-medium text-gray-700">
-            Fields JSON
-          </label>
-          <textarea
-            id="createFields"
-            value={createFields}
-            onChange={(e) => setCreateFields(e.target.value)}
-            className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 md:self-end"
-        >
-          {saving ? 'Saving…' : 'Create log'}
-        </button>
-      </form>
+      <div className="border-b border-border">
+        <nav className="-mb-px flex flex-wrap gap-1" aria-label="Log categories">
+          {Object.values(LogType).map((type) => {
+            const isActive = type === activeType;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => selectType(type)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+                }`}
+              >
+                {TYPE_LABELS[type]}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Temperature from phone camera</h2>
-        <p className="mb-3 text-sm text-gray-500">Capture image, review OCR suggestion, and confirm value before save.</p>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <div>
-            <label htmlFor="captureFile" className="mb-1 block text-sm font-medium text-gray-700">
-              Capture image
-            </label>
-            <input
-              id="captureFile"
-              aria-label="Capture temperature image"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => setCaptureFile(e.target.files?.[0] ?? null)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureItem" className="mb-1 block text-sm font-medium text-gray-700">
-              Item
-            </label>
-            <input
-              id="captureItem"
-              aria-label="Temperature item name"
-              value={captureItem}
-              onChange={(e) => setCaptureItem(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Item (e.g. Fridge 1)"
-            />
-          </div>
-          <div>
-            <label htmlFor="captureValue" className="mb-1 block text-sm font-medium text-gray-700">
-              Confirmed temperature
-            </label>
-            <input
-              id="captureValue"
-              aria-label="Confirmed temperature value"
-              value={captureValue}
-              onChange={(e) => setCaptureValue(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Confirmed temperature"
-            />
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void scanTemperature()}
-              className="w-full rounded-md border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
-            >
-              Get suggestion
-            </button>
-          </div>
-          <div className="md:self-end">
-            <button
-              type="button"
-              onClick={() => void createTemperatureFromCapture()}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Save capture log
-            </button>
-          </div>
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={captureConsent}
-            onChange={(e) => setCaptureConsent(e.target.checked)}
+      {activeType === LogType.TEMPERATURE && (
+        <TemperatureLog
+          units={temperatureUnits}
+          unit={selectedTemperatureUnit}
+          year={temperatureYear}
+          onUnitsChange={setTemperatureUnits}
+          onUnitChange={selectTemperatureUnit}
+          onYearChange={setTemperatureYear}
+        />
+      )}
+
+      {!hasEntryList && activeType !== LogType.TEMPERATURE && loading && (
+        <p role="status" className="text-sm text-muted-foreground">Loading…</p>
+      )}
+
+      {activeType === LogType.CLEANING && (
+        <>
+          <CleaningSchedule
+            logs={logs}
+            weekStart={cleaningWeek}
+            today={todayIso()}
+            busyKey={cleaningBusy}
+            onWeekChange={setCleaningWeek}
+            onTick={(area, date) => void tickCleaning(area, date)}
+            onUndo={(entry) => void undoCleaning(entry)}
           />
-          I confirm image capture consent and retention for audit traceability.
-        </label>
-        {captureSuggestion && (
-          <p className="mt-2 text-sm text-gray-600">
-            Suggested: <span className="font-semibold">{captureSuggestion.extractedValue ?? 'no value detected'}</span> ·
-            confidence {(captureSuggestion.confidence * 100).toFixed(0)}% · source {captureSuggestion.source}
+          <p role="status" aria-live="polite" aria-atomic="true" className="h-5 overflow-hidden text-sm leading-5 text-transparent">
+            {cleaningMessage}
           </p>
-        )}
-      </div>
+        </>
+      )}
 
-      <div className="grid gap-3 rounded-lg border bg-white p-4 shadow-sm md:grid-cols-4">
-        <div>
-          <label htmlFor="filterType" className="mb-1 block text-sm font-medium text-gray-700">
-            Type
-          </label>
-          <select
-            id="filterType"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">All types</option>
-            {Object.values(LogType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-gray-700">
-            Status
-          </label>
-          <select
-            id="filterStatus"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">All statuses</option>
-            {Object.values(LogStatus).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-gray-700">
-            From
-          </label>
-          <input
-            id="dateFrom"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-gray-700">
-            To
-          </label>
-          <input
-            id="dateTo"
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+      {activeType === LogType.INCIDENT && (
+        <IncidentLog logs={logs} saving={saving} onCreate={createIncident} onConfirm={confirmLog} onCancel={cancelLog} />
+      )}
 
-      {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
-      ) : (
-        <div className="space-y-4">
-          {logs.map((log) => (
-            <div key={log.id} className="rounded-lg border bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-gray-900">{log.type}</h2>
-                  <p className="text-xs text-gray-500">
-                    {new Date(log.createdAt).toLocaleString()} · {log.status}
-                    {log.isException ? ' · exception mode' : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {log.isException && (
-                    <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700">
-                      Exception
-                    </span>
-                  )}
-                  {log.status === LogStatus.PENDING && (
-                    <button
-                      type="button"
-                      onClick={() => void confirmLog(log.id)}
-                      className="rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
+      {activeDefs.length > 0 && (
+        <form onSubmit={createLog} className="space-y-3 rounded-lg border bg-card p-4">
+          <h2 className="text-lg font-semibold text-foreground">
+            {activeType === LogType.TEMPERATURE ? 'Record a reading' : `New ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+          </h2>
+          {activeType !== LogType.TEMPERATURE && <p className="text-sm text-muted-foreground">{TYPE_STANDARDS[activeType]}</p>}
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid flex-1 gap-3 md:grid-cols-3">
+              {activeDefs.map((def) => {
+                const fieldId = `field-${def.name}`;
+                const isFull = def.full || def.type === 'textarea';
+
+                if (def.type === 'checkbox') {
+                  return (
+                    <label
+                      key={def.name}
+                      htmlFor={fieldId}
+                      className={`flex items-center gap-2 text-sm font-medium text-foreground ${activeType === LogType.CHECKLIST ? 'col-span-full justify-center' : ''}`}
                     >
-                      Confirm
-                    </button>
-                  )}
-                </div>
-              </div>
+                      <input
+                        id={fieldId}
+                        type="checkbox"
+                        checked={Boolean(formValues[def.name])}
+                        onChange={(e) => setFieldValue(def.name, e.target.checked)}
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                      />
+                      {def.displayLabel ?? def.label}
+                    </label>
+                  );
+                }
 
-              <dl className="mt-3 grid gap-2 rounded-md bg-gray-50 p-3 text-sm">
-                {Object.entries(log.fields ?? {}).map(([key, value]) => (
-                  <div key={key} className="grid gap-1 md:grid-cols-[180px_1fr]">
-                    <dt className="font-medium text-gray-700">{key}</dt>
-                    <dd className="text-gray-600">{formatValue(value)}</dd>
+                return (
+                  <div key={def.name} className={isFull ? 'md:col-span-3' : ''}>
+                    <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-foreground">
+                      {def.displayLabel ?? def.label}
+                      {def.required && <span className="ml-0.5 text-danger">*</span>}
+                    </label>
+
+                    {def.type === 'textarea' && (
+                      <textarea
+                        id={fieldId}
+                        value={String(formValues[def.name] ?? '')}
+                        onChange={(e) => setFieldValue(def.name, e.target.value)}
+                        placeholder={def.placeholder}
+                        className={`h-16 ${FIELD_CLASSES}`}
+                      />
+                    )}
+
+                    {def.type === 'select' && (
+                      <select
+                        id={fieldId}
+                        value={String(formValues[def.name] ?? '')}
+                        onChange={(e) => setFieldValue(def.name, e.target.value)}
+                        className={FIELD_CLASSES}
+                      >
+                        {!def.options?.some((option) => option.value === '') && (
+                          <option value="">Select an option</option>
+                        )}
+                        {def.options?.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {(def.type === 'text' || def.type === 'number') && (
+                      <div className="relative">
+                        <input
+                          id={fieldId}
+                          type={def.type === 'number' ? 'number' : 'text'}
+                          step={def.type === 'number' ? 'any' : undefined}
+                          value={String(formValues[def.name] ?? '')}
+                          onChange={(e) => setFieldValue(def.name, e.target.value)}
+                          placeholder={def.placeholder}
+                          className={`${FIELD_CLASSES} ${def.unit ? 'pr-12' : ''}`}
+                        />
+                        {def.unit && (
+                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                            {def.unit}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {def.help && <p className="mt-1 text-xs text-muted-foreground">{def.help}</p>}
                   </div>
-                ))}
-                {Object.keys(log.fields ?? {}).length === 0 && <p className="text-gray-400">No fields recorded.</p>}
-                {(log.occurredAt || log.measuredAt || log.exceptionReason) && (
-                  <>
+                );
+              })}
+            </div>
+            <div className={activeType === LogType.TEMPERATURE || activeType === LogType.CHECKLIST ? 'basis-full flex justify-center' : ''}>
+              <ActionButton
+                type="submit"
+                variant="primary"
+                icon={<SaveIcon />}
+                label={activeType === LogType.TEMPERATURE ? 'Save reading' : `Create ${TYPE_LABELS[activeType].toLowerCase()} entry`}
+                busy={saving}
+                busyLabel="Saving…"
+              />
+            </div>
+          </div>
+        </form>
+      )}
+
+      {hasEntryList && (
+        <>
+          <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-card md:grid-cols-3">
+            <div>
+              <label htmlFor="filterStatus" className="mb-1 block text-sm font-medium text-foreground">
+                Status
+              </label>
+              <select id="filterStatus" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={FIELD_CLASSES}>
+                <option value="">All statuses</option>
+                {Object.values(LogStatus)
+                  .filter((status) => status !== LogStatus.OVERRIDDEN)
+                  .map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="dateFrom" className="mb-1 block text-sm font-medium text-foreground">
+                From
+              </label>
+              <input id="dateFrom" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={FIELD_CLASSES} />
+            </div>
+            <div>
+              <label htmlFor="dateTo" className="mb-1 block text-sm font-medium text-foreground">
+                To
+              </label>
+              <input id="dateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={FIELD_CLASSES} />
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <div className="space-y-4">
+              {logs.map((log) => (
+                <div key={log.id} className="rounded-lg border bg-card p-4 shadow-card">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="font-semibold text-foreground">{TYPE_LABELS[log.type as LogType] ?? log.type}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleString()} · {log.status}
+                        {log.isException ? ' · exception mode' : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {log.isException && (
+                        <span className="rounded-full bg-warning/10 px-2 py-1 text-xs font-medium text-warning">
+                          Exception
+                        </span>
+                      )}
+                      {log.status === LogStatus.PENDING && (
+                        <>
+                          <ActionButton icon={<CheckIcon />} label="Confirm" onClick={() => confirmLog(log.id)} />
+                          <ActionButton icon={<CloseIcon />} label="Cancel entry" variant="danger" onClick={() => cancelLog(log.id)} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <dl className="mt-3 grid gap-2 rounded-md bg-muted p-3 text-sm">
+                    {Object.entries(log.fields ?? {}).map(([key, value]) => (
+                      <div key={key} className="grid gap-1 md:grid-cols-[180px_1fr]">
+                        <dt className="font-medium text-foreground">{key}</dt>
+                        <dd className="text-muted-foreground">{formatValue(value)}</dd>
+                      </div>
+                    ))}
+                    {Object.keys(log.fields ?? {}).length === 0 && <p className="text-muted-foreground">No fields recorded.</p>}
                     {log.occurredAt && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-gray-700">Occurred at</dt>
-                        <dd className="text-gray-600">{new Date(log.occurredAt).toLocaleString()}</dd>
+                        <dt className="font-medium text-foreground">Occurred at</dt>
+                        <dd className="text-muted-foreground">{new Date(log.occurredAt).toLocaleString()}</dd>
                       </div>
                     )}
                     {log.measuredAt && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-gray-700">Measured at</dt>
-                        <dd className="text-gray-600">{new Date(log.measuredAt).toLocaleString()}</dd>
+                        <dt className="font-medium text-foreground">Measured at</dt>
+                        <dd className="text-muted-foreground">{new Date(log.measuredAt).toLocaleString()}</dd>
                       </div>
                     )}
                     {log.exceptionReason && (
                       <div className="grid gap-1 md:grid-cols-[180px_1fr]">
-                        <dt className="font-medium text-gray-700">Exception reason</dt>
-                        <dd className="text-gray-600">{log.exceptionReason}</dd>
+                        <dt className="font-medium text-foreground">Exception reason</dt>
+                        <dd className="text-muted-foreground">{log.exceptionReason}</dd>
                       </div>
                     )}
-                  </>
-                )}
-              </dl>
+                  </dl>
+                </div>
+              ))}
 
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.2fr_auto]">
-                <div className="space-y-1">
-                  <label htmlFor={`overrideFieldName-${log.id}`} className="block text-sm font-medium text-gray-700">
-                    Field name
-                  </label>
-                  <input
-                    id={`overrideFieldName-${log.id}`}
-                    value={overrideFieldName[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideFieldName((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="Field name"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideNewValue-${log.id}`} className="block text-sm font-medium text-gray-700">
-                    New value
-                  </label>
-                  <input
-                    id={`overrideNewValue-${log.id}`}
-                    value={overrideNewValue[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideNewValue((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="New value or JSON"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`overrideReason-${log.id}`} className="block text-sm font-medium text-gray-700">
-                    Override reason
-                  </label>
-                  <input
-                    id={`overrideReason-${log.id}`}
-                    value={overrideReason[log.id] ?? ''}
-                    onChange={(e) =>
-                      setOverrideReason((prev) => ({ ...prev, [log.id]: e.target.value }))
-                    }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="Override reason"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void submitOverride(log)}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black md:self-end"
-                >
-                  Override
-                </button>
-              </div>
-
-              {user?.role === UserRole.ADMIN && (
-                <div className="mt-4 rounded-md border border-orange-200 bg-orange-50 p-3">
-                  <h3 className="mb-2 text-sm font-semibold text-orange-900">Exception mode (Admin)</h3>
-                  <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
-                    <input
-                      aria-label={`Exception reason for log ${log.id}`}
-                      value={exceptionReason[log.id] ?? ''}
-                      onChange={(e) => setExceptionReason((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
-                      placeholder="Mandatory reason"
-                    />
-                    <input
-                      aria-label={`Exception occurred at for log ${log.id}`}
-                      type="datetime-local"
-                      value={exceptionOccurredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionOccurredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      aria-label={`Exception measured at for log ${log.id}`}
-                      type="datetime-local"
-                      value={exceptionMeasuredAt[log.id] ?? ''}
-                      onChange={(e) =>
-                        setExceptionMeasuredAt((prev) => ({ ...prev, [log.id]: e.target.value }))
-                      }
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
-                    />
-                    <select
-                      aria-label={`Exception unlock status for log ${log.id}`}
-                      value={exceptionStatus[log.id] ?? ''}
-                      onChange={(e) => setExceptionStatus((prev) => ({ ...prev, [log.id]: e.target.value }))}
-                      className="rounded-md border border-orange-200 px-3 py-2 text-sm"
-                    >
-                      <option value="">Keep current status</option>
-                      {Object.values(LogStatus).map((status) => (
-                        <option key={status} value={status}>
-                          Unlock to {status}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void applyException(log.id)}
-                      className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-                    >
-                      Apply
-                    </button>
-                  </div>
+              {logs.length === 0 && (
+                <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
+                  No {TYPE_LABELS[activeType].toLowerCase()} entries match the selected filters.
                 </div>
               )}
             </div>
-          ))}
-
-          {logs.length === 0 && (
-            <div className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-400 shadow-sm">
-              No log entries match the selected filters.
-            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

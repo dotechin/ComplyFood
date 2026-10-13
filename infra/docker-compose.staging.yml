@@ -1,0 +1,103 @@
+name: complyfood-staging
+
+# Local staging: production image targets (compiled builds, no hot reload),
+# but fully self-contained on your machine with its own Postgres and local upload storage.
+# Isolated ports/volumes so it can run alongside the dev stack.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: complyfood
+      POSTGRES_USER: complyfood
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-complyfood_staging}
+    ports:
+      - '5433:5432'
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U complyfood']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: runs TypeORM migrations, then exits. Uses the dev image target
+  # because migrations need ts-node + the .ts data-source/entities, which the
+  # slim production image does not include.
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: dev
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app/apps/api
+    command: ['npx', 'typeorm-ts-node-commonjs', 'migration:run', '-d', 'src/database/data-source.ts']
+    restart: 'no'
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: production
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+      JWT_SECRET: ${JWT_SECRET:-staging-secret-change-me}
+      PASSWORD_RESET_TOKEN_SALT: ${PASSWORD_RESET_TOKEN_SALT:-staging-salt-change-me}
+      JWT_EXPIRES_IN: 7d
+      PORT: 4000
+      WEB_URL: http://localhost:3100
+      STORAGE_DRIVER: local
+    ports:
+      - '4100:4000'
+    volumes:
+      - staging_storage:/app/apps/api/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      target: production
+      args:
+        # NEXT_PUBLIC_* is inlined at build time, so the browser-facing API URL
+        # must be baked in here. The browser reaches the API on the host port.
+        NEXT_PUBLIC_API_URL: http://localhost:4100
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4100
+    ports:
+      - '3100:3000'
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Optional demo data. Only runs when you pass --seed (profile "seed").
+  seed:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: dev
+    profiles: ['seed']
+    environment:
+      DATABASE_URL: postgres://complyfood:${POSTGRES_PASSWORD:-complyfood_staging}@postgres:5432/complyfood
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    working_dir: /app/apps/api
+    command: ['npx', 'ts-node', 'src/database/seeds/dev.seed.ts']
+    restart: 'no'
+
+volumes:
+  staging_postgres_data:
+  staging_storage:

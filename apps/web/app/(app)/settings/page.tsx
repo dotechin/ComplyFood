@@ -12,6 +12,7 @@ import {
   type User,
 } from '@complyfood/shared';
 import { apiGet, apiPatch, apiPost } from '../../../lib/api';
+import { ActionButton, PlusIcon, RefreshIcon, SaveIcon } from '../../../components/icon-button';
 
 function parseJson<T>(value: string, fallback: T): T {
   if (!value.trim()) return fallback;
@@ -40,8 +41,22 @@ export default function SettingsPage() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.STAFF);
+  const [language, setLanguage] = useState('en');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('complyfood-language') : null;
+    if (stored) setLanguage(stored);
+  }, []);
+
+  const changeLanguage = (value: string) => {
+    setLanguage(value);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('complyfood-language', value);
+    }
+    setMessage('Language preference saved. Full localization is coming soon.');
+  };
 
   useEffect(() => {
     apiGet<User>('/users/me')
@@ -70,7 +85,7 @@ export default function SettingsPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
   const updateOrganization = async (e: React.FormEvent) => {
@@ -178,7 +193,7 @@ export default function SettingsPage() {
 
   if (currentUser && currentUser.role !== UserRole.ADMIN) {
     return (
-      <div className="rounded-lg border bg-white p-6 text-sm text-gray-600 shadow-sm">
+      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground shadow-card">
         Settings are available to organization admins.
       </div>
     );
@@ -187,38 +202,63 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">
           Organization profile, user management, locations, presets, and reminder rules.
         </p>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {message && <p className="mt-2 text-sm text-success">{message}</p>}
+      </div>
+
+      <div className="rounded-lg border bg-card p-6 shadow-card">
+        <h2 className="mb-1 text-lg font-semibold text-foreground">Localization</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Choose your preferred language. Full interface translation is coming soon.
+        </p>
+        <div className="max-w-xs">
+          <label htmlFor="language" className="mb-1 block text-sm font-medium text-foreground">
+            Language
+          </label>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => changeLanguage(e.target.value)}
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="pt">Português</option>
+          </select>
+        </div>
       </div>
 
       {organization ? (
         <form
           id="organization-settings-form"
           onSubmit={updateOrganization}
-          className="rounded-lg border bg-white p-6 shadow-sm"
+          className="rounded-lg border bg-card p-6 shadow-card"
         >
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Organization profile</h2>
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Organization profile</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <input
               value={organization.name}
               onChange={(e) => setOrganization({ ...organization, name: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Organization name"
             />
             <input
               value={organization.address ?? ''}
               onChange={(e) => setOrganization({ ...organization, address: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Address"
             />
             <input
               value={organization.category ?? ''}
               onChange={(e) => setOrganization({ ...organization, category: e.target.value })}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Business category"
             />
           </div>
@@ -226,107 +266,103 @@ export default function SettingsPage() {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={addLocation} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Locations</h2>
+        <form onSubmit={addLocation} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Locations</h2>
           <div className="space-y-3">
             <input
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location name"
             />
             <input
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Location address"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Add location
-            </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {(organization?.locations ?? []).map((location) => (
               <li key={location.id}>
                 {location.name} {location.address ? `— ${location.address}` : ''}
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add location" />
+          </div>
         </form>
 
-        <div className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="rounded-lg border bg-card p-6 shadow-card">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-            <button
-              type="button"
-              onClick={() => void generateDailyTasks()}
-              className="rounded-md border border-blue-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
-            >
-              Generate today&apos;s tasks
-            </button>
+            <h2 className="text-lg font-semibold text-foreground">Users</h2>
+            <ActionButton icon={<RefreshIcon />} label="Generate today's tasks" onClick={() => void generateDailyTasks()} />
           </div>
-          <form onSubmit={createUser} className="mb-4 grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_auto]">
-            <div className="space-y-1">
-              <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
-                User email
-              </label>
-              <input
-                id="newUserEmail"
-                type="email"
-                required
-                value={newUserEmail}
-                onChange={(e) => setNewUserEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="User email"
-              />
+          <form onSubmit={createUser} className="mb-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <label htmlFor="newUserEmail" className="block text-sm font-medium text-foreground">
+                  User email
+                </label>
+                <input
+                  id="newUserEmail"
+                  type="email"
+                  required
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                  placeholder="User email"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="newUserPassword" className="block text-sm font-medium text-foreground">
+                  Password
+                </label>
+                <input
+                  id="newUserPassword"
+                  type="password"
+                  required
+                  minLength={8}
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                  placeholder="Password"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="newUserRole" className="block text-sm font-medium text-foreground">
+                  Role
+                </label>
+                <select
+                  id="newUserRole"
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                  className="w-full rounded-md border border-input px-3 py-2 text-sm"
+                >
+                  {Object.values(UserRole).map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label htmlFor="newUserPassword" className="block text-sm font-medium text-gray-700">
-                Temporary password
-              </label>
-              <input
-                id="newUserPassword"
-                type="password"
-                required
-                minLength={8}
-                value={newUserPassword}
-                onChange={(e) => setNewUserPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="Temporary password"
-              />
+            <div className="mt-4 flex justify-end">
+              <ActionButton type="submit" variant="primary" icon={<PlusIcon />} label="Add user" />
             </div>
-            <div className="space-y-1">
-              <label htmlFor="newUserRole" className="block text-sm font-medium text-gray-700">
-                Role
-              </label>
-              <select
-                id="newUserRole"
-                value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              >
-                {Object.values(UserRole).map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Add user
-            </button>
           </form>
           <div className="space-y-3">
             {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between rounded-md bg-gray-50 p-3">
+              <div key={user.id} className="flex items-center justify-between rounded-md bg-muted p-3">
                 <div>
-                  <p className="font-medium text-gray-900">{user.email}</p>
-                  <p className="text-xs text-gray-500">{user.role}</p>
+                  <p className="font-medium text-foreground">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">{user.role}</p>
                 </div>
                 <select
                   value={user.role}
                   onChange={(e) => void updateRole(user.id, e.target.value as UserRole)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-input px-3 py-2 text-sm"
                 >
                   {Object.values(UserRole).map((role) => (
                     <option key={role} value={role}>
@@ -341,30 +377,30 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={createPreset} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Automation presets</h2>
+        <form onSubmit={createPreset} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Automation presets</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Presets create scheduled pending log entries with default values. They do not send reminders.
+          </p>
           <div className="space-y-3">
             <input
               value={presetType}
               onChange={(e) => setPresetType(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Preset type"
             />
             <textarea
               value={presetDefaults}
               onChange={(e) => setPresetDefaults(e.target.value)}
-              className="h-28 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="h-28 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
             <textarea
               value={presetSchedule}
               onChange={(e) => setPresetSchedule(e.target.value)}
-              className="h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="h-24 w-full rounded-md border border-input px-3 py-2 text-sm"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Create preset
-            </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {presets.map((preset) => (
               <li key={preset.id}>
                 <span className="font-medium">{preset.type}</span>: {JSON.stringify(preset.defaults)} · schedule{' '}
@@ -372,34 +408,37 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Create preset" />
+          </div>
         </form>
 
-        <form onSubmit={createReminder} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Reminders</h2>
+        <form onSubmit={createReminder} className="rounded-lg border bg-card p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Reminders</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Reminders create scheduled dashboard notifications. They do not create log entries.
+          </p>
           <div className="space-y-3">
             <input
               value={reminderType}
               onChange={(e) => setReminderType(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Reminder type"
             />
             <input
               value={reminderMessage}
               onChange={(e) => setReminderMessage(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Reminder message"
             />
             <input
               value={cronExpression}
               onChange={(e) => setCronExpression(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input px-3 py-2 text-sm"
               placeholder="Cron expression"
             />
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-              Create reminder
-            </button>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-gray-600">
+          <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {reminders.map((reminder) => (
               <li key={reminder.id}>
                 <span className="font-medium">{reminder.type}</span>: {reminder.cronExpression} ·{' '}
@@ -407,6 +446,9 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex justify-end">
+            <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Create reminder" />
+          </div>
         </form>
       </div>
 

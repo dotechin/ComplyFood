@@ -2,9 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  Header,
+  HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Res,
@@ -22,6 +26,7 @@ import { UserRole } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { DocumentsService } from './documents.service';
+import { MAX_DOCUMENT_BYTES } from './pdf-parsing.service';
 
 class UploadDocumentDto {
   @IsOptional()
@@ -49,7 +54,7 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   upload(
     @CurrentUser() user: any,
@@ -67,6 +72,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }))
   findAll(@CurrentUser() user: any, @Query() query: FindDocumentsQueryDto) {
     return this.documentsService.findByOrg(user.orgId, query.category);
@@ -77,12 +83,26 @@ export class DocumentsController {
     return this.documentsService.findByLogEntry(user.orgId, entryId);
   }
 
+  @Get(':id/extract')
+  extract(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.documentsService.extract(user.orgId, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  delete(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.documentsService.delete(user.orgId, id, user.id, user.role);
+  }
+
   @Get(':id/download')
-  async download(@CurrentUser() user: any, @Param('id') id: string, @Res() res: Response) {
+  async download(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const result = await this.documentsService.getDownload(user.orgId, id);
     if (!result) {
       throw new BadRequestException('Document not found');
     }
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Content-Disposition', `attachment; filename="${result.name}"`);
     res.send(result.file);
   }

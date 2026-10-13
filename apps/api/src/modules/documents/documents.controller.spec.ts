@@ -9,6 +9,8 @@ describe('DocumentsController', () => {
     findByOrg: jest.fn(),
     findByLogEntry: jest.fn(),
     getDownload: jest.fn(),
+    extract: jest.fn(),
+    delete: jest.fn(),
   };
 
   let controller: DocumentsController;
@@ -86,5 +88,50 @@ describe('DocumentsController', () => {
         notes: 'Current permit',
       },
     );
+  });
+
+  it('passes organization scoping to extraction', () => {
+    controller.extract({ orgId: 'org-1' }, 'doc-1');
+    expect(documentsService.extract).toHaveBeenCalledWith('org-1', 'doc-1');
+  });
+
+  it('passes the organization, uploader identity and role to deletion', () => {
+    controller.delete({ orgId: 'org-1', id: 'user-1', role: UserRole.STAFF }, 'doc-1');
+    expect(documentsService.delete).toHaveBeenCalledWith('org-1', 'doc-1', 'user-1', UserRole.STAFF);
+  });
+
+  it('delivers recognized PDFs with an application/pdf type and safe caching headers', async () => {
+    const pdf = Buffer.from('%PDF-1.7 scanned');
+    documentsService.getDownload.mockResolvedValue({ file: pdf, name: 'scan.pdf', contentType: 'application/pdf' });
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await controller.download({ orgId: 'org-1' }, 'doc-1', res as any);
+
+    expect(documentsService.getDownload).toHaveBeenCalledWith('org-1', 'doc-1');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+    expect(res.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="scan.pdf"');
+    expect(res.send).toHaveBeenCalledWith(pdf);
+  });
+
+  it('delivers non-PDF files as opaque bytes', async () => {
+    documentsService.getDownload.mockResolvedValue({
+      file: Buffer.from('<svg/>'), name: 'layout.svg', contentType: 'application/octet-stream',
+    });
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await controller.download({ orgId: 'org-1' }, 'doc-1', res as any);
+
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
+    expect(res.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
+  });
+
+  it('does not send anything for documents outside the organization', async () => {
+    documentsService.getDownload.mockResolvedValue(null);
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await expect(controller.download({ orgId: 'org-2' }, 'doc-1', res as any)).rejects.toThrow(BadRequestException);
+    expect(res.send).not.toHaveBeenCalled();
   });
 });

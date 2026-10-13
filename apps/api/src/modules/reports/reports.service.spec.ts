@@ -66,6 +66,9 @@ describe('ReportsService', () => {
         measuredAt: new Date('2026-01-01T08:30:00Z'),
         isException: true,
         exceptionReason: 'Supplier said "delay"',
+        recordOrigin: 'historical_transcription',
+        sourceDocumentId: 'source-pdf-1',
+        sourcePage: 3,
         fields: { item: 'Fridge "A"', temperature: '4' },
       },
     ]);
@@ -74,7 +77,31 @@ describe('ReportsService', () => {
 
     expect(csv).toContain('id,type,status,locationId');
     expect(csv).toContain('"Supplier said ""delay"""');
+    expect(csv).toContain('"historical_transcription","source-pdf-1","3"');
     expect(csv).toContain('"{""item"":""Fridge \\""A\\"""",""temperature"":""4""}"');
+  });
+
+  it('uses source month and week, not import time, in historical PDF summaries', async () => {
+    logsService.findAll.mockResolvedValue([{
+      id: 'cleaning-1',
+      type: LogType.CLEANING,
+      status: LogStatus.CONFIRMED,
+      createdAt: new Date('2026-10-06T07:00:00Z'),
+      occurredAt: null,
+      measuredAt: null,
+      recordOrigin: 'historical_transcription',
+      sourceDocumentId: 'source-pdf-1',
+      sourcePage: 7,
+      submittedBy: 'user-1',
+      submittedAt: new Date('2026-10-06T07:00:00Z'),
+      fields: { 'Source month': '2020-11', 'Source week': 2, 'Source PDF': 'cleaning.pdf' },
+    }]);
+    overridesService.findByOrg.mockResolvedValue([]);
+
+    const pdf = await service.generatePdf('org-1');
+
+    expect(pdf.toString('utf8')).toContain('2020-11 week 2');
+    expect(pdf.toString('utf8')).toContain('Source: cleaning.pdf page 7 | Imported by: user-1 at 2026-10-06T07:00:00.000Z');
   });
 
   it('generates a PDF buffer', async () => {

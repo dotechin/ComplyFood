@@ -1,4 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
+import { UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { DataSource } from 'typeorm';
 import { DocumentCategory } from '@complyfood/shared';
 import { AuthService } from '../modules/auth/auth.service';
@@ -8,6 +10,7 @@ import { LogsService } from '../modules/logs/logs.service';
 import { OverridesService } from '../modules/overrides/overrides.service';
 import { AutomationService } from '../modules/automation/automation.service';
 import { DocumentsService } from '../modules/documents/documents.service';
+import { PdfParsingService } from '../modules/documents/pdf-parsing.service';
 import { ReportsService } from '../modules/reports/reports.service';
 import { UserRole } from '../common/decorators/roles.decorator';
 import { LogEntry, LogStatus, LogType } from '../modules/logs/entities/log-entry.entity';
@@ -40,7 +43,10 @@ describe('Compliance integration flow', () => {
       dataSource.getRepository(Organization),
       dataSource.getRepository(Location),
     );
-    logsService = new LogsService(dataSource.getRepository(LogEntry));
+    logsService = new LogsService(
+      dataSource.getRepository(LogEntry),
+      dataSource.getRepository(Document),
+    );
     overridesService = new OverridesService(
       dataSource.getRepository(OverrideRecord),
       logsService,
@@ -51,7 +57,9 @@ describe('Compliance integration flow', () => {
       dataSource.getRepository(ReminderEvent),
       logsService,
     );
-    documentsService = new DocumentsService(dataSource.getRepository(Document));
+    documentsService = new DocumentsService(dataSource.getRepository(Document), {
+      parse: jest.fn().mockRejectedValue(new Error('Invalid PDF')),
+    } as unknown as PdfParsingService);
     reportsService = new ReportsService(logsService, overridesService);
     authService = new AuthService(
       usersService,
@@ -61,6 +69,7 @@ describe('Compliance integration flow', () => {
   });
 
   afterEach(async () => {
+    await documentsService?.onModuleDestroy();
     await cleanupTestStorage();
     if (dataSource?.isInitialized) {
       await dataSource.destroy();
@@ -78,6 +87,11 @@ describe('Compliance integration flow', () => {
 
     expect(bootstrap.user.role).toBe(UserRole.ADMIN);
     expect(bootstrap.user.orgId).toBeDefined();
+    const owner = await usersService.findById(bootstrap.user.id);
+    expect(bcrypt.getRounds(owner!.passwordHash)).toBe(10);
+    await expect(authService.validateUser(owner!.email, 'password123')).resolves.toMatchObject({
+      id: owner!.id,
+    });
 
     const organization = await organizationsService.findOrgById(bootstrap.user.orgId);
     expect(organization).toMatchObject({
@@ -100,6 +114,10 @@ describe('Compliance integration flow', () => {
       bootstrap.user.orgId,
     );
     expect(staffUser.role).toBe(UserRole.STAFF);
+    expect(bcrypt.getRounds(staffUser.passwordHash)).toBe(10);
+    await expect(authService.validateUser(staffUser.email, 'password123')).resolves.toMatchObject({
+      id: staffUser.id,
+    });
 
     const reset = await authService.requestPasswordReset('chef@example.com');
     expect(reset.resetToken).toBeDefined();
@@ -109,6 +127,26 @@ describe('Compliance integration flow', () => {
 
     const authenticated = await authService.validateUser('chef@example.com', 'newpassword123');
     expect(authenticated.id).toBe(staffUser.id);
+    expect(bcrypt.getRounds(authenticated.passwordHash)).toBe(10);
+    expect(authenticated.passwordResetTokenHash).toBeNull();
+    await expect(authService.validateUser(staffUser.email, 'password123')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('hashes and verifies supermode PINs with cost 10', async () => {
+    const user = await usersService.create('pin@example.com', 'password123');
+    await usersService.setSupermodePin(user.id, '1234');
+    const updated = await usersService.findById(user.id);
+    expect(bcrypt.getRounds(updated!.supermodePinHash!)).toBe(10);
+
+    await expect(usersService.verifySupermodePin(user.id, '4321')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(usersService.verifySupermodePin(user.id, '1234')).resolves.toMatchObject({
+      pinSet: true,
+      attemptsLeft: 3,
+    });
   });
 
   it('covers logs, overrides, automation, documents, reports, and audit queries', async () => {

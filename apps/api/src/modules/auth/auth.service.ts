@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { randomBytes, scryptSync } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../../common/decorators/roles.decorator';
@@ -93,7 +93,8 @@ export class AuthService {
     };
 
     if (process.env.NODE_ENV !== 'production') {
-      const webUrl = process.env.WEB_URL || 'http://localhost:3000';
+      const webUrl = process.env.WEB_URL?.split(',').map((url) => url.trim()).find(Boolean)
+        || 'http://localhost:3000';
       response.resetToken = token;
       response.resetUrl = `${webUrl}/reset-password?token=${encodeURIComponent(token)}`;
     }

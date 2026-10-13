@@ -1,7 +1,31 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { LogEntry, LogStatus, LogType } from './entities/log-entry.entity';
+import { Document } from '../documents/entities/document.entity';
+
+const HISTORICAL_TEMPERATURE_UNITS = new Set([
+  'Banco Refrigerato Bar (n.1)',
+  'Banco Refrigerato Bar (n.2)',
+  'Banco Refrigerato Bar (n.3)',
+  'Pozzetto Freezer Cucina (n.4)',
+]);
+const CLEANING_SCHEDULE_AREA_FIELD = 'Area / Item';
+const CLEANING_SCHEDULE_DATE_FIELD = 'Cleaning date';
+
+const CLEANING_OUTCOME_FIELDS = [
+  'Machinery and equipment',
+  'Work surfaces',
+  'Sinks',
+  'Walls and ceilings',
+  'Floors',
+  'Dishwashing area and utensils',
+  'Fridges and freezers',
+  'Waste containers',
+  'Personal hygiene',
+  'Staff facilities',
+  'Shelves and cupboards',
+];
 
 interface CreateLogInput {
   type: LogType;
@@ -27,9 +51,12 @@ export class LogsService {
   constructor(
     @InjectRepository(LogEntry)
     private readonly repo: Repository<LogEntry>,
+    @InjectRepository(Document)
+    private readonly documents: Repository<Document>,
   ) {}
 
   create(orgId: string, userId: string | null, data: CreateLogInput) {
+    const occurredAt = data.type === LogType.CLEANING ? this.validateCleaningFields(data.fields) : null;
     return this.repo.save(
       this.repo.create({
         orgId,
@@ -40,7 +67,7 @@ export class LogsService {
         submittedBy: null,
         submittedAt: null,
         status: LogStatus.PENDING,
-        occurredAt: null,
+        occurredAt,
         measuredAt: null,
         isException: false,
         exceptionReason: null,
@@ -58,17 +85,28 @@ export class LogsService {
     dateFrom?: Date,
     dateTo?: Date,
   ): Promise<LogEntry[]> {
-    const where: Record<string, any> = { orgId };
-    if (type) where.type = type;
-    if (locationId) where.locationId = locationId;
-    if (status) where.status = status;
+    const query = this.repo.createQueryBuilder('log').where('log.org_id = :orgId', { orgId });
+    if (type) query.andWhere('log.type = :type', { type });
+    if (locationId) query.andWhere('log.location_id = :locationId', { locationId });
+    if (status) query.andWhere('log.status = :status', { status });
     if (dateFrom || dateTo) {
-      where.createdAt = Between(
-        dateFrom ?? new Date('2000-01-01T00:00:00.000Z'),
-        dateTo ?? new Date('2999-12-31T23:59:59.999Z'),
+      const from = dateFrom ?? new Date('2000-01-01T00:00:00.000Z');
+      const to = dateTo ?? new Date('2999-12-31T23:59:59.999Z');
+      query.andWhere(
+        `((log.fields->>'Source month' IS NOT NULL AND log.fields->>'Source month' BETWEEN :sourcePeriodFrom AND :sourcePeriodTo)
+          OR (log.fields->>'Source month' IS NULL AND COALESCE(log.measured_at, log.occurred_at, log.created_at) BETWEEN :dateFrom AND :dateTo))`,
+        {
+          dateFrom: from,
+          dateTo: to,
+          sourcePeriodFrom: from.toISOString().slice(0, 7),
+          sourcePeriodTo: to.toISOString().slice(0, 7),
+        },
       );
     }
-    return this.repo.find({ where, order: { createdAt: 'DESC' } });
+    return query.orderBy(
+      "COALESCE(to_date(log.fields->>'Source month', 'YYYY-MM')::timestamptz, log.measured_at, log.occurred_at, log.created_at)",
+      'DESC',
+    ).getMany();
   }
 
   async findOne(id: string, orgId: string): Promise<LogEntry> {
@@ -79,7 +117,11 @@ export class LogsService {
 
   async update(id: string, orgId: string, data: UpdateLogInput): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
+    if (entry.recordOrigin === 'historical_transcription') {
+      throw new BadRequestException('Historical source transcriptions cannot be edited; add a new reviewed record instead');
+    }
     if (data.fields) entry.fields = data.fields;
+    if (entry.type === LogType.CLEANING && data.fields) this.validateCleaningFields(entry.fields);
     if (Object.prototype.hasOwnProperty.call(data, 'locationId')) {
       entry.locationId = data.locationId ?? null;
     }
@@ -105,8 +147,321 @@ export class LogsService {
     return this.repo.save(entry);
   }
 
+  async backfill(
+    orgId: string,
+    userId: string,
+    data: {
+      type: LogType;
+      fields: Record<string, any>;
+      locationId?: string | null;
+      createdAt: Date;
+      status?: LogStatus;
+      occurredAt?: Date | null;
+      measuredAt?: Date | null;
+    },
+  ): Promise<LogEntry> {
+    const status = data.status ?? LogStatus.CONFIRMED;
+    const isConfirmed = status === LogStatus.CONFIRMED;
+    const entry = await this.repo.save(
+      this.repo.create({
+        orgId,
+        locationId: data.locationId ?? null,
+        type: data.type,
+        fields: data.fields ?? {},
+        presetId: null,
+        submittedBy: isConfirmed ? userId : null,
+        submittedAt: isConfirmed ? data.createdAt : null,
+        status,
+        occurredAt: data.occurredAt ?? data.createdAt,
+        measuredAt: data.measuredAt ?? data.createdAt,
+        isException: false,
+        exceptionReason: null,
+        exceptionBy: null,
+        exceptionAt: null,
+      }),
+    );
+    // createdAt is a CreateDateColumn set automatically on insert; override it so
+    // the entry lands on the requested (backdated) day for reports and filters.
+    await this.repo
+      .createQueryBuilder()
+      .update(LogEntry)
+      .set({ createdAt: data.createdAt })
+      .where('id = :id', { id: entry.id })
+      .execute();
+    return this.findOne(entry.id, orgId);
+  }
+
+  async importHistoricalTemperatures(
+    orgId: string,
+    userId: string,
+    sourceDocumentId: string,
+    records: Array<{ date: string; unit: string; outcome: 'C' | 'NC'; page: number }>,
+  ) {
+    const source = await this.documents.findOne({ where: { id: sourceDocumentId, orgId } });
+    if (!source || (source.mimeType !== 'application/pdf' && !source.name.toLowerCase().endsWith('.pdf'))) {
+      throw new NotFoundException('Source PDF not found');
+    }
+
+    const now = new Date();
+    const uniqueRecords = new Map<string, { date: string; unit: string; outcome: 'C' | 'NC'; page: number }>();
+    let skippedSundays = 0;
+    let duplicateInputs = 0;
+    for (const record of records) {
+      if (!HISTORICAL_TEMPERATURE_UNITS.has(record.unit)) {
+        throw new BadRequestException(`Unsupported historical temperature unit: ${record.unit}`);
+      }
+      if (!Number.isInteger(record.page) || record.page < 1) {
+        throw new BadRequestException('Source pages must be positive whole numbers');
+      }
+      const measuredAt = this.parseHistoricalDate(record.date);
+      if (measuredAt > now) throw new BadRequestException('Historical log dates cannot be in the future');
+      if (measuredAt.getUTCDay() === 0) {
+        skippedSundays += 1;
+        continue;
+      }
+      const key = `${record.date}|${record.unit}`;
+      const previous = uniqueRecords.get(key);
+      if (previous && (previous.outcome !== record.outcome || previous.page !== record.page)) {
+        throw new BadRequestException(`Conflicting source marks for ${record.unit} on ${record.date}`);
+      }
+      if (previous) duplicateInputs += 1;
+      else uniqueRecords.set(key, record);
+    }
+
+    const existing = await this.repo.find({ where: { orgId, sourceDocumentId } });
+    const existingByKey = new Map<string, LogEntry>(
+      existing.map((entry) => {
+        const date = entry.occurredAt?.toISOString().slice(0, 10);
+        return [`${date}|${entry.fields['Workstation / unit']}`, entry] as [string, LogEntry];
+      }),
+    );
+    let previouslyImported = 0;
+    const entries = [...uniqueRecords.values()].flatMap((record) => {
+      const key = `${record.date}|${record.unit}`;
+      const existingEntry = existingByKey.get(key);
+      if (existingEntry) {
+        if (
+          existingEntry.fields['Original form outcome'] !== record.outcome ||
+          existingEntry.sourcePage !== record.page
+        ) {
+          throw new BadRequestException(`Conflicting source marks for ${record.unit} on ${record.date}`);
+        }
+        previouslyImported += 1;
+        return [];
+      }
+      return [this.repo.create({
+        orgId,
+        locationId: null,
+        type: LogType.TEMPERATURE,
+        fields: {
+          'Workstation / unit': record.unit,
+          'Original form outcome': record.outcome,
+          'Record origin': 'Historical transcription',
+          'Source PDF': source.name,
+          'Source page': record.page,
+        },
+        status: LogStatus.CONFIRMED,
+        submittedBy: userId,
+        submittedAt: now,
+        presetId: null,
+        occurredAt: this.parseHistoricalDate(record.date),
+        measuredAt: this.parseHistoricalDate(record.date),
+        recordOrigin: 'historical_transcription',
+        sourceDocumentId,
+        sourcePage: record.page,
+        isException: false,
+        exceptionReason: null,
+        exceptionBy: null,
+        exceptionAt: null,
+      })];
+    });
+
+    if (entries.length > 0) {
+      await this.repo.manager.transaction(async (manager) => {
+        await manager.save(LogEntry, entries);
+      });
+    }
+    return {
+      imported: entries.length,
+      skippedSundays,
+      duplicates: duplicateInputs + previouslyImported,
+    };
+  }
+
+  async importHistoricalCleaning(
+    orgId: string,
+    userId: string,
+    sourceDocumentId: string,
+    records: Array<{
+      period: string;
+      week: number;
+      page: number;
+      outcomes: Array<'C' | 'A' | 'NC'>;
+      correctiveAction?: string;
+    }>,
+  ) {
+    const source = await this.documents.findOne({ where: { id: sourceDocumentId, orgId } });
+    if (!source || (source.mimeType !== 'application/pdf' && !source.name.toLowerCase().endsWith('.pdf'))) {
+      throw new NotFoundException('Source PDF not found');
+    }
+
+    const existing = await this.repo.find({ where: { orgId, sourceDocumentId } });
+    const existingByKey = new Map<string, LogEntry>(existing.map((entry) => [
+      `${entry.sourcePage}|${entry.fields['Source month']}|${entry.fields['Source week']}`,
+      entry,
+    ] as [string, LogEntry]));
+    const uniqueRecords = new Map<string, (typeof records)[number]>();
+    let duplicateInputs = 0;
+    for (const record of records) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(record.period)) {
+        throw new BadRequestException('Cleaning source periods must use YYYY-MM format');
+      }
+      if (!Number.isInteger(record.week) || record.week < 1 || record.week > 5 || record.outcomes.length !== CLEANING_OUTCOME_FIELDS.length ||
+        !Number.isInteger(record.page) || record.page < 1 ||
+        record.outcomes.some((outcome) => !['C', 'A', 'NC'].includes(outcome))) {
+        throw new BadRequestException('Each source week must include one C/A/NC outcome for every cleaning category');
+      }
+      const key = `${record.page}|${record.period}|${record.week}`;
+      const previous = uniqueRecords.get(key);
+      if (previous && (
+        (previous.correctiveAction?.trim() ?? '') !== (record.correctiveAction?.trim() ?? '') ||
+        previous.outcomes.some((outcome, index) => outcome !== record.outcomes[index])
+      )) {
+        throw new BadRequestException(`Conflicting source marks for ${record.period} week ${record.week}`);
+      }
+      if (previous) duplicateInputs += 1;
+      else uniqueRecords.set(key, record);
+    }
+    let previouslyImported = 0;
+    const entries = [...uniqueRecords.entries()].flatMap(([key, record]) => {
+      const existingEntry = existingByKey.get(key);
+      if (existingEntry) {
+        const existingOutcomes = CLEANING_OUTCOME_FIELDS.map(
+          (category) => existingEntry.fields[`Cleaning outcome — ${category}`],
+        );
+        if (
+          existingOutcomes.some((outcome, index) => outcome !== record.outcomes[index]) ||
+          (existingEntry.fields['Corrective action'] ?? '') !== (record.correctiveAction?.trim() ?? '')
+        ) {
+          throw new BadRequestException(`Conflicting source marks for ${record.period} week ${record.week}`);
+        }
+        previouslyImported += 1;
+        return [];
+      }
+      const fields: Record<string, any> = {
+        'Record origin': 'Historical transcription',
+        'Source PDF': source.name,
+        'Source page': record.page,
+        'Source month': record.period,
+        'Source week': record.week,
+      };
+      CLEANING_OUTCOME_FIELDS.forEach((category, index) => {
+        fields[`Cleaning outcome — ${category}`] = record.outcomes[index];
+      });
+      if (record.correctiveAction?.trim()) fields['Corrective action'] = record.correctiveAction.trim();
+      return [this.repo.create({
+        orgId,
+        locationId: null,
+        type: LogType.CLEANING,
+        fields,
+        status: LogStatus.CONFIRMED,
+        submittedBy: userId,
+        submittedAt: new Date(),
+        presetId: null,
+        occurredAt: null,
+        measuredAt: null,
+        recordOrigin: 'historical_transcription',
+        sourceDocumentId,
+        sourcePage: record.page,
+        isException: false,
+        exceptionReason: null,
+        exceptionBy: null,
+        exceptionAt: null,
+      })];
+    });
+
+    if (entries.length > 0) {
+      await this.repo.manager.transaction(async (manager) => {
+        await manager.save(LogEntry, entries);
+      });
+    }
+    return { imported: entries.length, duplicates: duplicateInputs + previouslyImported };
+  }
+
+  private parseHistoricalDate(value: string): Date {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+      throw new BadRequestException('Historical dates must be valid YYYY-MM-DD calendar dates');
+    }
+    return date;
+  }
+
+  private validateCleaningFields(fields: Record<string, any>): Date | null {
+    if (Object.prototype.hasOwnProperty.call(fields, CLEANING_SCHEDULE_AREA_FIELD)) {
+      return this.validateCleaningScheduleFields(fields);
+    }
+    for (const category of CLEANING_OUTCOME_FIELDS) {
+      const outcome = fields[`Cleaning outcome — ${category}`];
+      if (!['C', 'A', 'NC'].includes(outcome)) {
+        throw new BadRequestException(`Select a C, A, or NC outcome for ${category}`);
+      }
+    }
+    if (!['1', '2', '3', '4', '5'].includes(String(fields['Weekly check'] ?? ''))) {
+      throw new BadRequestException('Select the week for this cleaning check');
+    }
+    if (
+      CLEANING_OUTCOME_FIELDS.some((category) => fields[`Cleaning outcome — ${category}`] === 'NC') &&
+      !String(fields['Corrective action'] ?? '').trim()
+    ) {
+      throw new BadRequestException('A corrective action is required when any cleaning category is non-compliant');
+    }
+    return null;
+  }
+
+  /** A single tick on the Cleaning & Disinfection Schedule: one area/item cleaned on one calendar day. */
+  private validateCleaningScheduleFields(fields: Record<string, any>) {
+    const area = fields[CLEANING_SCHEDULE_AREA_FIELD];
+    if (typeof area !== 'string' || !area.trim()) {
+      throw new BadRequestException('Select the area or item that was cleaned');
+    }
+    const date = fields[CLEANING_SCHEDULE_DATE_FIELD];
+    const parsedDate = typeof date === 'string' ? new Date(`${date}T00:00:00.000Z`) : null;
+    if (
+      typeof date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      !parsedDate ||
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== date
+    ) {
+      throw new BadRequestException('Cleaning date must use YYYY-MM-DD format');
+    }
+    return parsedDate;
+  }
+
+  async reset(orgId: string, scope: 'generated' | 'all'): Promise<{ deleted: number }> {
+    const query = this.repo.createQueryBuilder().delete().from(LogEntry)
+      .where('org_id = :orgId', { orgId })
+      .andWhere('source_document_id IS NULL');
+    if (scope === 'generated') {
+      query.andWhere(`fields->>'source' LIKE 'supermode-%'`);
+    }
+    const result = await query.execute();
+    return { deleted: result.affected ?? 0 };
+  }
+
+  async remove(id: string, orgId: string): Promise<void> {
+    const entry = await this.findOne(id, orgId);
+    if (entry.recordOrigin === 'historical_transcription') {
+      throw new BadRequestException('Historical source transcriptions cannot be deleted');
+    }
+    await this.repo.remove(entry);
+  }
+
   async confirm(id: string, orgId: string, userId: string): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
+    if (entry.recordOrigin === 'historical_transcription') {
+      throw new BadRequestException('Historical source transcriptions are already reviewed and cannot be re-confirmed');
+    }
     entry.status = LogStatus.CONFIRMED;
     entry.submittedBy = userId;
     entry.submittedAt = new Date();
@@ -121,6 +476,9 @@ export class LogsService {
     data: { occurredAt?: Date; measuredAt?: Date; unlockToStatus?: LogStatus },
   ) {
     const entry = await this.findOne(id, orgId);
+    if (entry.recordOrigin === 'historical_transcription') {
+      throw new BadRequestException('Historical source transcriptions cannot be changed through exception mode');
+    }
     entry.isException = true;
     entry.exceptionReason = reason;
     entry.exceptionBy = userId;

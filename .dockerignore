@@ -1,0 +1,11 @@
+.git
+.github
+**/node_modules
+**/dist
+**/.next
+**/*.tsbuildinfo
+**/.turbo
+**/coverage
+**/.env
+**/.env.*
+apps/api/storage
