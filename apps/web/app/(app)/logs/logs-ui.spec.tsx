@@ -123,7 +123,7 @@ describe('Daily Logs UI', () => {
     );
     expect(html).toContain(`<option value="${TEMPERATURE_UNITS[3].value}" selected="">`);
     expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025 (blank sheet)');
-    expect(html).not.toContain('<table');
+    expect(html).toContain('<table');
   });
 
   it('supports fridge and freezer unit categories and protects the final unit from deletion', () => {
