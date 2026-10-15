@@ -37,6 +37,11 @@ class SetSupermodePinDto extends SupermodePinDto {
   currentPin?: string;
 }
 
+class SetSecretPinDto extends SupermodePinDto {
+  @IsString()
+  currentPin: string;
+}
+
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
@@ -99,5 +104,22 @@ export class UsersController {
   verifySupermodePin(@CurrentUser() user: any, @Body() dto: SupermodePinDto, @Req() request: Request) {
     request.body.pin = '[REDACTED]';
     return this.usersService.verifySupermodePin(user.id, dto.pin);
+  }
+
+  @Post('me/supermode/unlock')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  unlockSupermode(@CurrentUser() user: any, @Body() dto: SupermodePinDto, @Req() request: Request) {
+    request.body.pin = '[REDACTED]';
+    return this.usersService.unlockSupermode(user.id, dto.pin);
+  }
+
+  @Post('me/supermode/secret-pin')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN)
+  setSecretPin(@CurrentUser() user: any, @Body() dto: SetSecretPinDto, @Req() request: Request) {
+    request.body.pin = '[REDACTED]';
+    request.body.currentPin = '[REDACTED]';
+    return this.usersService.setSecretPin(user.id, dto.pin, dto.currentPin);
   }
 }
