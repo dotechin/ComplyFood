@@ -46,6 +46,7 @@ export class UsersService {
         : null;
     return {
       pinSet: Boolean(user.supermodePinHash),
+      secretPinSet: Boolean(user.supermodeSecretPinHash),
       lockedUntil,
       attemptsLeft: SUPERMODE_MAX_ATTEMPTS - (user.supermodeFailedAttempts ?? 0),
     };
@@ -72,6 +73,28 @@ export class UsersService {
    * account is locked, and each repeat lockout doubles the wait.
    */
   async verifySupermodePin(userId: string, pin: string) {
+    const { status } = await this.checkSupermodePin(userId, pin, false);
+    return status;
+  }
+
+  /** Unlocks supermode with either PIN; the secondary PIN opens the secret menu. */
+  async unlockSupermode(userId: string, pin: string) {
+    const { status, mode } = await this.checkSupermodePin(userId, pin, true);
+    return { ...status, mode };
+  }
+
+  async setSecretPin(userId: string, pin: string, currentPin: string) {
+    await this.verifySupermodePin(userId, currentPin);
+    const user = await this.requireUser(userId);
+    if (await bcrypt.compare(pin, user.supermodePinHash!)) {
+      throw new BadRequestException('The secret PIN must differ from the main PIN');
+    }
+    user.supermodeSecretPinHash = await bcrypt.hash(pin, 10);
+    await this.repo.save(user);
+    return this.getSupermodeStatus(user);
+  }
+
+  private async checkSupermodePin(userId: string, pin: string, allowSecret: boolean) {
     const user = await this.requireUser(userId);
     if (!user.supermodePinHash) throw new BadRequestException('Supermode PIN is not set');
 
@@ -82,13 +105,15 @@ export class UsersService {
       );
     }
 
-    const valid = await bcrypt.compare(pin, user.supermodePinHash);
-    if (valid) {
+    const isMain = await bcrypt.compare(pin, user.supermodePinHash);
+    const isSecret = !isMain && allowSecret && Boolean(user.supermodeSecretPinHash)
+      && await bcrypt.compare(pin, user.supermodeSecretPinHash!);
+    if (isMain || isSecret) {
       user.supermodeFailedAttempts = 0;
       user.supermodeLockouts = 0;
       user.supermodeLockedUntil = null;
       await this.repo.save(user);
-      return this.getSupermodeStatus(user);
+      return { status: this.getSupermodeStatus(user), mode: (isSecret ? 'secret' : 'standard') as 'secret' | 'standard' };
     }
 
     user.supermodeFailedAttempts = (user.supermodeFailedAttempts ?? 0) + 1;

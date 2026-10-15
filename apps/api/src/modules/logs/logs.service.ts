@@ -57,6 +57,8 @@ export class LogsService {
 
   create(orgId: string, userId: string | null, data: CreateLogInput) {
     const occurredAt = data.type === LogType.CLEANING ? this.validateCleaningFields(data.fields) : null;
+    // The reading time always comes from the server clock, never from the client.
+    const measuredAt = data.type === LogType.TEMPERATURE || data.type === LogType.RECEIVING ? new Date() : null;
     return this.repo.save(
       this.repo.create({
         orgId,
@@ -68,7 +70,7 @@ export class LogsService {
         submittedAt: null,
         status: LogStatus.PENDING,
         occurredAt,
-        measuredAt: null,
+        measuredAt,
         isException: false,
         exceptionReason: null,
         exceptionBy: null,

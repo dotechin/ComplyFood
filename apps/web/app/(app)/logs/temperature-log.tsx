@@ -24,6 +24,10 @@ const FIELDS = [
 ] as const;
 const ENTRIES_STORAGE_PREFIX = 'complyfood-temperature-sheet';
 
+function currentTime(date = new Date()) {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 function isOutOfRange(value: string, category: TemperatureUnitCategory) {
   const n = Number(value);
   if (value.trim() === '' || Number.isNaN(n)) return false;
@@ -87,6 +91,12 @@ export function TemperatureLog({
       const next = { ...prev };
       if (value) next[editing.key] = value;
       else delete next[editing.key];
+      // Temperature readings are stamped with the system clock, never typed by hand.
+      if (editing.key.endsWith('Temp')) {
+        const timeKey = `${editing.key}Time`;
+        if (value && value !== prev[editing.key]) next[timeKey] = currentTime();
+        else if (!value) delete next[timeKey];
+      }
       return next;
     });
     setEditing(null);
@@ -214,6 +224,9 @@ export function TemperatureLog({
                           className={`block h-10 w-full px-2 text-left text-foreground hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary ${out ? 'font-semibold text-danger' : ''}`}
                         >
                           {value}{value && field.kind === 'temp' ? '°C' : ''}
+                          {value && field.kind === 'temp' && entries[`${key}Time`] && (
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">@ {entries[`${key}Time`]}</span>
+                          )}
                         </button>
                         {open && (
                           <form

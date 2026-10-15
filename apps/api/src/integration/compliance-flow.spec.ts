@@ -149,6 +149,18 @@ describe('Compliance integration flow', () => {
     });
   });
 
+  it('opens the secret supermode menu with a secondary PIN only', async () => {
+    const user = await usersService.create('secret@example.com', 'password123');
+    await usersService.setSupermodePin(user.id, '1234');
+    await expect(usersService.setSecretPin(user.id, '1234', '1234')).rejects.toThrow('must differ');
+    await expect(usersService.setSecretPin(user.id, '9876', '1234')).resolves.toMatchObject({ secretPinSet: true });
+
+    await expect(usersService.unlockSupermode(user.id, '1234')).resolves.toMatchObject({ mode: 'standard' });
+    await expect(usersService.unlockSupermode(user.id, '9876')).resolves.toMatchObject({ mode: 'secret' });
+    // Destructive actions keep using the main PIN only.
+    await expect(usersService.verifySupermodePin(user.id, '9876')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('covers logs, overrides, automation, documents, reports, and audit queries', async () => {
     const bootstrap = await authService.bootstrapOrganization(
       'Osteria del Mercato',

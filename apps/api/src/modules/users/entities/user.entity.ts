@@ -35,6 +35,9 @@ export class User {
   @Column({ name: 'supermode_pin_hash', type: 'varchar', nullable: true })
   supermodePinHash: string | null;
 
+  @Column({ name: 'supermode_secret_pin_hash', type: 'varchar', nullable: true })
+  supermodeSecretPinHash: string | null;
+
   @Column({ name: 'supermode_failed_attempts', type: 'int', default: 0 })
   supermodeFailedAttempts: number;
 
