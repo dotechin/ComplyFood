@@ -24,11 +24,9 @@ if (apiProxyUrl) {
 const nextConfig = {
   output: 'standalone',
   transpilePackages: ['@complyfood/ui', '@complyfood/shared'],
-  experimental: {
-    // In a monorepo, trace files from the workspace root so the standalone
-    // build bundles everything the server needs.
-    outputFileTracingRoot: path.join(__dirname, '../../'),
-  },
+  // In a monorepo, trace files from the workspace root so the standalone
+  // build bundles everything the server needs.
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   async rewrites() {
     return apiProxyOrigin
       ? [{ source: '/api/v1/:path*', destination: `${apiProxyOrigin}/api/v1/:path*` }]
