@@ -68,6 +68,7 @@ export default function ForgotPasswordPage() {
               </svg>
             </span>
             <input
+              data-lpignore="true"
               id="email"
               type="email"
               required
