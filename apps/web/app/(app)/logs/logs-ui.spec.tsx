@@ -204,9 +204,11 @@ describe('Daily Logs UI', () => {
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
 
     const page = LogsPage();
-    const schedule = (page.props.children as React.ReactElement[])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- inspecting arbitrary element props
+    type AnyElement = React.ReactElement<any>;
+    const schedule = (page.props.children as AnyElement[])
       .flatMap((child) => child?.type === React.Fragment ? React.Children.toArray(child.props.children) : [child])
-      .find((child): child is React.ReactElement => React.isValidElement(child) && child.type === CleaningSchedule)!;
+      .find((child): child is AnyElement => React.isValidElement(child) && child.type === CleaningSchedule)!;
     schedule.props.onTick('Ice Machine (Bar)', '2026-10-05');
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -271,7 +273,8 @@ describe('Daily Logs UI', () => {
     (apiPost as jest.Mock).mockResolvedValue(base);
 
     const page = LogsPage();
-    const form = (page.props.children as React.ReactElement[]).find((child) => child?.type === 'form')!;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- inspecting arbitrary element props
+    const form = (page.props.children as React.ReactElement<any>[]).find((child) => child?.type === 'form')!;
     const preventDefault = jest.fn();
     await form.props.onSubmit({ preventDefault });
 
