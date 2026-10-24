@@ -158,6 +158,7 @@ export default function RegisterPage() {
                 Organization name
               </label>
               <input
+                data-lpignore="true"
                 id="organizationName"
                 required
                 value={organizationName}
@@ -170,6 +171,7 @@ export default function RegisterPage() {
                 Business category
               </label>
               <input
+                data-lpignore="true"
                 id="organizationCategory"
                 value={organizationCategory}
                 onChange={(e) => setOrganizationCategory(e.target.value)}
@@ -181,6 +183,7 @@ export default function RegisterPage() {
                 Address
               </label>
               <input
+                data-lpignore="true"
                 id="organizationAddress"
                 value={organizationAddress}
                 onChange={(e) => setOrganizationAddress(e.target.value)}
@@ -192,6 +195,7 @@ export default function RegisterPage() {
                 Admin email
               </label>
               <input
+                data-lpignore="true"
                 id="email"
                 type="email"
                 required
@@ -205,6 +209,7 @@ export default function RegisterPage() {
                 Password
               </label>
               <input
+                data-lpignore="true"
                 id="password"
                 type="password"
                 required
@@ -219,6 +224,7 @@ export default function RegisterPage() {
                 Confirm password
               </label>
               <input
+                data-lpignore="true"
                 id="confirmPassword"
                 type="password"
                 required
