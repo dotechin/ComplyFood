@@ -1,5 +1,13 @@
 const path = require('path');
 
+// Env files may live at the monorepo root (e.g. the v0 preview writes
+// .env.development.local there), but Next only reads them from apps/web.
+// @next/env is resolved through `next` because pnpm does not hoist it.
+if (process.env.NODE_ENV !== 'production') {
+  const { loadEnvConfig } = require(require.resolve('@next/env', { paths: [require.resolve('next')] }));
+  loadEnvConfig(path.join(__dirname, '../../'), true);
+}
+
 const apiProxyUrl = process.env.API_PROXY_URL;
 let apiProxyOrigin;
 if (apiProxyUrl) {
