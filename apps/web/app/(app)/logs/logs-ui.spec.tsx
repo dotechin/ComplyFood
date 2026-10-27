@@ -204,7 +204,6 @@ describe('Daily Logs UI', () => {
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
 
     const page = LogsPage();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- inspecting arbitrary element props
     type AnyElement = React.ReactElement<any>;
     const schedule = (page.props.children as AnyElement[])
       .flatMap((child) => child?.type === React.Fragment ? React.Children.toArray(child.props.children) : [child])
@@ -273,7 +272,6 @@ describe('Daily Logs UI', () => {
     (apiPost as jest.Mock).mockResolvedValue(base);
 
     const page = LogsPage();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- inspecting arbitrary element props
     const form = (page.props.children as React.ReactElement<any>[]).find((child) => child?.type === 'form')!;
     const preventDefault = jest.fn();
     await form.props.onSubmit({ preventDefault });

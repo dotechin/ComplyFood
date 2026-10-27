@@ -49,13 +49,14 @@ function backendOrigin(): string | null {
   }
 }
 
-async function proxy(request: NextRequest, { params }: { params: { path: string[] } }) {
+async function proxy(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
   const origin = backendOrigin();
   if (!origin) {
     return Response.json({ message: 'API backend URL is not configured' }, { status: 502 });
   }
 
-  const target = new URL(`/api/v1/${params.path.map(encodeURIComponent).join('/')}`, origin);
+  const target = new URL(`/api/v1/${path.map(encodeURIComponent).join('/')}`, origin);
   target.search = request.nextUrl.search;
 
   const headers = new Headers();
