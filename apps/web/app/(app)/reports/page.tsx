@@ -184,7 +184,7 @@ export default function ReportsPage() {
         </div>
       )}
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p role="status" className="sr-only">Loading…</p>
       ) : canViewAudit ? (
         <div className="rounded-lg border bg-card shadow-card">
           <AuditTable events={auditEvents} />
