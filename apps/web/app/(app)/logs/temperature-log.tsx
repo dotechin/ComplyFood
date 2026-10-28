@@ -15,14 +15,55 @@ const SELECT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm 
 const INPUT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const FIELDS = [
-  { key: 'amTemp', label: 'AM Temp', kind: 'temp' },
-  { key: 'amInitials', label: 'AM Initials', kind: 'initials' },
-  { key: 'pmTemp', label: 'PM Temp', kind: 'temp' },
-  { key: 'pmInitials', label: 'PM Initials', kind: 'initials' },
-  { key: 'comment', label: 'Corrective Actions / Comments', kind: 'comment' },
+// Monday-first week, values match Date#getDay().
+export const WEEKDAYS = [
+  { day: 1, short: 'Mon', long: 'Monday' },
+  { day: 2, short: 'Tue', long: 'Tuesday' },
+  { day: 3, short: 'Wed', long: 'Wednesday' },
+  { day: 4, short: 'Thu', long: 'Thursday' },
+  { day: 5, short: 'Fri', long: 'Friday' },
+  { day: 6, short: 'Sat', long: 'Saturday' },
+  { day: 0, short: 'Sun', long: 'Sunday' },
 ] as const;
-const ENTRIES_STORAGE_PREFIX = 'complyfood-temperature-sheet';
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const ENTRIES_STORAGE_PREFIX = 'complyfood-temperature-daily';
+const OPENING_DAYS_STORAGE_KEY = 'complyfood-opening-days';
+
+type DailyReading = { temp: string; time: string };
+
+function readOpeningDays(raw: string | null): number[] | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const days = ALL_DAYS.filter((day) => parsed.includes(day));
+    return days.length ? days : null;
+  } catch {
+    return null;
+  }
+}
+
+function readEntries(raw: string | null): Record<string, DailyReading> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const entries: Record<string, DailyReading> = {};
+    for (const [day, value] of Object.entries(parsed)) {
+      if (value && typeof value === 'object' && typeof value.temp === 'string' && typeof value.time === 'string') {
+        entries[day] = { temp: value.temp, time: value.time };
+      }
+    }
+    return entries;
+  } catch {
+    return {};
+  }
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
 
 function isOutOfRange(value: string, category: TemperatureUnitCategory) {
   const n = Number(value);
@@ -51,19 +92,46 @@ export function TemperatureLog({
   const selected = units.find((option) => option.value === unit) ?? units[0] ?? TEMPERATURE_UNITS[0];
   const currentYear = new Date().getFullYear();
   const [month, setMonth] = useState(() => new Date().getMonth());
-  const [entries, setEntries] = useState<Record<string, string>>({});
+  const [entries, setEntries] = useState<Record<string, DailyReading>>({});
   const [loadedKey, setLoadedKey] = useState('');
-  const [editing, setEditing] = useState<{ key: string; draft: string } | null>(null);
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const [editing, setEditing] = useState<{ day: number; draft: string } | null>(null);
+  const [openingDays, setOpeningDays] = useState<number[]>(ALL_DAYS);
+  const [openingDaysLoaded, setOpeningDaysLoaded] = useState(false);
+  // Resolved after mount so the server render and the browser agree on "today".
+  const [today, setToday] = useState<{ year: number; month: number; day: number } | null>(null);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const target = selected.category === 'freezer' ? '≤ -18°C' : '≤ 4°C';
   const storageKey = `${ENTRIES_STORAGE_PREFIX}:${selected.value}:${year}-${month + 1}`;
+  const openDates = Array.from({ length: daysInMonth }, (_, index) => index + 1)
+    .map((day) => ({ day, weekday: new Date(year, month, day).getDay() }))
+    .filter(({ weekday }) => openingDays.includes(weekday));
+  const isToday = (day: number) => today?.year === year && today.month === month && today.day === day;
+
+  useEffect(() => {
+    const now = new Date();
+    setToday({ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() });
+    try {
+      const stored = readOpeningDays(window.localStorage.getItem(OPENING_DAYS_STORAGE_KEY));
+      if (stored) setOpeningDays(stored);
+    } catch {
+      // Keep every day open when storage is unavailable.
+    }
+    setOpeningDaysLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!openingDaysLoaded) return;
+    try {
+      window.localStorage.setItem(OPENING_DAYS_STORAGE_KEY, JSON.stringify(openingDays));
+    } catch {
+      // storage unavailable
+    }
+  }, [openingDays, openingDaysLoaded]);
 
   useEffect(() => {
     setEditing(null);
     try {
-      const raw = window.localStorage.getItem(storageKey);
-      const parsed = raw ? JSON.parse(raw) : {};
-      setEntries(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {});
+      setEntries(readEntries(window.localStorage.getItem(storageKey)));
     } catch {
       setEntries({});
     }
@@ -79,14 +147,20 @@ export function TemperatureLog({
     }
   }, [entries, loadedKey, storageKey]);
 
-  const openEditor = (key: string, value: string) => setEditing({ key, draft: value });
+  const toggleOpeningDay = (day: number) =>
+    setOpeningDays((prev) => {
+      if (prev.includes(day)) return prev.length > 1 ? prev.filter((value) => value !== day) : prev;
+      return ALL_DAYS.filter((value) => value === day || prev.includes(value));
+    });
+
   const commit = () => {
     if (!editing) return;
-    const value = editing.draft.trim();
+    const { day } = editing;
+    const temp = editing.draft.trim();
     setEntries((prev) => {
       const next = { ...prev };
-      if (value) next[editing.key] = value;
-      else delete next[editing.key];
+      if (!temp) delete next[day];
+      else if (prev[day]?.temp !== temp) next[day] = { temp, time: formatTime(new Date()) };
       return next;
     });
     setEditing(null);
@@ -182,66 +256,92 @@ export function TemperatureLog({
             ))}
           </select>
         </div>
+        <fieldset className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-sm">
+          <legend className="sr-only">Opening days</legend>
+          <span aria-hidden="true" className="font-medium text-foreground">Opening days</span>
+          {WEEKDAYS.map(({ day, short, long }) => {
+            const open = openingDays.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                aria-pressed={open}
+                aria-label={long}
+                title={open && openingDays.length === 1 ? 'At least one opening day is required' : long}
+                onClick={() => toggleOpeningDay(day)}
+                className={`h-8 min-w-11 rounded-md border px-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary ${
+                  open ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card text-muted-foreground line-through'
+                }`}
+              >
+                {short}
+              </button>
+            );
+          })}
+        </fieldset>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[44rem] border-collapse text-sm">
+          <table className="w-full min-w-[28rem] border-collapse text-sm">
             <thead>
               <tr className="bg-[#1b365d] text-white">
-                <th scope="col" className="border border-border/40 px-2 py-2">Date</th>
-                <th scope="col" className="border border-border/40 px-2 py-2">AM Temp<br />(Target {target})</th>
-                <th scope="col" className="border border-border/40 px-2 py-2">AM Initials</th>
-                <th scope="col" className="border border-border/40 px-2 py-2">PM Temp<br />(Target {target})</th>
-                <th scope="col" className="border border-border/40 px-2 py-2">PM Initials</th>
-                <th scope="col" className="border border-border/40 px-2 py-2">Corrective Actions / Comments<br />(If limits exceeded)</th>
+                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Date</th>
+                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Time<br /><span className="font-normal">(automatic)</span></th>
+                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Temperature<br /><span className="font-normal">(Target {target})</span></th>
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => (
-                <tr key={day} className={day % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-                  <th scope="row" className="border border-border px-2 py-2 text-left font-normal text-foreground">{day}</th>
-                  {FIELDS.map((field) => {
-                    const key = `${day}:${field.key}`;
-                    const value = entries[key] ?? '';
-                    const open = editing?.key === key;
-                    const out = field.kind === 'temp' && isOutOfRange(value, selected.category);
-                    return (
-                      <td key={field.key} className="relative border border-border p-0">
-                        <button
-                          type="button"
-                          aria-label={`${field.label} day ${day}`}
-                          aria-haspopup="dialog"
-                          aria-expanded={open}
-                          onClick={() => openEditor(key, value)}
-                          className={`block h-10 w-full px-2 text-left text-foreground hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary ${out ? 'font-semibold text-danger' : ''}`}
+              {openDates.map(({ day, weekday }, index) => {
+                const reading = entries[day];
+                const open = editing?.day === day;
+                const current = isToday(day);
+                const out = reading ? isOutOfRange(reading.temp, selected.category) : false;
+                const dateLabel = `${WEEKDAY_SHORT[weekday]} ${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+                return (
+                  <tr
+                    key={day}
+                    aria-current={current ? 'date' : undefined}
+                    className={current ? 'bg-primary/10' : index % 2 === 1 ? 'bg-slate-50' : 'bg-white'}
+                  >
+                    <th scope="row" className={`border border-border px-2 py-2 text-left text-foreground ${current ? 'font-semibold' : 'font-normal'}`}>
+                      {dateLabel}
+                    </th>
+                    <td className="border border-border px-2 py-2 tabular-nums text-foreground">{reading?.time ?? ''}</td>
+                    <td className="relative border border-border p-0">
+                      <button
+                        type="button"
+                        aria-label={`Temperature ${dateLabel}`}
+                        aria-haspopup="dialog"
+                        aria-expanded={open}
+                        disabled={!current}
+                        title={current ? undefined : 'Readings can only be registered on the current day'}
+                        onClick={() => setEditing({ day, draft: reading?.temp ?? '' })}
+                        className={`block h-10 w-full px-2 text-left tabular-nums text-foreground enabled:hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed ${out ? 'font-semibold text-danger' : ''}`}
+                      >
+                        {reading ? `${reading.temp}°C` : ''}
+                      </button>
+                      {open && (
+                        <form
+                          role="dialog"
+                          aria-label={`Edit temperature ${dateLabel}`}
+                          onSubmit={(event) => { event.preventDefault(); commit(); }}
+                          onKeyDown={(event) => { if (event.key === 'Escape') setEditing(null); }}
+                          className="absolute right-0 top-full z-20 mt-1 flex w-56 items-center gap-1 rounded-md border bg-card p-2 shadow-lg"
                         >
-                          {value}{value && field.kind === 'temp' ? '°C' : ''}
-                        </button>
-                        {open && (
-                          <form
-                            role="dialog"
-                            aria-label={`Edit ${field.label} day ${day}`}
-                            onSubmit={(event) => { event.preventDefault(); commit(); }}
-                            onKeyDown={(event) => { if (event.key === 'Escape') setEditing(null); }}
-                            className="absolute left-0 top-full z-20 mt-1 flex w-56 items-center gap-1 rounded-md border bg-card p-2 shadow-lg"
-                          >
-                            <input
-                              autoFocus
-                              aria-label={field.label}
-                              type={field.kind === 'temp' ? 'number' : 'text'}
-                              step={field.kind === 'temp' ? '0.1' : undefined}
-                              maxLength={field.kind === 'comment' ? 200 : field.kind === 'initials' ? 4 : undefined}
-                              value={editing.draft}
-                              onChange={(event) => setEditing({ key, draft: event.target.value })}
-                              className={`${INPUT_CLASSES} min-w-0 flex-1`}
-                            />
-                            <ActionButton type="submit" icon={<CheckIcon />} label="Save" variant="primary" />
-                            <ActionButton icon={<CloseIcon />} label="Cancel" onClick={() => setEditing(null)} />
-                          </form>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                          <input
+                            autoFocus
+                            aria-label="Temperature (°C)"
+                            type="number"
+                            step="0.1"
+                            value={editing.draft}
+                            onChange={(event) => setEditing({ day, draft: event.target.value })}
+                            className={`${INPUT_CLASSES} min-w-0 flex-1`}
+                          />
+                          <ActionButton type="submit" icon={<CheckIcon />} label="Save" variant="primary" />
+                          <ActionButton icon={<CloseIcon />} label="Cancel" onClick={() => setEditing(null)} />
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -126,6 +126,27 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('<table');
   });
 
+  it('shows one daily row per opening day with only date, automatic time and temperature cells', () => {
+    const html = renderToStaticMarkup(
+      <TemperatureLog
+        units={[...TEMPERATURE_UNITS]}
+        unit={TEMPERATURE_UNITS[0].value}
+        year={2025}
+        onUnitsChange={jest.fn()}
+        onUnitChange={jest.fn()}
+        onYearChange={jest.fn()}
+      />,
+    );
+    expect(html.match(/<th scope="col"/g)).toHaveLength(3);
+    expect(html).toContain('>Date</th>');
+    expect(html).toContain('Time<br/><span class="font-normal">(automatic)</span>');
+    expect(html).toContain('Temperature<br/><span class="font-normal">(Target ≤ 4°C)</span>');
+    expect(html).not.toMatch(/AM Temp|PM Temp|Initials|Corrective Actions/);
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+      expect(html).toContain(`aria-pressed="true" aria-label="${day}"`);
+    }
+  });
+
   it('supports fridge and freezer unit categories and protects the final unit from deletion', () => {
     const html = renderToStaticMarkup(
       <TemperatureLog
