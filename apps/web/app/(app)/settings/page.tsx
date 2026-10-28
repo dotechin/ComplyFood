@@ -85,7 +85,7 @@ export default function SettingsPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return <p role="status" className="sr-only">Loading…</p>;
   }
 
   const updateOrganization = async (e: React.FormEvent) => {

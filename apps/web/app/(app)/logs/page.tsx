@@ -465,7 +465,7 @@ export default function LogsPage() {
       )}
 
       {!hasEntryList && activeType !== LogType.TEMPERATURE && loading && (
-        <p role="status" className="text-sm text-muted-foreground">Loading…</p>
+        <p role="status" className="sr-only">Loading…</p>
       )}
 
       {isTickSheet && (
@@ -639,7 +639,7 @@ export default function LogsPage() {
           </div>
 
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p role="status" className="sr-only">Loading…</p>
           ) : (
             <div className="space-y-4">
               {logs.map((log) => (

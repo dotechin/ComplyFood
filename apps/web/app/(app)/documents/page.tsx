@@ -307,7 +307,7 @@ export default function DocumentsPage() {
           </label>
         </div>
         {status === 'loading' ? (
-          <p role="status" className="px-4 py-8 text-center text-sm text-muted-foreground">Loading documents…</p>
+          <p role="status" className="sr-only">Loading documents…</p>
         ) : status === 'error' ? (
           <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-8">
             <p role="alert" className="text-sm text-danger">{error}</p>
