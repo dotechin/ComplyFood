@@ -8,6 +8,7 @@ import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, w
 import { CHECKLIST_DATE_FIELD, CHECKLIST_ITEM_FIELD, HygieneChecklist } from './hygiene-checklist';
 import { IncidentLog, type IncidentInput } from './incident-log';
 import { logTypeFromSearch } from './log-type-from-search';
+import { clearSampleData, generateSampleMonth } from './sample-data';
 import { TEMPERATURE_UNITS, TemperatureLog, type TemperatureUnit } from './temperature-log';
 
 const TYPE_LABELS: Record<LogType, string> = {
@@ -207,6 +208,9 @@ export default function LogsPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [cleaningMessage, setCleaningMessage] = useState('');
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleMessage, setSampleMessage] = useState('');
+  const [sampleVersion, setSampleVersion] = useState(0);
 
   const activeDefs = FIELD_DEFS[activeType];
   const hasEntryList = activeType === LogType.RECEIVING;
@@ -416,6 +420,30 @@ export default function LogsPage() {
     setCleaningBusy(null);
   };
 
+  const runSample = async (action: 'generate' | 'clear') => {
+    if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
+    setSampleBusy(true);
+    setSampleMessage('');
+    setError('');
+    try {
+      if (action === 'generate') {
+        const result = await generateSampleMonth(temperatureUnits);
+        setSampleMessage(
+          `Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents for the last 30 days.`,
+        );
+      } else {
+        const removed = await clearSampleData();
+        setSampleMessage(`Sample data cleared (${removed} logged entries removed).`);
+      }
+      setSampleVersion((v) => v + 1);
+      if (activeType !== LogType.TEMPERATURE) await refreshLogs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update sample data');
+    } finally {
+      setSampleBusy(false);
+    }
+  };
+
   const confirmLog = (id: string) =>
     void run(() => apiPatch<LogEntry>(`/logs/${id}/confirm`, {}).then(() => undefined), 'Log entry confirmed.', 'Unable to confirm log entry');
 
@@ -425,7 +453,28 @@ export default function LogsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Daily Logs</h1>
+          <div className="flex items-center gap-2 print:hidden">
+            <button
+              type="button"
+              onClick={() => void runSample('generate')}
+              disabled={sampleBusy}
+              className="h-9 rounded-md border border-primary bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            >
+              {sampleBusy ? 'Working…' : 'Generate sample month'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void runSample('clear')}
+              disabled={sampleBusy}
+              className="h-9 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60"
+            >
+              Clear sample data
+            </button>
+          </div>
+        </div>
+        {sampleMessage && <p role="status" className="text-sm text-success">{sampleMessage}</p>}
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {message && !isTickSheet && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
@@ -455,6 +504,7 @@ export default function LogsPage() {
 
       {activeType === LogType.TEMPERATURE && (
         <TemperatureLog
+          key={sampleVersion}
           units={temperatureUnits}
           unit={selectedTemperatureUnit}
           year={temperatureYear}
