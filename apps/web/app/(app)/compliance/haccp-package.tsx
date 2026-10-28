@@ -29,7 +29,7 @@ const RECORDS = [
   { name: 'Temperature Log', href: '/logs?type=temperature', text: 'Daily readings for every fridge, freezer and hot-holding unit.' },
   { name: 'Cleaning & Disinfection Schedule', href: '/logs?type=cleaning', text: 'Areas, frequency, method, chemicals and responsibility.' },
   { name: 'Corrective Action & Deviation Log', href: '/logs?type=incident', text: 'Deviations, immediate correction, product disposition and prevention.' },
-  { name: 'Daily Hygiene Checklist', href: '/checklists', text: 'Opening and closing prerequisite checks.' },
+  { name: 'Daily Hygiene Checklist', href: '/logs?type=checklist', text: 'Opening and closing prerequisite checks.' },
 ];
 
 export function HaccpPackage() {

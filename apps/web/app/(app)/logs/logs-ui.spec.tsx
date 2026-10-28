@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
-import ChecklistsPage from '../checklists/page';
+import { HygieneChecklist } from './hygiene-checklist';
 import { HaccpPackage } from '../compliance/haccp-package';
 import AppLayout from '../layout';
 import LogsPage from './page';
@@ -66,13 +66,25 @@ function renderPageAs(type: LogType, feedback = { message: '', cleaningMessage: 
 describe('Daily Logs UI', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('prints the checklist with full weekday names available to assistive technology', () => {
-    const html = renderToStaticMarkup(<ChecklistsPage />);
+  it('renders the hygiene checklist as a weekly tick sheet with the shared opening days row', () => {
+    const html = renderToStaticMarkup(
+      <HygieneChecklist logs={[]} weekStart={new Date('2026-10-26T00:00:00Z')} today="2026-10-28" busyKey={null} onWeekChange={() => {}} onTick={() => {}} onUndo={() => {}} />,
+    );
+    expect(html).toContain('Opening days');
+    expect(html).toContain('Opening checks');
+    expect(html).toContain('Closing checks');
     for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
-      expect(html).toContain(`<abbr title="${day}">`);
+      expect(html).toContain(`title="${day}"`);
     }
     expect(html).toContain('print:hidden');
-    expect(html).toContain('print:overflow-visible');
+  });
+
+  it('renders the cleaning schedule with the shared opening days row', () => {
+    const html = renderToStaticMarkup(
+      <CleaningSchedule logs={[]} weekStart={new Date('2026-10-26T00:00:00Z')} today="2026-10-28" busyKey={null} onWeekChange={() => {}} onTick={() => {}} onUndo={() => {}} />,
+    );
+    expect(html).toContain('Opening days');
+    expect(html).toContain('Weekly Cleaning Record');
   });
 
   it('removes the application shell and restores overflow when printing', () => {
@@ -276,10 +288,10 @@ describe('Daily Logs UI', () => {
     expect(html).not.toContain('<script>');
   });
 
-  it('centers the checklist completion checkbox and create-entry action', () => {
+  it('shows the checklist tab as a tick sheet instead of an entry form', () => {
     const html = renderPageAs(LogType.CHECKLIST);
-    expect(html).toMatch(/<label[^>]*class="[^"]*col-span-full[^"]*justify-center[^"]*"[^>]*><input[^>]*type="checkbox"/);
-    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Create checklist entry"/);
+    expect(html).toContain('Weekly Hygiene Checklist');
+    expect(html).not.toContain('aria-label="Create checklist entry"');
   });
 
   it('saves a temperature reading for the selected log with unchanged stored field names', async () => {

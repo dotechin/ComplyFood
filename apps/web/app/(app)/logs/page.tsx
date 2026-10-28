@@ -5,6 +5,7 @@ import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../../lib/api';
 import { ActionButton, CheckIcon, CloseIcon, SaveIcon } from '../../../components/icon-button';
 import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CleaningSchedule, todayIso, weekStartOf } from './cleaning-schedule';
+import { CHECKLIST_DATE_FIELD, CHECKLIST_ITEM_FIELD, HygieneChecklist } from './hygiene-checklist';
 import { IncidentLog, type IncidentInput } from './incident-log';
 import { logTypeFromSearch } from './log-type-from-search';
 import { TEMPERATURE_UNITS, TemperatureLog, type TemperatureUnit } from './temperature-log';
@@ -90,30 +91,7 @@ const FIELD_DEFS: Record<LogType, FieldDef[]> = {
       ],
     },
   ],
-  [LogType.CHECKLIST]: [
-    {
-      name: 'checklist',
-      label: 'Checklist',
-      type: 'select',
-      options: [
-        { value: 'Opening', label: 'Opening' },
-        { value: 'Mid-service', label: 'Mid-service' },
-        { value: 'Closing', label: 'Closing' },
-        { value: 'Weekly', label: 'Weekly' },
-      ],
-    },
-    {
-      name: 'shift',
-      label: 'Shift',
-      type: 'select',
-      options: [
-        { value: 'AM', label: 'AM' },
-        { value: 'PM', label: 'PM' },
-      ],
-    },
-    { name: 'completed', label: 'All items completed', type: 'checkbox' },
-    { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional observations', full: true },
-  ],
+  [LogType.CHECKLIST]: [],
   [LogType.INCIDENT]: [],
 };
 
@@ -231,7 +209,8 @@ export default function LogsPage() {
   const [cleaningMessage, setCleaningMessage] = useState('');
 
   const activeDefs = FIELD_DEFS[activeType];
-  const hasEntryList = activeType === LogType.RECEIVING || activeType === LogType.CHECKLIST;
+  const hasEntryList = activeType === LogType.RECEIVING;
+  const isTickSheet = activeType === LogType.CLEANING || activeType === LogType.CHECKLIST;
   const selectedTemperatureUnit = temperatureUnits.some((option) => option.value === temperatureUnit)
     ? temperatureUnit
     : temperatureUnits[0].value;
@@ -406,28 +385,32 @@ export default function LogsPage() {
     return created;
   };
 
-  const tickCleaning = async (area: string, date: string) => {
-    setCleaningBusy(`${area}|${date}`);
+  const sheetFields = (type: LogType) =>
+    type === LogType.CHECKLIST
+      ? { row: CHECKLIST_ITEM_FIELD, date: CHECKLIST_DATE_FIELD, noun: 'checklist item' }
+      : { row: CLEANING_AREA_FIELD, date: CLEANING_DATE_FIELD, noun: 'cleaning check' };
+
+  const tickSheet = async (type: LogType, row: string, date: string) => {
+    const fields = sheetFields(type);
+    setCleaningBusy(`${row}|${date}`);
     await run(
       async () => {
-        await apiPost<LogEntry>('/logs', {
-          type: LogType.CLEANING,
-          fields: { [CLEANING_AREA_FIELD]: area, [CLEANING_DATE_FIELD]: date },
-        });
+        await apiPost<LogEntry>('/logs', { type, fields: { [fields.row]: row, [fields.date]: date } });
       },
-      `${area} marked as done.`,
-      'Unable to save the cleaning check',
+      `${row} marked as done.`,
+      `Unable to save the ${fields.noun}`,
       setCleaningMessage,
     );
     setCleaningBusy(null);
   };
 
-  const undoCleaning = async (entry: LogEntry) => {
-    setCleaningBusy(`${entry.fields[CLEANING_AREA_FIELD]}|${entry.fields[CLEANING_DATE_FIELD]}`);
+  const undoSheet = async (entry: LogEntry) => {
+    const fields = sheetFields(entry.type);
+    setCleaningBusy(`${entry.fields[fields.row]}|${entry.fields[fields.date]}`);
     await run(
       () => apiDelete(`/logs/${entry.id}`),
-      'Cleaning check removed.',
-      'Unable to remove the cleaning check',
+      `${fields.noun[0].toUpperCase()}${fields.noun.slice(1)} removed.`,
+      `Unable to remove the ${fields.noun}`,
       setCleaningMessage,
     );
     setCleaningBusy(null);
@@ -444,7 +427,7 @@ export default function LogsPage() {
       <div>
         <h1 className="mb-2 text-2xl font-bold text-foreground">Daily Logs</h1>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-        {message && activeType !== LogType.CLEANING && <p className="mt-2 text-sm text-success">{message}</p>}
+        {message && !isTickSheet && <p className="mt-2 text-sm text-success">{message}</p>}
       </div>
 
       <div className="border-b border-border">
@@ -485,17 +468,29 @@ export default function LogsPage() {
         <p role="status" className="text-sm text-muted-foreground">Loading…</p>
       )}
 
-      {activeType === LogType.CLEANING && (
+      {isTickSheet && (
         <>
-          <CleaningSchedule
-            logs={logs}
-            weekStart={cleaningWeek}
-            today={todayIso()}
-            busyKey={cleaningBusy}
-            onWeekChange={setCleaningWeek}
-            onTick={(area, date) => void tickCleaning(area, date)}
-            onUndo={(entry) => void undoCleaning(entry)}
-          />
+          {activeType === LogType.CLEANING ? (
+            <CleaningSchedule
+              logs={logs}
+              weekStart={cleaningWeek}
+              today={todayIso()}
+              busyKey={cleaningBusy}
+              onWeekChange={setCleaningWeek}
+              onTick={(area, date) => void tickSheet(LogType.CLEANING, area, date)}
+              onUndo={(entry) => void undoSheet(entry)}
+            />
+          ) : (
+            <HygieneChecklist
+              logs={logs}
+              weekStart={cleaningWeek}
+              today={todayIso()}
+              busyKey={cleaningBusy}
+              onWeekChange={setCleaningWeek}
+              onTick={(check, date) => void tickSheet(LogType.CHECKLIST, check, date)}
+              onUndo={(entry) => void undoSheet(entry)}
+            />
+          )}
           <p role="status" aria-live="polite" aria-atomic="true" className="h-5 overflow-hidden text-sm leading-5 text-transparent">
             {cleaningMessage}
           </p>
