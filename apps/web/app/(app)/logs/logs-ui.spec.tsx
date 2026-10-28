@@ -137,8 +137,11 @@ describe('Daily Logs UI', () => {
         onYearChange={jest.fn()}
       />,
     );
-    expect(html.match(/<th scope="col"/g)).toHaveLength(3);
+    expect(html.match(/<th scope="col"/g)).toHaveLength(4);
+    expect(html).toContain('>Weekday</th>');
     expect(html).toContain('>Date</th>');
+    // January 2025 has 31 days; every calendar day is listed, open or closed.
+    expect(html.match(/<th scope="row"/g)).toHaveLength(31);
     expect(html).toContain('Time<br/><span class="font-normal">(automatic)</span>');
     expect(html).toContain('Temperature<br/><span class="font-normal">(Target ≤ 4°C)</span>');
     expect(html).not.toMatch(/AM Temp|PM Temp|Initials|Corrective Actions/);
