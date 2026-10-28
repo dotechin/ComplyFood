@@ -71,22 +71,22 @@ export function IncidentLog({
     <section aria-labelledby="incident-heading" className="space-y-3 rounded-lg border bg-card p-4 shadow-card">
       <div>
         <h2 id="incident-heading" className="text-xl font-bold text-foreground">Corrective Action &amp; Deviation Log</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-foreground">
           Record any deviation from a critical limit or hygiene standard, the immediate correction and how a repeat will be prevented.
         </p>
       </div>
-      <form onSubmit={submit} className="overflow-x-auto">
+      <form onSubmit={submit} className="overflow-x-auto rounded-md border border-border bg-card print:overflow-visible">
         <table className="w-full border-collapse text-left text-sm" aria-label="Corrective Action & Deviation Log">
-          <thead className="bg-sidebar text-white">
-            <tr>
+          <thead>
+            <tr className="bg-primary text-primary-foreground">
               {COLUMNS.map((column) => (
-                <th key={column} scope="col" className="border border-border px-3 py-2 text-center font-semibold">{column}</th>
+                <th key={column} scope="col" className="border border-primary-foreground/20 px-3 py-2 text-center font-semibold">{column}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <tr className="bg-accent/40 align-top">
-              <td className="border border-border px-3 py-2 text-xs text-muted-foreground">Recorded on save</td>
+            <tr className="bg-accent align-top text-accent-foreground print:hidden">
+              <td className="border border-border px-3 py-2 text-xs font-semibold">Recorded on save</td>
               <td className="border border-border p-1.5">
                 <textarea
                   required
@@ -131,8 +131,8 @@ export function IncidentLog({
                 <ActionButton type="submit" variant="primary" icon={<SaveIcon />} label="Add entry" busy={saving} busyLabel="Saving…" />
               </td>
             </tr>
-            {entries.map((log) => (
-              <tr key={log.id} className="align-top">
+            {entries.map((log, index) => (
+              <tr key={log.id} className={`align-top text-foreground ${index % 2 === 1 ? 'bg-accent/30' : 'bg-card'}`}>
                 <td className="whitespace-nowrap border border-border px-3 py-2 tabular-nums">
                   {new Date(log.occurredAt ?? log.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}
                 </td>
@@ -147,7 +147,7 @@ export function IncidentLog({
                       <ActionButton icon={<CloseIcon />} label="Cancel entry" variant="danger" onClick={() => onCancel(log.id)} />
                     </div>
                   ) : (
-                    <span className="capitalize text-muted-foreground">{log.status}</span>
+                    <span className="inline-block rounded-full bg-accent px-2 py-0.5 text-xs font-semibold capitalize text-accent-foreground">{log.status}</span>
                   )}
                 </td>
               </tr>
