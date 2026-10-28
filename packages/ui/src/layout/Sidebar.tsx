@@ -33,7 +33,6 @@ const icons = {
 const NAV_ITEMS: { href: string; label: string; icon: keyof typeof icons }[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/logs', label: 'Daily Logs', icon: 'logs' },
-  { href: '/checklists', label: 'Checklists', icon: 'checklists' },
   { href: '/reports', label: 'Reports', icon: 'reports' },
   { href: '/documents', label: 'Documents', icon: 'documents' },
   { href: '/compliance', label: 'EU Compliance', icon: 'compliance' },
