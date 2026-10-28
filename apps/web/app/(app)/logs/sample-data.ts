@@ -57,9 +57,22 @@ function randomTemperature(unit: TemperatureUnit) {
   return { temp: value.toFixed(1), outOfRange };
 }
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function withRetry<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await wait(400 * attempt);
+    }
+  }
+}
+
 async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise<unknown>) {
   for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(task));
+    await Promise.all(items.slice(i, i + size).map((item) => withRetry(() => task(item))));
   }
 }
 
@@ -114,7 +127,7 @@ export async function generateSampleMonth(units: TemperatureUnit[]) {
     }
   }
 
-  await inBatches(ticks, 8, (body) => apiPost<LogEntry>('/logs', body));
+  await inBatches(ticks, 4, (body) => apiPost<LogEntry>('/logs', body));
   await inBatches(incidents, 4, (fields) => apiPost<LogEntry>('/logs', { type: LogType.INCIDENT, fields }));
 
   return { readings, ticks: ticks.length, incidents: incidents.length };
@@ -133,6 +146,6 @@ export async function clearSampleData() {
   const logs = (
     await Promise.all([LogType.CLEANING, LogType.CHECKLIST, LogType.INCIDENT].map((type) => apiGet<LogEntry[]>(`/logs?type=${type}`)))
   ).flat().filter(isSample);
-  await inBatches(logs, 8, (log) => apiDelete(`/logs/${log.id}`));
+  await inBatches(logs, 4, (log) => apiDelete(`/logs/${log.id}`));
   return logs.length;
 }

@@ -6,7 +6,9 @@ function normalizeApiOrigin(raw: string | undefined): string | null {
 }
 
 const API_ORIGIN = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL);
-const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api/v1` : '/api/v1';
+// Browsers go through the same-origin /api/v1 proxy route: no CORS preflight per
+// request, and bursts don't hit the backend tunnel directly.
+const API_BASE = typeof window === 'undefined' && API_ORIGIN ? `${API_ORIGIN}/api/v1` : '/api/v1';
 
 const AUTH_COOKIE = 'auth_token';
 
