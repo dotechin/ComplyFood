@@ -102,9 +102,10 @@ export function TemperatureLog({
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const target = selected.category === 'freezer' ? '≤ -18°C' : '≤ 4°C';
   const storageKey = `${ENTRIES_STORAGE_PREFIX}:${selected.value}:${year}-${month + 1}`;
-  const openDates = Array.from({ length: daysInMonth }, (_, index) => index + 1)
-    .map((day) => ({ day, weekday: new Date(year, month, day).getDay() }))
-    .filter(({ weekday }) => openingDays.includes(weekday));
+  const monthDates = Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
+    const weekday = new Date(year, month, day).getDay();
+    return { day, weekday, isOpen: openingDays.includes(weekday) };
+  });
   const isToday = (day: number) => today?.year === year && today.month === month && today.day === day;
 
   useEffect(() => {
@@ -246,7 +247,7 @@ export function TemperatureLog({
       <div
         role="group"
         aria-label={`Temperature Log — ${selected.label}, ${year} (blank sheet)`}
-        className="rounded-md border border-border bg-white"
+        className="overflow-hidden rounded-md border border-border bg-card"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 text-sm">
           <span className="font-semibold text-foreground">Daily Temperature Monitoring Log — {selected.label}</span>
@@ -270,7 +271,7 @@ export function TemperatureLog({
                 title={open && openingDays.length === 1 ? 'At least one opening day is required' : long}
                 onClick={() => toggleOpeningDay(day)}
                 className={`h-8 min-w-11 rounded-md border px-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary ${
-                  open ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card text-muted-foreground line-through'
+                  open ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
                 {short}
@@ -279,43 +280,59 @@ export function TemperatureLog({
           })}
         </fieldset>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[28rem] border-collapse text-sm">
+          <table className="w-full min-w-[32rem] border-collapse text-sm">
             <thead>
-              <tr className="bg-[#1b365d] text-white">
-                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Date</th>
-                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Time<br /><span className="font-normal">(automatic)</span></th>
-                <th scope="col" className="w-1/3 border border-border/40 px-2 py-2">Temperature<br /><span className="font-normal">(Target {target})</span></th>
+              <tr className="bg-primary text-primary-foreground">
+                <th scope="col" className="w-24 border border-primary-foreground/20 px-2 py-2">Weekday</th>
+                <th scope="col" className="w-32 border border-primary-foreground/20 px-2 py-2">Date</th>
+                <th scope="col" className="border border-primary-foreground/20 px-2 py-2">Time<br /><span className="font-normal">(automatic)</span></th>
+                <th scope="col" className="border border-primary-foreground/20 px-2 py-2">Temperature<br /><span className="font-normal">(Target {target})</span></th>
               </tr>
             </thead>
             <tbody>
-              {openDates.map(({ day, weekday }, index) => {
+              {monthDates.map(({ day, weekday, isOpen }, index) => {
                 const reading = entries[day];
-                const open = editing?.day === day;
+                const open = isOpen && editing?.day === day;
                 const current = isToday(day);
                 const out = reading ? isOutOfRange(reading.temp, selected.category) : false;
-                const dateLabel = `${WEEKDAY_SHORT[weekday]} ${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+                const weekdayLabel = WEEKDAY_SHORT[weekday];
+                const dateText = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+                const dateLabel = `${weekdayLabel} ${dateText}`;
+                const rowClass = !isOpen
+                  ? 'bg-muted text-muted-foreground'
+                  : current
+                    ? 'bg-accent text-accent-foreground'
+                    : index % 2 === 1
+                      ? 'bg-accent/30 text-foreground'
+                      : 'bg-card text-foreground';
                 return (
                   <tr
                     key={day}
                     aria-current={current ? 'date' : undefined}
-                    className={current ? 'bg-primary/10' : index % 2 === 1 ? 'bg-slate-50' : 'bg-white'}
+                    aria-disabled={isOpen ? undefined : true}
+                    className={rowClass}
                   >
-                    <th scope="row" className={`border border-border px-2 py-2 text-left text-foreground ${current ? 'font-semibold' : 'font-normal'}`}>
-                      {dateLabel}
+                    <td className={`border border-border px-2 py-2 ${current && isOpen ? 'font-semibold' : ''}`}>
+                      {weekdayLabel}
+                    </td>
+                    <th scope="row" className={`border border-border px-2 py-2 text-left tabular-nums ${current && isOpen ? 'font-semibold' : 'font-normal'}`}>
+                      {dateText}
                     </th>
-                    <td className="border border-border px-2 py-2 tabular-nums text-foreground">{reading?.time ?? ''}</td>
+                    <td className="border border-border px-2 py-2 tabular-nums">
+                      {isOpen ? reading?.time ?? '' : <span className="text-xs uppercase tracking-wide">Closed</span>}
+                    </td>
                     <td className="relative border border-border p-0">
                       <button
                         type="button"
-                        aria-label={`Temperature ${dateLabel}`}
+                        aria-label={`Temperature ${dateLabel}${isOpen ? '' : ' (closed)'}`}
                         aria-haspopup="dialog"
                         aria-expanded={open}
-                        disabled={!current}
-                        title={current ? undefined : 'Readings can only be registered on the current day'}
+                        disabled={!isOpen || !current}
+                        title={!isOpen ? 'Closed day — no reading required' : current ? undefined : 'Readings can only be registered on the current day'}
                         onClick={() => setEditing({ day, draft: reading?.temp ?? '' })}
-                        className={`block h-10 w-full px-2 text-left tabular-nums text-foreground enabled:hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed ${out ? 'font-semibold text-danger' : ''}`}
+                        className={`block h-10 w-full px-2 text-left tabular-nums enabled:hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed ${out && isOpen ? 'font-semibold text-danger' : ''}`}
                       >
-                        {reading ? `${reading.temp}°C` : ''}
+                        {isOpen && reading ? `${reading.temp}°C` : ''}
                       </button>
                       {open && (
                         <form
