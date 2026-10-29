@@ -60,9 +60,20 @@ function PinField({ id, label, value, onChange }: { id: string; label: string; v
   );
 }
 
-function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin: string) => void }) {
+const UNLOCK_DURATIONS = [5, 15, 30, 60] as const;
+type UnlockDuration = (typeof UNLOCK_DURATIONS)[number];
+
+const formatRemaining = (ms: number) => {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
+function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin: string, minutes: UnlockDuration) => void }) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [duration, setDuration] = useState<UnlockDuration>(15);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const creating = !status.pinSet;
@@ -75,7 +86,7 @@ function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin
     setBusy(true);
     try {
       await apiPost(creating ? '/users/me/supermode/pin' : '/users/me/supermode/verify', { pin });
-      onUnlock(pin);
+      onUnlock(pin, duration);
     } catch (err) {
       setError(errorText(err, 'Unable to verify the PIN'));
       setPin('');
@@ -98,6 +109,25 @@ function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin
         <PinField id="supermode-pin" label="PIN" value={pin} onChange={setPin} />
         {creating && <PinField id="supermode-pin-confirm" label="Confirm PIN" value={confirmPin} onChange={setConfirmPin} />}
       </div>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-sm font-medium text-foreground">Keep unlocked for</legend>
+        <div role="radiogroup" aria-label="Keep unlocked for" className="mt-1 flex w-fit rounded-md border border-border bg-muted/40 p-1">
+          {UNLOCK_DURATIONS.map((minutes) => (
+            <button
+              key={minutes}
+              type="button"
+              role="radio"
+              aria-checked={duration === minutes}
+              onClick={() => setDuration(minutes)}
+              className={`h-8 rounded px-3 text-sm font-medium ${
+                duration === minutes ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {`${minutes} min`}
+            </button>
+          ))}
+        </div>
+      </fieldset>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <div>
         <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
@@ -340,10 +370,31 @@ export default function SupermodePage() {
     };
   }, []);
 
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
   const lock = () => {
     setPin(null);
+    setExpiresAt(null);
     setStatus((prev) => (prev ? { ...prev, pinSet: true } : prev));
   };
+
+  const unlock = (value: string, minutes: UnlockDuration) => {
+    setPin(value);
+    setNow(Date.now());
+    setExpiresAt(Date.now() + minutes * 60_000);
+  };
+
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const tick = () => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= expiresAt) lock();
+    };
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [expiresAt]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -352,10 +403,15 @@ export default function SupermodePage() {
         <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
           {pin ? 'Unlocked' : 'PIN protected'}
         </span>
+        {pin && expiresAt !== null && (
+          <span className="font-mono text-sm tabular-nums text-muted-foreground" aria-label="Time until Supermode locks">
+            {`Locks in ${formatRemaining(expiresAt - now)}`}
+          </span>
+        )}
       </div>
       {loadError && <p role="alert" className="text-sm text-danger">{loadError}</p>}
       {!status && !loadError && <p role="status" className="sr-only">Loading…</p>}
-      {status && !pin && <PinGate status={status} onUnlock={setPin} />}
+      {status && !pin && <PinGate status={status} onUnlock={unlock} />}
       {pin && <SupermodeTools pin={pin} onLock={lock} />}
     </div>
   );
