@@ -6,6 +6,9 @@ import { INCIDENT_FIELDS } from './incident-log';
 import type { TemperatureUnit } from './temperature-log';
 
 const SAMPLE_FIELD = 'Sample data';
+/** The API's "generated" reset scope matches `fields.source LIKE 'supermode-%'`. */
+const SAMPLE_SOURCE = { source: 'supermode-sample' };
+const TEMPERATURE_UNITS_KEY = 'complyfood-temperature-units';
 const SAMPLE_REGISTRY_KEY = 'complyfood-sample-temperature';
 const TEMPERATURE_PREFIX = 'complyfood-temperature-daily';
 const OPENING_DAYS_KEY = 'complyfood-opening-days';
@@ -104,6 +107,7 @@ export async function generateSampleMonth(units: TemperatureUnit[]) {
           [INCIDENT_FIELDS.disposition]: chance(0.7) ? 'Retained' : 'Discarded',
           [INCIDENT_FIELDS.preventative]: 'Added to weekly maintenance check; staff reminded to keep door closed.',
           [SAMPLE_FIELD]: 'yes',
+          ...SAMPLE_SOURCE,
         });
       }
     }
@@ -122,7 +126,7 @@ export async function generateSampleMonth(units: TemperatureUnit[]) {
       const iso = isoLocal(date);
       for (const item of sheet.items) {
         if (done.has(`${item}|${iso}`) || !chance(0.92)) continue;
-        ticks.push({ type: sheet.type, fields: { [sheet.row]: item, [sheet.date]: iso, [SAMPLE_FIELD]: 'yes' } });
+        ticks.push({ type: sheet.type, fields: { [sheet.row]: item, [sheet.date]: iso, [SAMPLE_FIELD]: 'yes', ...SAMPLE_SOURCE } });
       }
     }
   }
@@ -133,8 +137,12 @@ export async function generateSampleMonth(units: TemperatureUnit[]) {
   return { readings, ticks: ticks.length, incidents: incidents.length };
 }
 
-/** Removes only what generateSampleMonth created. */
-export async function clearSampleData() {
+type ResetResult = { deleted: number };
+
+/** Removes only what generateSampleMonth created. The server checks the Supermode PIN first. */
+export async function clearSampleData(pin: string) {
+  const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'generated' });
+
   const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
   for (const [key, days] of Object.entries(registry)) {
     const entries = readJson<Record<string, Reading>>(key, {});
@@ -143,9 +151,33 @@ export async function clearSampleData() {
   }
   window.localStorage.removeItem(SAMPLE_REGISTRY_KEY);
 
-  const logs = (
+  // Entries generated before the server-side `source` marker existed.
+  const legacy = (
     await Promise.all([LogType.CLEANING, LogType.CHECKLIST, LogType.INCIDENT].map((type) => apiGet<LogEntry[]>(`/logs?type=${type}`)))
   ).flat().filter(isSample);
-  await inBatches(logs, 4, (log) => apiDelete(`/logs/${log.id}`));
-  return logs.length;
+  await inBatches(legacy, 4, (log) => apiDelete(`/logs/${log.id}`));
+  return deleted + legacy.length;
+}
+
+/** Deletes every log entry and every temperature reading. Opening days and units are kept. */
+export async function resetAllData(pin: string) {
+  const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'all' });
+  const storage = window.localStorage;
+  const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter(
+    (key): key is string => !!key && key.startsWith(`${TEMPERATURE_PREFIX}:`),
+  );
+  for (const key of keys) storage.removeItem(key);
+  storage.removeItem(SAMPLE_REGISTRY_KEY);
+  return { logs: deleted, temperatureSheets: keys.length };
+}
+
+/** Temperature units configured on the Daily Logs page, or the defaults. */
+export function storedTemperatureUnits(fallback: TemperatureUnit[]): TemperatureUnit[] {
+  const stored = readJson<unknown>(TEMPERATURE_UNITS_KEY, null);
+  if (!Array.isArray(stored)) return fallback;
+  const units = stored.filter(
+    (u): u is TemperatureUnit =>
+      !!u && typeof u.value === 'string' && typeof u.label === 'string' && (u.category === 'fridge' || u.category === 'freezer'),
+  );
+  return units.length ? units : fallback;
 }
