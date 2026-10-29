@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../../lib/api';
-import { clearSampleData, generateSampleMonth, resetAllData, storedTemperatureUnits } from '../logs/sample-data';
+import {
+  MAX_SAMPLE_DAYS,
+  clearSampleData,
+  defaultSamplePeriod,
+  generateSampleData,
+  resetAllData,
+  storedTemperatureUnits,
+} from '../logs/sample-data';
 import { TEMPERATURE_UNITS } from '../logs/temperature-log';
 
 type SupermodeStatus = { pinSet: boolean; lockedUntil: string | null; attemptsLeft: number };
@@ -89,8 +96,26 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
   const [busy, setBusy] = useState<'generate' | 'clear' | 'reset' | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [period, setPeriod] = useState(defaultSamplePeriod);
+
+  const parseDay = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const fromDate = parseDay(period.from);
+  const toDate = parseDay(period.to);
+  const spanDays = Math.round((toDate.getTime() - fromDate.getTime()) / 86_400_000) + 1;
+  const periodError = !period.from || !period.to
+    ? 'Choose a start and end date.'
+    : spanDays < 1
+      ? 'The end date must be on or after the start date.'
+      : spanDays > MAX_SAMPLE_DAYS
+        ? `The period can be at most ${MAX_SAMPLE_DAYS} days.`
+        : '';
+  const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   const run = async (action: 'generate' | 'clear' | 'reset') => {
+    if (action === 'generate' && periodError) return setError(periodError);
     if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
     if (
       action === 'reset'
@@ -101,8 +126,10 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     setError('');
     try {
       if (action === 'generate') {
-        const result = await generateSampleMonth(storedTemperatureUnits(TEMPERATURE_UNITS));
-        setMessage(`Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents for the last 30 days.`);
+        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate);
+        setMessage(
+          `Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents across ${result.days} opening days (${formatDay(fromDate)} – ${formatDay(toDate)}).`,
+        );
       } else if (action === 'clear') {
         const removed = await clearSampleData(pin);
         setMessage(`Sample data cleared (${removed} logged entries removed).`);
@@ -123,12 +150,41 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Sample data</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Fill the last 30 opening days with test registrations, or remove only what was generated.
+            Fill the opening days of a chosen period with test registrations, or remove only what was generated.
+            Days that already have a registration are left untouched.
           </p>
         </div>
+        <fieldset className="flex flex-wrap items-end gap-4">
+          <legend className="sr-only">Sample data period</legend>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sample-from" className="text-sm font-medium text-foreground">From</label>
+            <input
+              id="sample-from"
+              type="date"
+              value={period.from}
+              max={period.to || undefined}
+              onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))}
+              className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sample-to" className="text-sm font-medium text-foreground">To</label>
+            <input
+              id="sample-to"
+              type="date"
+              value={period.to}
+              min={period.from || undefined}
+              onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))}
+              className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+            />
+          </div>
+          <p className="pb-2 text-sm text-muted-foreground" aria-live="polite">
+            {periodError || `${spanDays} ${spanDays === 1 ? 'day' : 'days'} selected`}
+          </p>
+        </fieldset>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void run('generate')} disabled={!!busy} className={PRIMARY_BUTTON}>
-            {busy === 'generate' ? 'Generating…' : 'Generate sample month'}
+          <button type="button" onClick={() => void run('generate')} disabled={!!busy || !!periodError} className={PRIMARY_BUTTON}>
+            {busy === 'generate' ? 'Generating…' : 'Generate sample data'}
           </button>
           <button type="button" onClick={() => void run('clear')} disabled={!!busy} className={SECONDARY_BUTTON}>
             {busy === 'clear' ? 'Clearing…' : 'Clear sample data'}

@@ -35,12 +35,23 @@ function openingDays(): number[] {
   return Array.isArray(stored) && stored.length ? stored.filter((d): d is number => typeof d === 'number') : [0, 1, 2, 3, 4, 5, 6];
 }
 
-function lastOpenDays(now = new Date()) {
+export const MAX_SAMPLE_DAYS = 366;
+
+function openDaysBetween(from: Date, to: Date) {
   const open = openingDays();
-  return Array.from({ length: DAYS }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (DAYS - 1 - index));
-    return date;
-  }).filter((date) => open.includes(date.getDay()));
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  const days: Date[] = [];
+  for (let d = start; d <= end && days.length < MAX_SAMPLE_DAYS; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    if (open.includes(d.getDay())) days.push(d);
+  }
+  return days;
+}
+
+/** Default period offered in Supermode: the last 30 days up to today. */
+export function defaultSamplePeriod(now = new Date()) {
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (DAYS - 1));
+  return { from: isoLocal(from), to: isoLocal(now) };
 }
 
 const isoLocal = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -81,9 +92,9 @@ async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise
 
 const isSample = (log: LogEntry) => log.fields?.[SAMPLE_FIELD] === 'yes';
 
-/** Fills the last 30 days (opening days only) with temperature readings, cleaning and checklist ticks, and incidents. */
-export async function generateSampleMonth(units: TemperatureUnit[]) {
-  const days = lastOpenDays();
+/** Fills the opening days between `from` and `to` (inclusive) with temperature readings, cleaning and checklist ticks, and incidents. */
+export async function generateSampleData(units: TemperatureUnit[], from: Date, to: Date) {
+  const days = openDaysBetween(from, to);
   const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
   const incidents: Record<string, string>[] = [];
   let readings = 0;
@@ -134,12 +145,12 @@ export async function generateSampleMonth(units: TemperatureUnit[]) {
   await inBatches(ticks, 4, (body) => apiPost<LogEntry>('/logs', body));
   await inBatches(incidents, 4, (fields) => apiPost<LogEntry>('/logs', { type: LogType.INCIDENT, fields }));
 
-  return { readings, ticks: ticks.length, incidents: incidents.length };
+  return { days: days.length, readings, ticks: ticks.length, incidents: incidents.length };
 }
 
 type ResetResult = { deleted: number };
 
-/** Removes only what generateSampleMonth created. The server checks the Supermode PIN first. */
+/** Removes only what generateSampleData created. The server checks the Supermode PIN first. */
 export async function clearSampleData(pin: string) {
   const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'generated' });
 
