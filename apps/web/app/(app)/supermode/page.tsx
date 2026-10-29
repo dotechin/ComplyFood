@@ -257,8 +257,11 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
             {(['fridge', 'freezer'] as const).map((kind) => (
               <div key={kind} className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
                 <span className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-foreground">
-                  {kind === 'fridge' ? 'Fridges target' : 'Freezers target'}
-                  <span className="font-normal text-muted-foreground">
+  <span>
+  {kind === 'fridge' ? 'Fridges' : 'Freezers'}{' '}
+  <span className="text-muted-foreground">target</span>
+  </span>
+  <span className="font-normal text-muted-foreground">
                     {`≤ ${formatTemp(TEMPERATURE_TARGETS[kind], scale)}${symbol}`}
                   </span>
                 </span>
