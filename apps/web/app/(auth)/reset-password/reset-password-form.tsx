@@ -88,6 +88,7 @@ export function ResetPasswordForm({ initialToken }: { initialToken: string }) {
               </svg>
             </span>
             <input
+              data-lpignore="true"
               id="password"
               type="password"
               required
@@ -109,6 +110,7 @@ export function ResetPasswordForm({ initialToken }: { initialToken: string }) {
               </svg>
             </span>
             <input
+              data-lpignore="true"
               id="confirmPassword"
               type="password"
               required

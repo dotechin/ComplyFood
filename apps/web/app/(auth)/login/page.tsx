@@ -75,6 +75,7 @@ export default function LoginPage() {
               </svg>
             </span>
             <input
+              data-lpignore="true"
               id="email"
               type="email"
               required
@@ -107,6 +108,7 @@ export default function LoginPage() {
               </svg>
             </span>
             <input
+              data-lpignore="true"
               id="password"
               type="password"
               required

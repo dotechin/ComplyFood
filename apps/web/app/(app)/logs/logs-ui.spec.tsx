@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { LogStatus, LogType, type LogEntry } from '@complyfood/shared';
 import { apiGet, apiPost } from '../../../lib/api';
-import ChecklistsPage from '../checklists/page';
+import { HygieneChecklist } from './hygiene-checklist';
 import { HaccpPackage } from '../compliance/haccp-package';
 import AppLayout from '../layout';
 import LogsPage from './page';
@@ -66,13 +66,25 @@ function renderPageAs(type: LogType, feedback = { message: '', cleaningMessage: 
 describe('Daily Logs UI', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('prints the checklist with full weekday names available to assistive technology', () => {
-    const html = renderToStaticMarkup(<ChecklistsPage />);
+  it('renders the hygiene checklist as a weekly tick sheet with the shared opening days row', () => {
+    const html = renderToStaticMarkup(
+      <HygieneChecklist logs={[]} weekStart={new Date('2026-10-26T00:00:00Z')} today="2026-10-28" busyKey={null} onWeekChange={() => {}} onTick={() => {}} onUndo={() => {}} />,
+    );
+    expect(html).toContain('Opening days');
+    expect(html).toContain('Opening checks');
+    expect(html).toContain('Closing checks');
     for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
-      expect(html).toContain(`<abbr title="${day}">`);
+      expect(html).toContain(`title="${day}"`);
     }
     expect(html).toContain('print:hidden');
-    expect(html).toContain('print:overflow-visible');
+  });
+
+  it('renders the cleaning schedule with the shared opening days row', () => {
+    const html = renderToStaticMarkup(
+      <CleaningSchedule logs={[]} weekStart={new Date('2026-10-26T00:00:00Z')} today="2026-10-28" busyKey={null} onWeekChange={() => {}} onTick={() => {}} onUndo={() => {}} />,
+    );
+    expect(html).toContain('Opening days');
+    expect(html).toContain('Weekly Cleaning Record');
   });
 
   it('removes the application shell and restores overflow when printing', () => {
@@ -124,6 +136,30 @@ describe('Daily Logs UI', () => {
     expect(html).toContain(`<option value="${TEMPERATURE_UNITS[3].value}" selected="">`);
     expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025 (blank sheet)');
     expect(html).toContain('<table');
+  });
+
+  it('shows one daily row per opening day with only date, automatic time and temperature cells', () => {
+    const html = renderToStaticMarkup(
+      <TemperatureLog
+        units={[...TEMPERATURE_UNITS]}
+        unit={TEMPERATURE_UNITS[0].value}
+        year={2025}
+        onUnitsChange={jest.fn()}
+        onUnitChange={jest.fn()}
+        onYearChange={jest.fn()}
+      />,
+    );
+    expect(html.match(/<th scope="col"/g)).toHaveLength(4);
+    expect(html).toContain('>Weekday</th>');
+    expect(html).toContain('>Date</th>');
+    // January 2025 has 31 days; every calendar day is listed, open or closed.
+    expect(html.match(/<th scope="row"/g)).toHaveLength(31);
+    expect(html).toContain('Time<br/><span class="font-normal">(automatic)</span>');
+    expect(html).toContain('Temperature<br/><span class="font-normal">(Target ≤ 4°C)</span>');
+    expect(html).not.toMatch(/AM Temp|PM Temp|Initials|Corrective Actions/);
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+      expect(html).toContain(`aria-pressed="true" aria-label="${day}"`);
+    }
   });
 
   it('supports fridge and freezer unit categories and protects the final unit from deletion', () => {
@@ -204,9 +240,10 @@ describe('Daily Logs UI', () => {
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
 
     const page = LogsPage();
-    const schedule = (page.props.children as React.ReactElement[])
+    type AnyElement = React.ReactElement<any>;
+    const schedule = (page.props.children as AnyElement[])
       .flatMap((child) => child?.type === React.Fragment ? React.Children.toArray(child.props.children) : [child])
-      .find((child): child is React.ReactElement => React.isValidElement(child) && child.type === CleaningSchedule)!;
+      .find((child): child is AnyElement => React.isValidElement(child) && child.type === CleaningSchedule)!;
     schedule.props.onTick('Ice Machine (Bar)', '2026-10-05');
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -251,10 +288,10 @@ describe('Daily Logs UI', () => {
     expect(html).not.toContain('<script>');
   });
 
-  it('centers the checklist completion checkbox and create-entry action', () => {
+  it('shows the checklist tab as a tick sheet instead of an entry form', () => {
     const html = renderPageAs(LogType.CHECKLIST);
-    expect(html).toMatch(/<label[^>]*class="[^"]*col-span-full[^"]*justify-center[^"]*"[^>]*><input[^>]*type="checkbox"/);
-    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Create checklist entry"/);
+    expect(html).toContain('Weekly Hygiene Checklist');
+    expect(html).not.toContain('aria-label="Create checklist entry"');
   });
 
   it('saves a temperature reading for the selected log with unchanged stored field names', async () => {
@@ -271,7 +308,7 @@ describe('Daily Logs UI', () => {
     (apiPost as jest.Mock).mockResolvedValue(base);
 
     const page = LogsPage();
-    const form = (page.props.children as React.ReactElement[]).find((child) => child?.type === 'form')!;
+    const form = (page.props.children as React.ReactElement<any>[]).find((child) => child?.type === 'form')!;
     const preventDefault = jest.fn();
     await form.props.onSubmit({ preventDefault });
 

@@ -29,7 +29,7 @@ const RECORDS = [
   { name: 'Temperature Log', href: '/logs?type=temperature', text: 'Daily readings for every fridge, freezer and hot-holding unit.' },
   { name: 'Cleaning & Disinfection Schedule', href: '/logs?type=cleaning', text: 'Areas, frequency, method, chemicals and responsibility.' },
   { name: 'Corrective Action & Deviation Log', href: '/logs?type=incident', text: 'Deviations, immediate correction, product disposition and prevention.' },
-  { name: 'Daily Hygiene Checklist', href: '/checklists', text: 'Opening and closing prerequisite checks.' },
+  { name: 'Daily Hygiene Checklist', href: '/logs?type=checklist', text: 'Opening and closing prerequisite checks.' },
 ];
 
 export function HaccpPackage() {
@@ -60,7 +60,7 @@ export function HaccpPackage() {
           <ol className="space-y-2 text-sm">
             {PRINCIPLES.map((principle, index) => (
               <li key={principle} className="flex gap-3 rounded-md border border-border bg-muted/30 p-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sidebar text-xs font-semibold text-white">{index + 1}</span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{index + 1}</span>
                 <span className="text-foreground">{principle}</span>
               </li>
             ))}
@@ -71,17 +71,18 @@ export function HaccpPackage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <div>
           <h3 className="mb-2 text-sm font-semibold text-foreground">Critical limits</h3>
+          <div className="overflow-x-auto rounded-md border border-border bg-card">
           <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-sidebar text-white">
-              <tr>
-                <th scope="col" className="border border-border px-3 py-2 font-semibold">Control point</th>
-                <th scope="col" className="border border-border px-3 py-2 font-semibold">Critical limit</th>
-                <th scope="col" className="border border-border px-3 py-2 font-semibold">Record</th>
+            <thead>
+              <tr className="bg-primary text-primary-foreground">
+                <th scope="col" className="border border-primary-foreground/20 px-3 py-2 font-semibold">Control point</th>
+                <th scope="col" className="border border-primary-foreground/20 px-3 py-2 font-semibold">Critical limit</th>
+                <th scope="col" className="border border-primary-foreground/20 px-3 py-2 font-semibold">Record</th>
               </tr>
             </thead>
             <tbody>
               {CRITICAL_LIMITS.map((row, index) => (
-                <tr key={row.point} className={index % 2 ? 'bg-muted/40' : ''}>
+                <tr key={row.point} className={index % 2 === 1 ? 'bg-accent/30' : 'bg-card'}>
                   <th scope="row" className="border border-border px-3 py-2 font-medium text-foreground">{row.point}</th>
                   <td className="border border-border px-3 py-2 tabular-nums text-foreground">{row.limit}</td>
                   <td className="border border-border px-3 py-2 text-muted-foreground">{row.record}</td>
@@ -89,6 +90,7 @@ export function HaccpPackage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         <div>
           <h3 className="mb-2 text-sm font-semibold text-foreground">Package records</h3>

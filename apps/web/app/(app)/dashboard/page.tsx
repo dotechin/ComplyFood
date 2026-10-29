@@ -171,10 +171,7 @@ export default function DashboardPage() {
               )}
             </div>
             {loading ? (
-              <div className="flex items-center gap-2 px-5 py-10 text-sm text-muted-foreground">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
-                Loading…
-              </div>
+              <p role="status" className="sr-only">Loading…</p>
             ) : (
               <LogTable entries={snapshot?.pendingLogs ?? []} onConfirm={handleConfirm} onCancel={handleCancel} />
             )}
