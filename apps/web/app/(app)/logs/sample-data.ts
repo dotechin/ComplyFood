@@ -62,13 +62,23 @@ function randomTime() {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 }
 
-function randomTemperature(unit: TemperatureUnit) {
-  const outOfRange = chance(0.05);
-  const value =
-    unit.category === 'freezer'
-      ? outOfRange ? between(-17, -14) : between(-22, -18.5)
-      : outOfRange ? between(4.6, 7.5) : between(1, 4);
-  return { temp: value.toFixed(1), outOfRange };
+export type TemperatureRange = { min: number; max: number };
+export type TemperatureRanges = { fridge: TemperatureRange; freezer: TemperatureRange };
+
+/** Legal upper limits: readings above these are logged as incidents. */
+export const TEMPERATURE_TARGETS = { fridge: 4, freezer: -18 } as const;
+
+/** Mostly compliant, with an occasional reading just above the target so incidents appear too. */
+export const DEFAULT_TEMPERATURE_RANGES: TemperatureRanges = {
+  fridge: { min: 1, max: 4.5 },
+  freezer: { min: -22, max: -17.5 },
+};
+
+function randomTemperature(unit: TemperatureUnit, ranges: TemperatureRanges) {
+  const kind = unit.category === 'freezer' ? 'freezer' : 'fridge';
+  const { min, max } = ranges[kind];
+  const temp = between(min, max).toFixed(1);
+  return { temp, outOfRange: Number(temp) > TEMPERATURE_TARGETS[kind] };
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,7 +103,12 @@ async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise
 const isSample = (log: LogEntry) => log.fields?.[SAMPLE_FIELD] === 'yes';
 
 /** Fills the opening days between `from` and `to` (inclusive) with temperature readings, cleaning and checklist ticks, and incidents. */
-export async function generateSampleData(units: TemperatureUnit[], from: Date, to: Date) {
+export async function generateSampleData(
+  units: TemperatureUnit[],
+  from: Date,
+  to: Date,
+  ranges: TemperatureRanges = DEFAULT_TEMPERATURE_RANGES,
+) {
   const days = openDaysBetween(from, to);
   const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
   const incidents: Record<string, string>[] = [];
@@ -105,7 +120,7 @@ export async function generateSampleData(units: TemperatureUnit[], from: Date, t
       const entries = readJson<Record<string, Reading>>(key, {});
       const day = String(date.getDate());
       if (entries[day]) continue;
-      const { temp, outOfRange } = randomTemperature(unit);
+      const { temp, outOfRange } = randomTemperature(unit, ranges);
       const time = randomTime();
       entries[day] = { temp, time };
       window.localStorage.setItem(key, JSON.stringify(entries));

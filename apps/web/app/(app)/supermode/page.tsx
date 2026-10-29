@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../../lib/api';
 import {
+  DEFAULT_TEMPERATURE_RANGES,
   MAX_SAMPLE_DAYS,
+  TEMPERATURE_TARGETS,
+  type TemperatureRanges,
   clearSampleData,
   defaultSamplePeriod,
   generateSampleData,
@@ -114,8 +117,29 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         : '';
   const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
+  const [ranges, setRanges] = useState<Record<keyof TemperatureRanges, { min: string; max: string }>>(() => ({
+    fridge: { min: String(DEFAULT_TEMPERATURE_RANGES.fridge.min), max: String(DEFAULT_TEMPERATURE_RANGES.fridge.max) },
+    freezer: { min: String(DEFAULT_TEMPERATURE_RANGES.freezer.min), max: String(DEFAULT_TEMPERATURE_RANGES.freezer.max) },
+  }));
+  const parsedRanges: TemperatureRanges = {
+    fridge: { min: parseFloat(ranges.fridge.min), max: parseFloat(ranges.fridge.max) },
+    freezer: { min: parseFloat(ranges.freezer.min), max: parseFloat(ranges.freezer.max) },
+  };
+  const rangeError = (['fridge', 'freezer'] as const)
+    .map((kind) => {
+      const { min, max } = parsedRanges[kind];
+      const name = kind === 'fridge' ? 'Fridge' : 'Freezer';
+      if (!Number.isFinite(min) || !Number.isFinite(max)) return `${name}: enter both a minimum and a maximum.`;
+      if (min > max) return `${name}: the minimum must not exceed the maximum.`;
+      if (min < -50 || max > 50) return `${name}: keep values between -50°C and 50°C.`;
+      return '';
+    })
+    .find(Boolean) ?? '';
+  const setRange = (kind: keyof TemperatureRanges, bound: 'min' | 'max', value: string) =>
+    setRanges((r) => ({ ...r, [kind]: { ...r[kind], [bound]: value } }));
+
   const run = async (action: 'generate' | 'clear' | 'reset') => {
-    if (action === 'generate' && periodError) return setError(periodError);
+    if (action === 'generate' && (periodError || rangeError)) return setError(periodError || rangeError);
     if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
     if (
       action === 'reset'
@@ -126,7 +150,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     setError('');
     try {
       if (action === 'generate') {
-        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate);
+        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate, parsedRanges);
         setMessage(
           `Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents across ${result.days} opening days (${formatDay(fromDate)} – ${formatDay(toDate)}).`,
         );
@@ -182,8 +206,44 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
             {periodError || `${spanDays} ${spanDays === 1 ? 'day' : 'days'} selected`}
           </p>
         </fieldset>
+        <fieldset className="flex flex-col gap-3">
+          <legend className="text-sm font-medium text-foreground">Temperature range (°C)</legend>
+          <div className="flex flex-wrap gap-6">
+            {(['fridge', 'freezer'] as const).map((kind) => (
+              <div key={kind} className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
+                <span className="text-sm font-medium text-foreground">
+                  {kind === 'fridge' ? 'Fridges' : 'Freezers'}
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {`target ≤ ${TEMPERATURE_TARGETS[kind]}°C`}
+                  </span>
+                </span>
+                <div className="flex items-end gap-3">
+                  {(['min', 'max'] as const).map((bound) => (
+                    <div key={bound} className="flex flex-col gap-1">
+                      <label htmlFor={`range-${kind}-${bound}`} className="text-xs text-muted-foreground">
+                        {bound === 'min' ? 'Min' : 'Max'}
+                      </label>
+                      <input
+                        id={`range-${kind}-${bound}`}
+                        type="number"
+                        inputMode="decimal"
+                        step="0.5"
+                        value={ranges[kind][bound]}
+                        onChange={(e) => setRange(kind, bound, e.target.value)}
+                        className="h-10 w-24 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground" aria-live="polite">
+            {rangeError || 'Readings are picked at random within each range. Any reading above the target is also logged as an incident.'}
+          </p>
+        </fieldset>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void run('generate')} disabled={!!busy || !!periodError} className={PRIMARY_BUTTON}>
+          <button type="button" onClick={() => void run('generate')} disabled={!!busy || !!periodError || !!rangeError} className={PRIMARY_BUTTON}>
             {busy === 'generate' ? 'Generating…' : 'Generate sample data'}
           </button>
           <button type="button" onClick={() => void run('clear')} disabled={!!busy} className={SECONDARY_BUTTON}>
