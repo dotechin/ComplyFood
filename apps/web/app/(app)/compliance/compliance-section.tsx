@@ -202,15 +202,15 @@ export function ComplianceSection() {
                 <div className="overflow-hidden rounded-md border border-border">
                   <table className="w-full border-collapse text-left text-xs">
                     <thead>
-                      <tr className="bg-muted/60 text-muted-foreground">
+                      <tr className="bg-primary text-primary-foreground">
                         <th className="px-3 py-2 font-semibold">Regione</th>
                         <th className="px-3 py-2 font-semibold">Validità</th>
                         <th className="hidden px-3 py-2 font-semibold sm:table-cell">Note</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {note.regions.map((row) => (
-                        <tr key={row.region} className="border-t border-border">
+                      {note.regions.map((row, index) => (
+                        <tr key={row.region} className={`border-t border-border ${index % 2 === 1 ? 'bg-accent/30' : 'bg-card'}`}>
                           <td className="px-3 py-2 font-medium text-foreground">{row.region}</td>
                           <td className="px-3 py-2 text-muted-foreground">{row.validity}</td>
                           <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{row.note ?? '—'}</td>
