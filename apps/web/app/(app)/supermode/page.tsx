@@ -26,6 +26,19 @@ const SECONDARY_BUTTON =
 const DANGER_BUTTON =
   'h-10 rounded-md border border-danger bg-danger px-4 text-sm font-medium text-danger-foreground disabled:opacity-60';
 
+type TemperatureScale = 'C' | 'K' | 'F';
+const SCALES: Record<TemperatureScale, { name: string; symbol: string }> = {
+  C: { name: 'Celsius', symbol: '°C' },
+  K: { name: 'Kelvin', symbol: 'K' },
+  F: { name: 'Fahrenheit', symbol: '°F' },
+};
+const toCelsius = (value: number, scale: TemperatureScale) =>
+  scale === 'K' ? value - 273.15 : scale === 'F' ? ((value - 32) * 5) / 9 : value;
+const fromCelsius = (celsius: number, scale: TemperatureScale) =>
+  scale === 'K' ? celsius + 273.15 : scale === 'F' ? (celsius * 9) / 5 + 32 : celsius;
+const formatTemp = (celsius: number, scale: TemperatureScale) =>
+  String(Math.round(fromCelsius(celsius, scale) * 10) / 10);
+
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 8);
 
@@ -117,26 +130,42 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         : '';
   const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
+  const [scale, setScale] = useState<TemperatureScale>('C');
   const [ranges, setRanges] = useState<Record<keyof TemperatureRanges, { min: string; max: string }>>(() => ({
     fridge: { min: String(DEFAULT_TEMPERATURE_RANGES.fridge.min), max: String(DEFAULT_TEMPERATURE_RANGES.fridge.max) },
     freezer: { min: String(DEFAULT_TEMPERATURE_RANGES.freezer.min), max: String(DEFAULT_TEMPERATURE_RANGES.freezer.max) },
   }));
+  const toC = (value: string) => toCelsius(parseFloat(value), scale);
   const parsedRanges: TemperatureRanges = {
-    fridge: { min: parseFloat(ranges.fridge.min), max: parseFloat(ranges.fridge.max) },
-    freezer: { min: parseFloat(ranges.freezer.min), max: parseFloat(ranges.freezer.max) },
+    fridge: { min: toC(ranges.fridge.min), max: toC(ranges.fridge.max) },
+    freezer: { min: toC(ranges.freezer.min), max: toC(ranges.freezer.max) },
   };
+  const symbol = SCALES[scale].symbol;
   const rangeError = (['fridge', 'freezer'] as const)
     .map((kind) => {
       const { min, max } = parsedRanges[kind];
-      const name = kind === 'fridge' ? 'Fridge' : 'Freezer';
+      const name = kind === 'fridge' ? 'Fridges' : 'Freezers';
       if (!Number.isFinite(min) || !Number.isFinite(max)) return `${name}: enter both a minimum and a maximum.`;
       if (min > max) return `${name}: the minimum must not exceed the maximum.`;
-      if (min < -50 || max > 50) return `${name}: keep values between -50°C and 50°C.`;
+      if (min < -50 || max > 50) {
+        return `${name}: keep values between ${formatTemp(-50, scale)}${symbol} and ${formatTemp(50, scale)}${symbol}.`;
+      }
       return '';
     })
     .find(Boolean) ?? '';
   const setRange = (kind: keyof TemperatureRanges, bound: 'min' | 'max', value: string) =>
     setRanges((r) => ({ ...r, [kind]: { ...r[kind], [bound]: value } }));
+  const changeScale = (next: TemperatureScale) => {
+    const convert = (value: string) => {
+      const celsius = toCelsius(parseFloat(value), scale);
+      return Number.isFinite(celsius) ? formatTemp(celsius, next) : value;
+    };
+    setRanges((r) => ({
+      fridge: { min: convert(r.fridge.min), max: convert(r.fridge.max) },
+      freezer: { min: convert(r.freezer.min), max: convert(r.freezer.max) },
+    }));
+    setScale(next);
+  };
 
   const run = async (action: 'generate' | 'clear' | 'reset') => {
     if (action === 'generate' && (periodError || rangeError)) return setError(periodError || rangeError);
@@ -207,14 +236,30 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           </p>
         </fieldset>
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium text-foreground">Temperature range (°C)</legend>
+          <legend className="text-sm font-medium text-foreground">{`Temperature range (${symbol})`}</legend>
+          <div role="radiogroup" aria-label="Unit of measurement" className="flex w-fit rounded-md border border-border bg-muted/40 p-1">
+            {(Object.keys(SCALES) as TemperatureScale[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={scale === key}
+                onClick={() => changeScale(key)}
+                className={`h-8 rounded px-3 text-sm font-medium ${
+                  scale === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {`${SCALES[key].name} (${SCALES[key].symbol})`}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap gap-6">
             {(['fridge', 'freezer'] as const).map((kind) => (
               <div key={kind} className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
-                <span className="text-sm font-medium text-foreground">
-                  {kind === 'fridge' ? 'Fridges' : 'Freezers'}
-                  <span className="ml-2 font-normal text-muted-foreground">
-                    {`target ≤ ${TEMPERATURE_TARGETS[kind]}°C`}
+                <span className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-foreground">
+                  {kind === 'fridge' ? 'Fridges target' : 'Freezers target'}
+                  <span className="font-normal text-muted-foreground">
+                    {`≤ ${formatTemp(TEMPERATURE_TARGETS[kind], scale)}${symbol}`}
                   </span>
                 </span>
                 <div className="flex items-end gap-3">
