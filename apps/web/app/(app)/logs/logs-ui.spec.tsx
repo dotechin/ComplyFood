@@ -64,7 +64,10 @@ function renderPageAs(type: LogType, feedback = { message: '', cleaningMessage: 
 }
 
 describe('Daily Logs UI', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
   it('renders the hygiene checklist as a weekly tick sheet with the shared opening days row', () => {
     const html = renderToStaticMarkup(
@@ -139,6 +142,7 @@ describe('Daily Logs UI', () => {
   });
 
   it('shows one daily row per opening day with only date, automatic time and temperature cells', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2025-01-15T12:00:00Z'));
     const html = renderToStaticMarkup(
       <TemperatureLog
         units={[...TEMPERATURE_UNITS]}
