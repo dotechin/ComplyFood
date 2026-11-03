@@ -51,6 +51,14 @@ bash scripts/staging-down.sh --volumes  # stop the stack and delete its data
 
 The seed option provides demo accounts `admin@demo.com` and `staff@demo.com`, both with password `password123`. Do not use these credentials outside a local environment. To override staging defaults, create `.env.staging` in the repository root; see `infra/docker-compose.staging.yml` for the supported variables.
 
+To update and start the full local stack instead, copy `.env.example` to `.env` and set the required backend values, then run:
+
+```bash
+./scripts/update-local.sh
+```
+
+This command runs `git pull --ff-only`, then rebuilds and starts the API and web app with the production and Tailscale Compose configuration. It preserves existing data volumes. The web app is available at <http://localhost:3100> and the API at <http://localhost:4000/api/v1>.
+
 ## Development
 
 Install workspace dependencies with pnpm 9 or later and Node.js 20 or later:
