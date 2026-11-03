@@ -31,7 +31,11 @@ export class SupermodePinDto {
   pin: string;
 }
 
-class SetSupermodePinDto extends SupermodePinDto {
+class SetSupermodePinDto {
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'PIN must be 4 digits' })
+  pin: string;
+
   @IsOptional()
   @IsString()
   currentPin?: string;

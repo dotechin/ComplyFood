@@ -17,8 +17,8 @@ import { TEMPERATURE_UNITS } from '../logs/temperature-log';
 
 type SupermodeStatus = { pinSet: boolean; lockedUntil: string | null; attemptsLeft: number };
 
-const INPUT_CLASSES =
-  'h-10 w-40 rounded-md border border-input bg-card px-3 text-center font-mono text-lg tracking-[0.4em] text-foreground';
+const PIN_BOX_CLASSES =
+  'h-12 w-11 rounded-md border border-input bg-card text-center font-mono text-xl text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30';
 const PRIMARY_BUTTON =
   'h-10 rounded-md border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60';
 const SECONDARY_BUTTON =
@@ -40,23 +40,85 @@ const formatTemp = (celsius: number, scale: TemperatureScale) =>
   String(Math.round(fromCelsius(celsius, scale) * 10) / 10);
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
-const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 8);
+const PIN_LENGTH = 4;
+const digitsOnly = (value: string) => value.replace(/\D/g, '');
+
+function EyeIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+      {!open && <path d="M3 3l18 18" />}
+    </svg>
+  );
+}
 
 function PinField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  const [visible, setVisible] = useState(false);
+  const focusBox = (index: number) =>
+    document.getElementById(`${id}-${Math.max(0, Math.min(PIN_LENGTH - 1, index))}`)?.focus();
+
+  const setDigitAt = (index: number, raw: string) => {
+    const digits = digitsOnly(raw);
+    if (!digits) return;
+    const chars = value.split('');
+    for (let i = 0; i < digits.length && index + i < PIN_LENGTH; i++) chars[index + i] = digits[i];
+    const next = chars.join('').slice(0, PIN_LENGTH);
+    onChange(next);
+    focusBox(index + digits.length);
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (value[index]) {
+        onChange(value.slice(0, index) + value.slice(index + 1));
+      } else if (index > 0) {
+        onChange(value.slice(0, index - 1) + value.slice(index));
+        focusBox(index - 1);
+      }
+    } else if (e.key === 'ArrowLeft') {
+      focusBox(index - 1);
+    } else if (e.key === 'ArrowRight') {
+      focusBox(index + 1);
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
-      <input
-        id={id}
-        type="password"
-        inputMode="numeric"
-        autoComplete="off"
-        pattern="\d{4,8}"
-        value={value}
-        onChange={(e) => onChange(digitsOnly(e.target.value))}
-        className={INPUT_CLASSES}
-      />
-    </div>
+    <fieldset className="flex flex-col gap-1">
+      <legend className="text-sm font-medium text-foreground">{label}</legend>
+      <div className="mt-1 flex items-center gap-2">
+        {Array.from({ length: PIN_LENGTH }, (_, index) => (
+          <input
+            key={index}
+            id={`${id}-${index}`}
+            type={visible ? 'text' : 'password'}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={PIN_LENGTH}
+            aria-label={`${label} digit ${index + 1} of ${PIN_LENGTH}`}
+            value={value[index] ?? ''}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setDigitAt(index, e.target.value.slice(-PIN_LENGTH))}
+            onKeyDown={(e) => handleKeyDown(index, e)}
+            onPaste={(e) => {
+              e.preventDefault();
+              setDigitAt(index, e.clipboardData.getData('text'));
+            }}
+            className={PIN_BOX_CLASSES}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+          aria-pressed={visible}
+          className="flex h-12 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <EyeIcon open={!visible} />
+        </button>
+      </div>
+    </fieldset>
   );
 }
 
@@ -81,7 +143,7 @@ function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (pin.length < 4) return setError('PIN must be 4 to 8 digits.');
+    if (pin.length !== PIN_LENGTH) return setError(`PIN must be ${PIN_LENGTH} digits.`);
     if (creating && pin !== confirmPin) return setError('The two PINs do not match.');
     setBusy(true);
     try {
@@ -101,7 +163,7 @@ function PinGate({ status, onUnlock }: { status: SupermodeStatus; onUnlock: (pin
         <h2 className="text-lg font-semibold text-foreground">{creating ? 'Create a Supermode PIN' : 'Enter your PIN'}</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           {creating
-            ? 'Supermode can delete records. Choose a 4 to 8 digit PIN to protect it.'
+            ? 'Supermode can delete records. Choose a 4-digit PIN to protect it.'
             : 'Supermode is locked. Enter your PIN to continue.'}
         </p>
       </div>
