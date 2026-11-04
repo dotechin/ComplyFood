@@ -205,6 +205,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [period, setPeriod] = useState(defaultSamplePeriod);
+  const [yearlyOpen, setYearlyOpen] = useState(false);
 
   const parseDay = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number);
@@ -338,7 +339,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               type="date"
               value={period.from}
               max={period.to || undefined}
-              onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))}
+              onChange={(e) => { setYearlyOpen(false); setPeriod((p) => ({ ...p, from: e.target.value })); }}
               className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
             />
           </div>
@@ -349,28 +350,61 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               type="date"
               value={period.to}
               min={period.from || undefined}
-              onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))}
+              onChange={(e) => { setYearlyOpen(false); setPeriod((p) => ({ ...p, to: e.target.value })); }}
               className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="sample-period-preset" className="text-sm font-medium text-foreground">Period</label>
-            <select
-              id="sample-period-preset"
-              value={selectedPreset}
-              onChange={(e) => selectPreset(e.target.value)}
-              className="h-10 min-w-44 rounded-md border border-input bg-card px-3 text-sm text-foreground"
-            >
-              <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="180">Last 6 months</option>
-              <option value="365">Last year (365 days)</option>
-              <option value="previous-year">Previous calendar year</option>
-              <option value="730">Last 2 years</option>
-              <option value="1095">Last 3 years</option>
-              <option value="custom">Custom period</option>
-            </select>
+            <span className="text-sm font-medium text-foreground">Quick period</span>
+            <div className="flex h-10 items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+              {[
+                ['30', '30 days'],
+                ['90', '90 days'],
+                ['180', '6 months'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selectedPreset === value}
+                  onClick={() => { setYearlyOpen(false); selectPreset(value); }}
+                  className={`h-8 rounded px-3 text-sm font-medium transition-colors ${
+                    selectedPreset === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-expanded={yearlyOpen}
+                aria-controls="yearly-period-options"
+                onClick={() => setYearlyOpen((open) => !open)}
+                className={`h-8 rounded px-3 text-sm font-medium transition-colors ${
+                  yearlyOpen || ['previous-year', '365', '730', '1095'].includes(selectedPreset)
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Yearly
+              </button>
+            </div>
           </div>
+          {yearlyOpen && (
+            <div id="yearly-period-options" className="flex flex-col gap-1">
+              <label htmlFor="yearly-period-select" className="text-sm font-medium text-foreground">Yearly period</label>
+              <select
+                id="yearly-period-select"
+                value={['previous-year', '365', '730', '1095'].includes(selectedPreset) ? selectedPreset : '365'}
+                onChange={(e) => selectPreset(e.target.value)}
+                className="h-10 min-w-48 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+              >
+                <option value="previous-year">Previous calendar year</option>
+                <option value="365">Last year</option>
+                <option value="730">Last 2 years</option>
+                <option value="1095">Last 3 years</option>
+              </select>
+            </div>
+          )}
           {periodError && (
             <p className="pb-2 text-sm text-danger" role="alert">{periodError}</p>
           )}
