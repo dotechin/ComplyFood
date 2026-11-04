@@ -205,6 +205,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [period, setPeriod] = useState(defaultSamplePeriod);
+  const [yearlyOpen, setYearlyOpen] = useState(false);
 
   const parseDay = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number);
@@ -221,6 +222,33 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         ? `The period can be at most ${MAX_SAMPLE_DAYS} days.`
         : '';
   const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const toIsoDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const selectPreset = (value: string) => {
+    if (value === 'custom') return;
+    const today = new Date();
+    if (value === 'previous-year') {
+      const year = today.getFullYear() - 1;
+      setPeriod({ from: `${year}-01-01`, to: `${year}-12-31` });
+      return;
+    }
+    const days = Number(value);
+    if (!Number.isFinite(days)) return;
+    const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
+    setPeriod({ from: toIsoDate(from), to: toIsoDate(today) });
+  };
+  const previousYear = new Date().getFullYear() - 1;
+  const selectedPreset = ['30', '90', '180', '365', '730', '1095'].includes(String(spanDays))
+    ? String(spanDays)
+    : period.from === `${previousYear}-01-01` && period.to === `${previousYear}-12-31`
+      ? 'previous-year'
+      : 'custom';
+  const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
+  const isLargePeriod = spanDays > 90;
 
   const [scale, setScale] = useState<TemperatureScale>('C');
   const [ranges, setRanges] = useState<Record<keyof TemperatureRanges, { min: string; max: string }>>(() => ({
@@ -261,6 +289,9 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
 
   const run = async (action: 'generate' | 'clear' | 'reset') => {
     if (action === 'generate' && (periodError || rangeError)) return setError(periodError || rangeError);
+    if (action === 'generate' && isLargePeriod && !window.confirm(
+      `This may create up to about ${estimatedRegistrations.toLocaleString()} records over ${spanDays} days. Generation is throttled to protect your PC. Continue?`,
+    )) return;
     if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
     if (
       action === 'reset'
@@ -295,8 +326,8 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Sample data</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Fill the opening days of a chosen period with test registrations, or remove only what was generated.
-            Days that already have a registration are left untouched.
+            Fill the opening days of a chosen period, including an entire year, with test registrations, or remove only what was generated.
+            Days that already have a registration are left untouched. One generation is limited to three years and is deliberately throttled to protect your PC.
           </p>
         </div>
         <fieldset className="flex flex-wrap items-end gap-4">
@@ -308,7 +339,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               type="date"
               value={period.from}
               max={period.to || undefined}
-              onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))}
+              onChange={(e) => { setYearlyOpen(false); setPeriod((p) => ({ ...p, from: e.target.value })); }}
               className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
             />
           </div>
@@ -319,13 +350,69 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               type="date"
               value={period.to}
               min={period.from || undefined}
-              onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))}
+              onChange={(e) => { setYearlyOpen(false); setPeriod((p) => ({ ...p, to: e.target.value })); }}
               className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
             />
           </div>
-          <p className="pb-2 text-sm text-muted-foreground" aria-live="polite">
-            {periodError || `${spanDays} ${spanDays === 1 ? 'day' : 'days'} selected`}
-          </p>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-foreground">Quick period</span>
+            <div className="flex h-10 items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+              {[
+                ['30', '30 days'],
+                ['90', '90 days'],
+                ['180', '6 months'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selectedPreset === value}
+                  onClick={() => { setYearlyOpen(false); selectPreset(value); }}
+                  className={`h-8 rounded px-3 text-sm font-medium transition-colors ${
+                    selectedPreset === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-expanded={yearlyOpen}
+                aria-controls="yearly-period-options"
+                onClick={() => setYearlyOpen((open) => !open)}
+                className={`h-8 rounded px-3 text-sm font-medium transition-colors ${
+                  yearlyOpen || ['previous-year', '365', '730', '1095'].includes(selectedPreset)
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Yearly
+              </button>
+            </div>
+          </div>
+          {yearlyOpen && (
+            <div id="yearly-period-options" className="flex flex-col gap-1">
+              <label htmlFor="yearly-period-select" className="text-sm font-medium text-foreground">Yearly period</label>
+              <select
+                id="yearly-period-select"
+                value={['previous-year', '365', '730', '1095'].includes(selectedPreset) ? selectedPreset : '365'}
+                onChange={(e) => selectPreset(e.target.value)}
+                className="h-10 min-w-48 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+              >
+                <option value="previous-year">Previous calendar year</option>
+                <option value="365">Last year</option>
+                <option value="730">Last 2 years</option>
+                <option value="1095">Last 3 years</option>
+              </select>
+            </div>
+          )}
+          {periodError && (
+            <p className="pb-2 text-sm text-danger" role="alert">{periodError}</p>
+          )}
+          {!periodError && isLargePeriod && (
+            <p className="max-w-xl pb-2 text-sm text-warning" role="note">
+              Long periods are supported up to three years. Generation is deliberately throttled and runs only on opening days; expect roughly {estimatedRegistrations.toLocaleString()} records at most.
+            </p>
+          )}
         </fieldset>
         <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium text-foreground">{`Temperature range (${symbol})`}</legend>

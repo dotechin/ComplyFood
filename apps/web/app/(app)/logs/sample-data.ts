@@ -35,7 +35,8 @@ function openingDays(): number[] {
   return Array.isArray(stored) && stored.length ? stored.filter((d): d is number => typeof d === 'number') : [0, 1, 2, 3, 4, 5, 6];
 }
 
-export const MAX_SAMPLE_DAYS = 366;
+// Three years is the safety ceiling. Generation remains batched and limited to opening days.
+export const MAX_SAMPLE_DAYS = 1095;
 
 function openDaysBetween(from: Date, to: Date) {
   const open = openingDays();
@@ -94,9 +95,11 @@ async function withRetry<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
   }
 }
 
+/** Throttled writes keep a full-year generation from saturating the API or browser. */
 async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise<unknown>) {
   for (let i = 0; i < items.length; i += size) {
     await Promise.all(items.slice(i, i + size).map((item) => withRetry(() => task(item))));
+    if (i + size < items.length) await wait(50);
   }
 }
 
