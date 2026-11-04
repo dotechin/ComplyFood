@@ -221,6 +221,8 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         ? `The period can be at most ${MAX_SAMPLE_DAYS} days.`
         : '';
   const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
+  const isLargePeriod = spanDays > 90;
 
   const [scale, setScale] = useState<TemperatureScale>('C');
   const [ranges, setRanges] = useState<Record<keyof TemperatureRanges, { min: string; max: string }>>(() => ({
@@ -261,6 +263,9 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
 
   const run = async (action: 'generate' | 'clear' | 'reset') => {
     if (action === 'generate' && (periodError || rangeError)) return setError(periodError || rangeError);
+    if (action === 'generate' && isLargePeriod && !window.confirm(
+      `This may create up to about ${estimatedRegistrations.toLocaleString()} records over ${spanDays} days. Generation is throttled to protect your PC. Continue?`,
+    )) return;
     if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
     if (
       action === 'reset'
@@ -295,8 +300,8 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Sample data</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Fill the opening days of a chosen period with test registrations, or remove only what was generated.
-            Days that already have a registration are left untouched.
+            Fill the opening days of a chosen period, including an entire year, with test registrations, or remove only what was generated.
+            Days that already have a registration are left untouched. One generation is limited to 366 calendar days to protect your PC.
           </p>
         </div>
         <fieldset className="flex flex-wrap items-end gap-4">
@@ -326,6 +331,11 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           <p className="pb-2 text-sm text-muted-foreground" aria-live="polite">
             {periodError || `${spanDays} ${spanDays === 1 ? 'day' : 'days'} selected`}
           </p>
+          {!periodError && isLargePeriod && (
+            <p className="max-w-xl pb-2 text-sm text-warning" role="note">
+              A full year is supported. Generation is deliberately throttled and runs only on opening days; expect roughly {estimatedRegistrations.toLocaleString()} records at most.
+            </p>
+          )}
         </fieldset>
         <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium text-foreground">{`Temperature range (${symbol})`}</legend>

@@ -94,9 +94,11 @@ async function withRetry<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
   }
 }
 
+/** Throttled writes keep a full-year generation from saturating the API or browser. */
 async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise<unknown>) {
   for (let i = 0; i < items.length; i += size) {
     await Promise.all(items.slice(i, i + size).map((item) => withRetry(() => task(item))));
+    if (i + size < items.length) await wait(50);
   }
 }
 
