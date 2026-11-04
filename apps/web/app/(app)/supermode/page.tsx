@@ -221,6 +221,21 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         ? `The period can be at most ${MAX_SAMPLE_DAYS} days.`
         : '';
   const formatDay = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const toIsoDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const selectPreset = (value: string) => {
+    if (value === 'custom') return;
+    const days = Number(value);
+    if (!Number.isFinite(days)) return;
+    const today = new Date();
+    const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
+    setPeriod({ from: toIsoDate(from), to: toIsoDate(today) });
+  };
+  const selectedPreset = ['30', '90', '180', '365'].includes(String(spanDays)) ? String(spanDays) : 'custom';
   const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
   const isLargePeriod = spanDays > 90;
 
@@ -328,9 +343,24 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground"
             />
           </div>
-          <p className="pb-2 text-sm text-muted-foreground" aria-live="polite">
-            {periodError || `${spanDays} ${spanDays === 1 ? 'day' : 'days'} selected`}
-          </p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sample-period-preset" className="text-sm font-medium text-foreground">Period</label>
+            <select
+              id="sample-period-preset"
+              value={selectedPreset}
+              onChange={(e) => selectPreset(e.target.value)}
+              className="h-10 min-w-44 rounded-md border border-input bg-card px-3 text-sm text-foreground"
+            >
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="180">Last 6 months</option>
+              <option value="365">Last year (365 days)</option>
+              <option value="custom">Custom period</option>
+            </select>
+          </div>
+          {periodError && (
+            <p className="pb-2 text-sm text-danger" role="alert">{periodError}</p>
+          )}
           {!periodError && isLargePeriod && (
             <p className="max-w-xl pb-2 text-sm text-warning" role="note">
               A full year is supported. Generation is deliberately throttled and runs only on opening days; expect roughly {estimatedRegistrations.toLocaleString()} records at most.
