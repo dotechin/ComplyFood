@@ -35,7 +35,8 @@ function openingDays(): number[] {
   return Array.isArray(stored) && stored.length ? stored.filter((d): d is number => typeof d === 'number') : [0, 1, 2, 3, 4, 5, 6];
 }
 
-export const MAX_SAMPLE_DAYS = 366;
+// Three years is the safety ceiling. Generation remains batched and limited to opening days.
+export const MAX_SAMPLE_DAYS = 1095;
 
 function openDaysBetween(from: Date, to: Date) {
   const open = openingDays();

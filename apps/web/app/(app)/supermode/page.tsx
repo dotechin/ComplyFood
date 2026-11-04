@@ -229,13 +229,23 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
   };
   const selectPreset = (value: string) => {
     if (value === 'custom') return;
+    const today = new Date();
+    if (value === 'previous-year') {
+      const year = today.getFullYear() - 1;
+      setPeriod({ from: `${year}-01-01`, to: `${year}-12-31` });
+      return;
+    }
     const days = Number(value);
     if (!Number.isFinite(days)) return;
-    const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
     setPeriod({ from: toIsoDate(from), to: toIsoDate(today) });
   };
-  const selectedPreset = ['30', '90', '180', '365'].includes(String(spanDays)) ? String(spanDays) : 'custom';
+  const previousYear = new Date().getFullYear() - 1;
+  const selectedPreset = ['30', '90', '180', '365', '730', '1095'].includes(String(spanDays))
+    ? String(spanDays)
+    : period.from === `${previousYear}-01-01` && period.to === `${previousYear}-12-31`
+      ? 'previous-year'
+      : 'custom';
   const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
   const isLargePeriod = spanDays > 90;
 
@@ -316,7 +326,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           <h2 className="text-lg font-semibold text-foreground">Sample data</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Fill the opening days of a chosen period, including an entire year, with test registrations, or remove only what was generated.
-            Days that already have a registration are left untouched. One generation is limited to 366 calendar days to protect your PC.
+            Days that already have a registration are left untouched. One generation is limited to three years and is deliberately throttled to protect your PC.
           </p>
         </div>
         <fieldset className="flex flex-wrap items-end gap-4">
@@ -355,6 +365,9 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
               <option value="90">Last 90 days</option>
               <option value="180">Last 6 months</option>
               <option value="365">Last year (365 days)</option>
+              <option value="previous-year">Previous calendar year</option>
+              <option value="730">Last 2 years</option>
+              <option value="1095">Last 3 years</option>
               <option value="custom">Custom period</option>
             </select>
           </div>
@@ -363,7 +376,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           )}
           {!periodError && isLargePeriod && (
             <p className="max-w-xl pb-2 text-sm text-warning" role="note">
-              A full year is supported. Generation is deliberately throttled and runs only on opening days; expect roughly {estimatedRegistrations.toLocaleString()} records at most.
+              Long periods are supported up to three years. Generation is deliberately throttled and runs only on opening days; expect roughly {estimatedRegistrations.toLocaleString()} records at most.
             </p>
           )}
         </fieldset>
