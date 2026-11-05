@@ -242,11 +242,13 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     setPeriod({ from: toIsoDate(from), to: toIsoDate(today) });
   };
   const previousYear = new Date().getFullYear() - 1;
-  const selectedPreset = ['30', '90', '180', '365', '730', '1095'].includes(String(spanDays))
-    ? String(spanDays)
-    : period.from === `${previousYear}-01-01` && period.to === `${previousYear}-12-31`
-      ? 'previous-year'
-      : 'custom';
+  const selectedPreset = yearlyOpen
+    ? 'yearly'
+    : ['30', '90', '180', '365', '730', '1095'].includes(String(spanDays))
+      ? String(spanDays)
+      : period.from === defaultSamplePeriod().from && period.to === defaultSamplePeriod().to
+        ? '30'
+        : 'custom';
   const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
   const isLargePeriod = spanDays > 90;
 
