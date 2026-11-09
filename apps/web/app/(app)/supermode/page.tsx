@@ -7,6 +7,7 @@ import {
   MAX_SAMPLE_DAYS,
   TEMPERATURE_TARGETS,
   type TemperatureRanges,
+  type SampleDataSelection,
   clearSampleData,
   defaultSamplePeriod,
   generateSampleData,
@@ -14,6 +15,8 @@ import {
   storedTemperatureUnits,
 } from '../logs/sample-data';
 import { TEMPERATURE_UNITS } from '../logs/temperature-log';
+import { CLEANING_SCHEDULE } from '../logs/cleaning-schedule';
+import { CHECKLIST_SECTIONS } from '../logs/hygiene-checklist';
 
 type SupermodeStatus = { pinSet: boolean; lockedUntil: string | null; attemptsLeft: number };
 
@@ -242,6 +245,12 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     setPeriod({ from: toIsoDate(from), to: toIsoDate(today) });
   };
   const previousYear = new Date().getFullYear() - 1;
+  const [sampleSelection, setSampleSelection] = useState<SampleDataSelection>({
+    temperatures: true,
+    cleaning: true,
+    checklist: true,
+    incidents: true,
+  });
   const selectedPreset = yearlyOpen
     ? 'yearly'
     : ['30', '90', '180', '365', '730', '1095'].includes(String(spanDays))
@@ -249,7 +258,14 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
       : period.from === defaultSamplePeriod().from && period.to === defaultSamplePeriod().to
         ? '30'
         : 'custom';
-  const estimatedRegistrations = Math.max(0, spanDays) * (TEMPERATURE_UNITS.length + 18);
+  const selectedKinds = [
+    sampleSelection.temperatures ? TEMPERATURE_UNITS.length : 0,
+    sampleSelection.cleaning ? CLEANING_SCHEDULE.length : 0,
+    sampleSelection.checklist ? CHECKLIST_SECTIONS.reduce((count, section) => count + section.items.length, 0) : 0,
+    sampleSelection.incidents ? Math.ceil(TEMPERATURE_UNITS.length * 0.05) : 0,
+  ];
+  const hasSelectedSampleData = Object.values(sampleSelection).some(Boolean);
+  const estimatedRegistrations = Math.max(0, spanDays) * selectedKinds.reduce((sum, count) => sum + count, 0);
   const isLargePeriod = spanDays > 90;
 
   const [scale, setScale] = useState<TemperatureScale>('C');
@@ -290,7 +306,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
   };
 
   const run = async (action: 'generate' | 'clear' | 'reset') => {
-    if (action === 'generate' && (periodError || rangeError)) return setError(periodError || rangeError);
+    if (action === 'generate' && (periodError || rangeError || !hasSelectedSampleData)) return setError(periodError || rangeError || 'Select at least one data type to generate.');
     if (action === 'generate' && isLargePeriod && !window.confirm(
       `This may create up to about ${estimatedRegistrations.toLocaleString()} records over ${spanDays} days. Generation is throttled to protect your PC. Continue?`,
     )) return;
@@ -304,7 +320,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     setError('');
     try {
       if (action === 'generate') {
-        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate, parsedRanges);
+        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate, parsedRanges, sampleSelection);
         setMessage(
           `Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents across ${result.days} opening days (${formatDay(fromDate)} – ${formatDay(toDate)}).`,
         );
@@ -417,6 +433,30 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           )}
         </fieldset>
         <fieldset className="flex flex-col gap-3">
+          <legend className="text-sm font-medium text-foreground">Data to generate</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {([
+              ['temperatures', 'Temperature readings'],
+              ['cleaning', 'Cleaning records'],
+              ['checklist', 'Checklist records'],
+              ['incidents', 'Out-of-range incidents'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={sampleSelection[key]}
+                  onChange={(event) => setSampleSelection((current) => ({ ...current, [key]: event.target.checked }))}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {!Object.values(sampleSelection).some(Boolean) && (
+            <p className="text-sm text-danger" role="alert">Select at least one data type to generate.</p>
+          )}
+        </fieldset>
+        <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium text-foreground">{`Temperature range (${symbol})`}</legend>
           <div role="radiogroup" aria-label="Unit of measurement" className="flex w-fit rounded-md border border-border bg-muted/40 p-1">
             {(Object.keys(SCALES) as TemperatureScale[]).map((key) => (
@@ -456,7 +496,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
                         id={`range-${kind}-${bound}`}
                         type="number"
                         inputMode="decimal"
-                        step="0.5"
+                        step="0.1"
                         value={ranges[kind][bound]}
                         onChange={(e) => setRange(kind, bound, e.target.value)}
                         className="h-10 w-24 rounded-md border border-input bg-card px-3 text-sm text-foreground"
@@ -472,7 +512,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
           </p>
         </fieldset>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void run('generate')} disabled={!!busy || !!periodError || !!rangeError} className={PRIMARY_BUTTON}>
+          <button type="button" onClick={() => void run('generate')} disabled={!!busy || !!periodError || !!rangeError || !hasSelectedSampleData} className={PRIMARY_BUTTON}>
             {busy === 'generate' ? 'Generating…' : 'Generate sample data'}
           </button>
           <button type="button" onClick={() => void run('clear')} disabled={!!busy} className={SECONDARY_BUTTON}>
