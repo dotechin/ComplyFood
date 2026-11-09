@@ -175,7 +175,12 @@ function readTemperatureUnits(value: string | null): TemperatureUnit[] | null {
       seen.add(key);
       return true;
     });
-    return units.length ? units : null;
+    if (!units.length) return null;
+    const existing = new Set(units.map((unit) => unit.value.trim().toLocaleLowerCase()));
+    return [
+      ...units,
+      ...TEMPERATURE_UNITS.filter((unit) => !existing.has(unit.value.toLocaleLowerCase())),
+    ];
   } catch {
     return null;
   }
