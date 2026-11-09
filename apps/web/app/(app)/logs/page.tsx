@@ -164,8 +164,11 @@ function readTemperatureUnits(value: string | null): TemperatureUnit[] | null {
       if (
         !unit
         || typeof unit !== 'object'
+        || !('value' in unit)
         || typeof unit.value !== 'string'
+        || !('label' in unit)
         || typeof unit.label !== 'string'
+        || !('category' in unit)
         || (unit.category !== 'fridge' && unit.category !== 'freezer')
         || !unit.value.trim()
         || !unit.label.trim()
