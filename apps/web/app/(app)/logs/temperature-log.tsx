@@ -10,6 +10,7 @@ export const TEMPERATURE_UNITS: TemperatureUnit[] = [
   { value: 'Banco Refrigerato Bar (n.2)', label: 'Bar counter 2', category: 'fridge' },
   { value: 'Banco Refrigerato Bar (n.3)', label: 'Bar counter 3', category: 'fridge' },
   { value: 'Pozzetto Freezer Cucina (n.4)', label: 'Kitchen chest freezer 4', category: 'freezer' },
+  { value: 'Kitchen Fridge 5', label: 'Kitchen Fridge 5', category: 'fridge' },
 ];
 
 const SELECT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground';
