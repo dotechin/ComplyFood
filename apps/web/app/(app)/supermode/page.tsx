@@ -456,7 +456,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
                         id={`range-${kind}-${bound}`}
                         type="number"
                         inputMode="decimal"
-                        step="0.5"
+                        step="0.1"
                         value={ranges[kind][bound]}
                         onChange={(e) => setRange(kind, bound, e.target.value)}
                         className="h-10 w-24 rounded-md border border-input bg-card px-3 text-sm text-foreground"
