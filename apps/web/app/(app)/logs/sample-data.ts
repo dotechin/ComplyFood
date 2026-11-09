@@ -106,18 +106,33 @@ async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise
 const isSample = (log: LogEntry) => log.fields?.[SAMPLE_FIELD] === 'yes';
 
 /** Fills the opening days between `from` and `to` (inclusive) with temperature readings, cleaning and checklist ticks, and incidents. */
+export type SampleDataSelection = {
+  temperatures: boolean;
+  cleaning: boolean;
+  checklist: boolean;
+  incidents: boolean;
+};
+
+export const ALL_SAMPLE_DATA: SampleDataSelection = {
+  temperatures: true,
+  cleaning: true,
+  checklist: true,
+  incidents: true,
+};
+
 export async function generateSampleData(
   units: TemperatureUnit[],
   from: Date,
   to: Date,
   ranges: TemperatureRanges = DEFAULT_TEMPERATURE_RANGES,
+  selection: SampleDataSelection = ALL_SAMPLE_DATA,
 ) {
   const days = openDaysBetween(from, to);
   const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
   const incidents: Record<string, string>[] = [];
   let readings = 0;
 
-  for (const unit of units) {
+  if (selection.temperatures) for (const unit of units) {
     for (const date of days) {
       const key = `${TEMPERATURE_PREFIX}:${unit.value}:${date.getFullYear()}-${date.getMonth() + 1}`;
       const entries = readJson<Record<string, Reading>>(key, {});
@@ -129,7 +144,7 @@ export async function generateSampleData(
       window.localStorage.setItem(key, JSON.stringify(entries));
       registry[key] = [...new Set([...(registry[key] ?? []), day])];
       readings += 1;
-      if (outOfRange) {
+      if (selection.incidents && outOfRange) {
         incidents.push({
           [INCIDENT_FIELDS.description]: `${unit.label} read ${temp}°C on ${labelDate(date)} at ${time} (target ${unit.category === 'freezer' ? '≤ -18°C' : '≤ 4°C'}).`,
           [INCIDENT_FIELDS.correction]: chance(0.5) ? 'Door seal checked, thermostat adjusted, re-checked after 30 min.' : 'Stock moved to back-up unit, engineer called.',
@@ -144,8 +159,8 @@ export async function generateSampleData(
   window.localStorage.setItem(SAMPLE_REGISTRY_KEY, JSON.stringify(registry));
 
   const sheets = [
-    { type: LogType.CLEANING, row: CLEANING_AREA_FIELD, date: CLEANING_DATE_FIELD, items: CLEANING_SCHEDULE.map((r) => r.area) },
-    { type: LogType.CHECKLIST, row: CHECKLIST_ITEM_FIELD, date: CHECKLIST_DATE_FIELD, items: CHECKLIST_SECTIONS.flatMap((s) => s.items.map((i) => i.check)) },
+    ...(selection.cleaning ? [{ type: LogType.CLEANING, row: CLEANING_AREA_FIELD, date: CLEANING_DATE_FIELD, items: CLEANING_SCHEDULE.map((r) => r.area) }] : []),
+    ...(selection.checklist ? [{ type: LogType.CHECKLIST, row: CHECKLIST_ITEM_FIELD, date: CHECKLIST_DATE_FIELD, items: CHECKLIST_SECTIONS.flatMap((s) => s.items.map((i) => i.check)) }] : []),
   ];
   const ticks: { type: LogType; fields: Record<string, string> }[] = [];
   for (const sheet of sheets) {
