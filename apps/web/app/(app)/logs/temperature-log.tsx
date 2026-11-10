@@ -65,6 +65,7 @@ export function TemperatureLog({
   onUnitChange: (unit: string) => void;
   onYearChange: (year: number) => void;
 }) {
+  const sortedUnits = [...units].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
   const [newUnitName, setNewUnitName] = useState('');
   const [newUnitCategory, setNewUnitCategory] = useState<TemperatureUnitCategory>('fridge');
   const [unitError, setUnitError] = useState('');
@@ -155,9 +156,9 @@ export function TemperatureLog({
         <h2 id="temperature-heading" className="text-xl font-bold text-foreground">Temperature Log</h2>
         <div className="flex items-center gap-2">
           <select aria-label="Temperature log" value={selected.value} onChange={(e) => onUnitChange(e.target.value)} className={SELECT_CLASSES}>
-            {units.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
+{sortedUnits.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
           </select>
           <ActionButton
             icon={<TrashIcon />}

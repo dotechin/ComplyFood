@@ -205,9 +205,13 @@ export default function LogsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [temperatureUnits, setTemperatureUnits] = useState<TemperatureUnit[]>(TEMPERATURE_UNITS);
+  const [temperatureUnits, setTemperatureUnits] = useState<TemperatureUnit[]>(() =>
+    [...TEMPERATURE_UNITS].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
+  );
   const [temperatureUnitsLoaded, setTemperatureUnitsLoaded] = useState(false);
-  const [temperatureUnit, setTemperatureUnit] = useState<string>(TEMPERATURE_UNITS[0].value);
+  const [temperatureUnit, setTemperatureUnit] = useState<string>(() =>
+    [...TEMPERATURE_UNITS].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))[0].value,
+  );
   const [temperatureYear, setTemperatureYear] = useState(new Date().getFullYear());
   const [cleaningWeek, setCleaningWeek] = useState(() => weekStartOf(new Date()));
   const [cleaningBusy, setCleaningBusy] = useState<string | null>(null);
@@ -227,8 +231,11 @@ export default function LogsPage() {
     try {
       const storedUnits = readTemperatureUnits(window.localStorage.getItem(TEMPERATURE_UNITS_STORAGE_KEY));
       if (storedUnits) {
-        const selectedUnit = storedUnits[0].value;
-        setTemperatureUnits(storedUnits);
+        const sortedUnits = [...storedUnits].sort((a, b) =>
+          a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
+        );
+        const selectedUnit = sortedUnits[0].value;
+        setTemperatureUnits(sortedUnits);
         setTemperatureUnit(selectedUnit);
         setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedUnit, storedUnits) }));
       }
