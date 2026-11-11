@@ -103,7 +103,10 @@ async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise
   }
 }
 
-const isSample = (log: LogEntry) => log.fields?.[SAMPLE_FIELD] === 'yes';
+const isSample = (log: LogEntry) =>
+  !log.sourceDocumentId
+  && log.recordOrigin !== 'historical_transcription'
+  && log.fields?.[SAMPLE_FIELD] === 'yes';
 
 /** Fills the opening days between `from` and `to` (inclusive) with temperature readings, cleaning and checklist ticks, and incidents. */
 export type SampleDataSelection = {
@@ -183,17 +186,9 @@ export async function generateSampleData(
 
 type ResetResult = { deleted: number };
 
-/** Removes only what generateSampleData created. The server checks the Supermode PIN first. */
+/** Removes marked server-side samples. Browser readings need manual review. */
 export async function clearSampleData(pin: string) {
   const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'generated' });
-
-  const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
-  for (const [key, days] of Object.entries(registry)) {
-    const entries = readJson<Record<string, Reading>>(key, {});
-    for (const day of days) delete entries[day];
-    window.localStorage.setItem(key, JSON.stringify(entries));
-  }
-  window.localStorage.removeItem(SAMPLE_REGISTRY_KEY);
 
   // Entries generated before the server-side `source` marker existed.
   const legacy = (

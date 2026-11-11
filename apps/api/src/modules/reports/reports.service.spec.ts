@@ -81,6 +81,37 @@ describe('ReportsService', () => {
     expect(csv).toContain('"{""item"":""Fridge \\""A\\"""",""temperature"":""4""}"');
   });
 
+  it('excludes marked sample entries from summaries and exports while preserving historical entries', async () => {
+    const entry = {
+      type: LogType.CLEANING,
+      status: LogStatus.PENDING,
+      isException: false,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    logsService.findAll.mockResolvedValue([
+      { ...entry, id: 'real', fields: {} },
+      { ...entry, id: 'sample-legacy', fields: { 'Sample data': 'yes' } },
+      { ...entry, id: 'sample-source', fields: { source: 'supermode-sample' } },
+      { ...entry, id: 'historical', recordOrigin: 'historical_transcription', fields: { 'Sample data': 'yes' } },
+    ]);
+    overridesService.findByOrg.mockResolvedValue([
+      { id: 'sample-override', logEntryId: 'sample-source', fieldName: 'fields' },
+    ]);
+
+    const summary = await service.getComplianceSummary('org-1');
+    const csv = await service.generateCsv('org-1');
+    const pdf = (await service.generatePdf('org-1')).toString('utf8');
+
+    expect(summary.totalLogs).toBe(2);
+    expect(summary.totalOverrides).toBe(0);
+    expect(summary.recentLogs.map((log) => log.id)).toEqual(['real', 'historical']);
+    expect(csv).toContain('"real"');
+    expect(csv).toContain('"historical"');
+    expect(csv).not.toContain('sample-legacy');
+    expect(csv).not.toContain('sample-source');
+    expect(pdf).toContain('Total logs: 2');
+  });
+
   it('uses source month and week, not import time, in historical PDF summaries', async () => {
     logsService.findAll.mockResolvedValue([{
       id: 'cleaning-1',

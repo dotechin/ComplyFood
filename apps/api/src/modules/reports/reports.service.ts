@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { LogStatus, LogType } from '../logs/entities/log-entry.entity';
+import { LogEntry, LogStatus, LogType } from '../logs/entities/log-entry.entity';
 import { LogsService } from '../logs/logs.service';
 import { OverridesService } from '../overrides/overrides.service';
+
+function isSample(entry: LogEntry): boolean {
+  if (entry.sourceDocumentId || entry.recordOrigin === 'historical_transcription') return false;
+  return entry.fields?.['Sample data'] === 'yes'
+    || (typeof entry.fields?.source === 'string' && entry.fields.source.startsWith('supermode-'));
+}
 
 @Injectable()
 export class ReportsService {
@@ -18,7 +24,8 @@ export class ReportsService {
     dateFrom?: Date,
     dateTo?: Date,
   ) {
-    const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
+    const logs = (await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo))
+      .filter((entry) => !isSample(entry));
     const overrides = await this.overridesService.findByOrg(orgId);
     const logIds = new Set(logs.map((log) => log.id));
     const logById = new Map(logs.map((log) => [log.id, log]));
@@ -76,7 +83,8 @@ export class ReportsService {
     dateFrom?: Date,
     dateTo?: Date,
   ) {
-    const logs = await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo);
+    const logs = (await this.logsService.findAll(orgId, type, locationId, status, dateFrom, dateTo))
+      .filter((entry) => !isSample(entry));
     const header =
       'id,type,status,locationId,submittedBy,submittedAt,createdAt,occurredAt,measuredAt,isException,exceptionReason,recordOrigin,sourceDocumentId,sourcePage,fields\n';
     const rows = logs
@@ -116,6 +124,7 @@ export class ReportsService {
     const summary = await this.getComplianceSummary(orgId, type, locationId, status, dateFrom, dateTo);
     const lines = [
       'ComplyFood Compliance Report',
+      'Marked sample entries are excluded.',
       '',
       `Total logs: ${summary.totalLogs}`,
       `Total overrides: ${summary.totalOverrides}`,
