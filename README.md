@@ -101,6 +101,50 @@ tests/       Integration and end-to-end test documentation
 
 ComplyFood is a working MVP foundation. Core workflows include authentication, organization setup, daily logs, checklists, overrides, reports, documents, reminders, automation, and HACCP manual workflows. Release readiness still depends on completing staging validation, performance evidence, and beta onboarding.
 
+### Resume the daily-check and Supermode work
+
+The following is a handoff prompt for continuing the unfinished implementation:
+
+```text
+Complete the Supermode and daily-check workflow. First inspect the current
+checkout and existing changes; do not assume the partial work below is present
+or complete. Preserve existing records and unrelated changes.
+
+The goal is to reduce manual registration without inventing official records:
+- Provide a PIN-protected Supermode configuration for an opt-in server-side
+  daily or weekly schedule, opening days, appliances and temperature limits.
+  The schedule must work with the browser closed and survive restarts.
+- A daily schedule prepares pending checks; a weekly schedule prepares separate
+  pending checks for each opening day in the coming week. Support a chosen time
+  and time zone, missed runs, error visibility and duplicate prevention.
+- Provide one daily screen where a person confirms checks actually performed,
+  enters actual temperature readings, and records exceptions and corrective
+  actions. Record who confirmed and when; do not generate official readings or
+  completed checks. Unfinished checks remain pending.
+- Store temperature readings and settings on the server for use across devices.
+  Existing readings are browser-local and not organization-scoped. The sample
+  registry may still mark a manually edited reading as sample. Require an
+  administrator to review and classify ambiguous existing readings before
+  import, retain browser originals, and surface conflicts rather than silently
+  overwriting or classifying them.
+- Separate simulated data into a clearly labeled demo view within the same
+  organization. Exclude it from normal logs, dashboards, compliance reports and
+  exports. Review existing sample markers and preserve historical and real
+  records; do not assume unmarked records are real or delete ambiguous data.
+  Sample removal must not remove real or historical records.
+- Show pending, completed and overdue checks appropriately, retain an audit
+  trail, enforce organization and role boundaries, and document operation and
+  recovery. Add focused tests for scheduling, time zones, concurrency, restart
+  recovery, migration, authorization, sample isolation and reports.
+
+Partial work exists in this development session: marked samples are excluded
+from report summaries and exports, and clearing samples retains browser
+temperature readings for review. These changes do not isolate samples from
+normal logs or dashboards, and cannot identify unmarked samples. The scheduler,
+daily workflow, server-side temperature migration and demo view are not yet
+implemented. Verify all behavior rather than relying on this status note.
+```
+
 ## PDF and Documents
 
 The Documents feature stores organization files, supports viewing and downloading PDFs, and extracts text from supported PDFs asynchronously. Scanned/image-only PDFs do not currently receive OCR. The PDF API details and limits are implementation-specific and are maintained alongside the document service and tests rather than as a standalone README section.

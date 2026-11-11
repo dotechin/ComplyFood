@@ -92,7 +92,7 @@ export default function ReportsPage() {
     <div>
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-foreground">Compliance Reports</h1>
-        <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and exception activity.</p>
+        <p className="text-sm text-muted-foreground">Filter compliance data, incident trends, and exception activity. Marked sample entries are excluded from summaries and exports.</p>
       </div>
       <div
         role="group"

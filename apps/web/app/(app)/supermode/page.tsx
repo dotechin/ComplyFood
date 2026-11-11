@@ -310,7 +310,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     if (action === 'generate' && isLargePeriod && !window.confirm(
       `This may create up to about ${estimatedRegistrations.toLocaleString()} records over ${spanDays} days. Generation is throttled to protect your PC. Continue?`,
     )) return;
-    if (action === 'clear' && !window.confirm('Remove all generated sample entries?')) return;
+    if (action === 'clear' && !window.confirm('Remove marked sample log entries? Browser temperature readings will be kept for manual review.')) return;
     if (
       action === 'reset'
       && window.prompt('This permanently deletes ALL log entries and temperature readings. Type RESET to confirm.') !== 'RESET'
@@ -326,7 +326,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         );
       } else if (action === 'clear') {
         const removed = await clearSampleData(pin);
-        setMessage(`Sample data cleared (${removed} logged entries removed).`);
+        setMessage(`Removed ${removed} marked sample log entries. Browser temperature readings were kept for manual review.`);
       } else {
         const result = await resetAllData(pin);
         setMessage(`Reset complete: ${result.logs} log entries and ${result.temperatureSheets} temperature sheets deleted.`);
