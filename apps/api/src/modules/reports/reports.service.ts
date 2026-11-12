@@ -5,6 +5,8 @@ import { OverridesService } from '../overrides/overrides.service';
 
 function isSample(entry: LogEntry): boolean {
   if (entry.sourceDocumentId || entry.recordOrigin === 'historical_transcription') return false;
+  if (entry.dataClassification === 'real' || entry.dataClassification === 'historical') return false;
+  if (entry.dataClassification === 'demo' || entry.dataClassification === 'unreviewed') return true;
   return entry.fields?.['Sample data'] === 'yes'
     || (typeof entry.fields?.source === 'string' && entry.fields.source.startsWith('supermode-'));
 }

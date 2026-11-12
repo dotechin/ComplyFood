@@ -111,17 +111,15 @@ describe('Daily Logs UI', () => {
     expect(logTypeFromSearch('?type=unknown')).toBeNull();
   });
 
-  it('shows one Temperature Log sheet with a log selector and no historical import or entry-mode choices', () => {
+  it('shows one server-backed Temperature Log sheet with a log selector', () => {
     const html = renderToStaticMarkup(<LogsPage />);
     expect(html).toContain('Daily Logs');
     expect(html).toContain('>Temperature Log</h2>');
     expect(html).not.toContain('CCP 2/3');
     expect(html.match(/aria-label="Temperature log"/g)).toHaveLength(1);
     for (const unit of TEMPERATURE_UNITS) expect(html).toContain(`>${unit.label}</option>`);
-    expect(html).toContain('aria-label="Add temperature unit"');
-    expect(html).toContain('aria-label="Unit type"');
-    expect(html).toContain('aria-label="Delete Bar counter 1"');
-    expect(html).toMatch(/<div class="basis-full flex justify-center"><button[^>]*aria-label="Save reading"/);
+    expect(html).toContain('Server-stored readings across your organization.');
+    expect(html).toContain('Enter and confirm actual readings in Daily Checks.');
     expect(html).not.toMatch(/Import verified historical|Phone camera|Coming soon|Manual entry/);
   });
 
@@ -131,13 +129,13 @@ describe('Daily Logs UI', () => {
         units={[...TEMPERATURE_UNITS]}
         unit={TEMPERATURE_UNITS[3].value}
         year={2025}
-        onUnitsChange={jest.fn()}
+        openingDays={[0, 1, 2, 3, 4, 5, 6]}
         onUnitChange={jest.fn()}
         onYearChange={jest.fn()}
       />,
     );
     expect(html).toContain(`<option value="${TEMPERATURE_UNITS[3].value}" selected="">`);
-    expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025 (blank sheet)');
+    expect(html).toContain('Temperature Log — Kitchen chest freezer 4, 2025');
     expect(html).toContain('<table');
   });
 
@@ -148,7 +146,7 @@ describe('Daily Logs UI', () => {
         units={[...TEMPERATURE_UNITS]}
         unit={TEMPERATURE_UNITS[0].value}
         year={2025}
-        onUnitsChange={jest.fn()}
+        openingDays={[0, 1, 2, 3, 4, 5, 6]}
         onUnitChange={jest.fn()}
         onYearChange={jest.fn()}
       />,
@@ -158,31 +156,29 @@ describe('Daily Logs UI', () => {
     expect(html).toContain('>Date</th>');
     // January 2025 has 31 days; every calendar day is listed, open or closed.
     expect(html.match(/<th scope="row"/g)).toHaveLength(31);
-    expect(html).toContain('Time<br/><span class="font-normal">(automatic)</span>');
+    expect(html).toContain('>Time</th>');
     expect(html).toContain('Temperature<br/><span class="font-normal">(Target ≤ 4°C)</span>');
     expect(html).not.toMatch(/AM Temp|PM Temp|Initials|Corrective Actions/);
     for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
-      expect(html).toContain(`aria-pressed="true" aria-label="${day}"`);
+      expect(html).toContain(day.slice(0, 3));
     }
   });
 
-  it('supports fridge and freezer unit categories and protects the final unit from deletion', () => {
+  it('uses server-configured appliance categories and temperature limits', () => {
     const html = renderToStaticMarkup(
       <TemperatureLog
         units={[TEMPERATURE_UNITS[0]]}
         unit={TEMPERATURE_UNITS[0].value}
         year={2025}
-        onUnitsChange={jest.fn()}
+        openingDays={[1, 2, 3, 4, 5]}
         onUnitChange={jest.fn()}
         onYearChange={jest.fn()}
       />,
     );
     expect(TEMPERATURE_UNITS[0].category).toBe('fridge');
     expect(TEMPERATURE_UNITS[3].category).toBe('freezer');
-    expect(html).toContain('<option value="fridge" selected="">Fridge</option>');
-    expect(html).toContain('<option value="freezer">Freezer</option>');
-    expect(html).toContain('aria-label="Delete Bar counter 1"');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Delete Bar counter 1"/);
+    expect(html).toContain('Target ≤ 4°C');
+    expect(html).toContain('Opening days: Mon, Tue, Wed, Thu, Fri');
   });
 
   it('renders the Cleaning & Disinfection Schedule with the legend, columns and areas', () => {

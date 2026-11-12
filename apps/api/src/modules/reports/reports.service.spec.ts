@@ -89,10 +89,11 @@ describe('ReportsService', () => {
       createdAt: new Date('2026-01-01T00:00:00Z'),
     };
     logsService.findAll.mockResolvedValue([
-      { ...entry, id: 'real', fields: {} },
+      { ...entry, id: 'real', dataClassification: 'real', fields: { 'Sample data': 'yes' } },
       { ...entry, id: 'sample-legacy', fields: { 'Sample data': 'yes' } },
       { ...entry, id: 'sample-source', fields: { source: 'supermode-sample' } },
       { ...entry, id: 'historical', recordOrigin: 'historical_transcription', fields: { 'Sample data': 'yes' } },
+      { ...entry, id: 'unreviewed', dataClassification: 'unreviewed', fields: {} },
     ]);
     overridesService.findByOrg.mockResolvedValue([
       { id: 'sample-override', logEntryId: 'sample-source', fieldName: 'fields' },

@@ -29,6 +29,7 @@ import { OverrideRecord } from '../modules/overrides/entities/override-record.en
 import { PresetRule } from '../modules/automation/entities/preset-rule.entity';
 import { ReminderRule } from '../modules/automation/entities/reminder-rule.entity';
 import { ReminderEvent } from '../modules/automation/entities/reminder-event.entity';
+import { SupermodeSchedule } from '../modules/automation/entities/supermode-schedule.entity';
 import { Document } from '../modules/documents/entities/document.entity';
 import { AuditEvent } from '../modules/audit/entities/audit-event.entity';
 
@@ -42,6 +43,7 @@ export const TEST_ENTITIES = [
   PresetRule,
   ReminderRule,
   ReminderEvent,
+  SupermodeSchedule,
   Document,
   AuditEvent,
 ];

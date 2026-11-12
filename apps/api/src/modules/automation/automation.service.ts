@@ -1,15 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { PresetRule } from './entities/preset-rule.entity';
 import { ReminderRule } from './entities/reminder-rule.entity';
 import { ReminderEvent } from './entities/reminder-event.entity';
 import { LogsService } from '../logs/logs.service';
-import { LogStatus, LogType } from '../logs/entities/log-entry.entity';
+import { LogDataClassification, LogEntry, LogStatus, LogType } from '../logs/entities/log-entry.entity';
+import { SupermodeSchedule } from './entities/supermode-schedule.entity';
+import { dueRunDates, followingWeekDates, localDateTime, validateTimeZone } from './supermode-schedule-time';
 
 @Injectable()
 export class AutomationService {
+  private readonly logger = new Logger(AutomationService.name);
+
   constructor(
     @InjectRepository(PresetRule)
     private readonly presetRepo: Repository<PresetRule>,
@@ -17,8 +21,83 @@ export class AutomationService {
     private readonly reminderRepo: Repository<ReminderRule>,
     @InjectRepository(ReminderEvent)
     private readonly reminderEventRepo: Repository<ReminderEvent>,
+    @InjectRepository(SupermodeSchedule)
+    private readonly supermodeScheduleRepo: Repository<SupermodeSchedule>,
     private readonly logsService: LogsService,
   ) {}
+
+  getSupermodeSchedule(orgId: string) {
+    return this.supermodeScheduleRepo.findOne({ where: { orgId } });
+  }
+
+  async getDailyCheckDate(orgId: string) {
+    const schedule = await this.supermodeScheduleRepo.findOne({ where: { orgId } });
+    const timezone = schedule?.timezone ?? 'UTC';
+    return { date: localDateTime(new Date(), timezone).date, timezone };
+  }
+
+  async getTemperatureSettings(orgId: string) {
+    const schedule = await this.supermodeScheduleRepo.findOne({ where: { orgId } });
+    return {
+      units: schedule?.appliances.map((appliance) => ({
+        value: appliance.name,
+        label: appliance.name,
+        category: appliance.category,
+      })) ?? [],
+      openingDays: schedule?.openingDays ?? [0, 1, 2, 3, 4, 5, 6],
+    };
+  }
+
+  async saveSupermodeSchedule(
+    orgId: string,
+    data: {
+      enabled: boolean;
+      cadence: 'daily' | 'weekly';
+      runTime: string;
+      timezone: string;
+      weeklyRunDay?: number;
+      openingDays: number[];
+      appliances: Array<{ name: string; category: 'fridge' | 'freezer'; limit: number }>;
+    },
+  ) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(data.runTime)) {
+      throw new BadRequestException('Choose a valid 24-hour schedule time');
+    }
+    if (!validateTimeZone(data.timezone)) throw new BadRequestException('Choose a valid time zone');
+    if (data.cadence === 'weekly' && (!Number.isInteger(data.weeklyRunDay) || data.weeklyRunDay! < 0 || data.weeklyRunDay! > 6)) {
+      throw new BadRequestException('Choose a weekly run day');
+    }
+    if (data.cadence === 'daily' && data.weeklyRunDay !== undefined) {
+      throw new BadRequestException('Daily schedules cannot have a weekly run day');
+    }
+    if (!data.openingDays.length || data.openingDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+      throw new BadRequestException('Select at least one valid opening day');
+    }
+    if (!data.appliances.length || data.appliances.length > 30) {
+      throw new BadRequestException('Configure between 1 and 30 appliances');
+    }
+    const names = new Set<string>();
+    for (const appliance of data.appliances) {
+      const name = appliance.name.trim();
+      if (!name || name.length > 80 || names.has(name.toLocaleLowerCase())) {
+        throw new BadRequestException('Appliance names must be unique and no longer than 80 characters');
+      }
+      if (!Number.isFinite(appliance.limit) || appliance.limit < -100 || appliance.limit > 200) {
+        throw new BadRequestException(`Enter a valid temperature limit for ${name}`);
+      }
+      names.add(name.toLocaleLowerCase());
+    }
+
+    const existing = await this.supermodeScheduleRepo.findOne({ where: { orgId } });
+    const schedule = existing ?? this.supermodeScheduleRepo.create({ orgId });
+    Object.assign(schedule, {
+      ...data,
+      weeklyRunDay: data.cadence === 'weekly' ? data.weeklyRunDay : null,
+      openingDays: [...new Set(data.openingDays)],
+      appliances: data.appliances.map((appliance) => ({ ...appliance, name: appliance.name.trim() })),
+    });
+    return this.supermodeScheduleRepo.save(schedule);
+  }
 
   findPresets(orgId: string) {
     return this.presetRepo.find({ where: { orgId }, order: { createdAt: 'DESC' } });
@@ -132,6 +211,91 @@ export class AutomationService {
         await this.reminderRepo.save(rule);
       }),
     );
+  }
+
+  @Cron('* * * * *')
+  async processSupermodeSchedules() {
+    const schedules = await this.supermodeScheduleRepo.find({ where: { enabled: true } });
+    for (const schedule of schedules) {
+      try {
+        await this.processSupermodeSchedule(schedule.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.supermodeScheduleRepo.update(schedule.id, { lastError: message });
+        this.logger.error(`Unable to prepare daily checks for organization ${schedule.orgId}: ${message}`);
+      }
+    }
+  }
+
+  private async processSupermodeSchedule(id: string) {
+    await this.supermodeScheduleRepo.manager.transaction(async (manager) => {
+      const schedules = manager.getRepository(SupermodeSchedule);
+      const schedule = await schedules.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!schedule?.enabled) return;
+
+      const now = new Date();
+      const runDates = dueRunDates(
+        schedule.cadence,
+        schedule.runTime,
+        schedule.weeklyRunDay,
+        schedule.lastRunLocalDate,
+        now,
+        schedule.timezone,
+      );
+      const logs = manager.getRepository(LogEntry);
+      for (const runDate of runDates) {
+        const checkDates = schedule.cadence === 'daily' ? [runDate] : followingWeekDates(runDate);
+        const entries: LogEntry[] = [];
+        for (const date of checkDates) {
+          const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+          if (!schedule.openingDays.includes(weekday)) continue;
+          for (const appliance of schedule.appliances) {
+            const key = `${schedule.id}:${date}:${appliance.name.toLocaleLowerCase()}`;
+            entries.push(logs.create({
+              orgId: schedule.orgId,
+              locationId: null,
+              type: LogType.TEMPERATURE,
+              fields: {
+                scheduledDate: date,
+                'Workstation / unit': appliance.name,
+                category: appliance.category,
+                limit: appliance.limit,
+                scheduleCadence: schedule.cadence,
+                source: 'daily-schedule',
+              },
+              dataClassification: LogDataClassification.REAL,
+              status: LogStatus.PENDING,
+              submittedBy: null,
+              submittedAt: null,
+              presetId: null,
+              occurredAt: new Date(`${date}T00:00:00.000Z`),
+              measuredAt: null,
+              recordOrigin: null,
+              sourceDocumentId: null,
+              sourcePage: null,
+              scheduleKey: key,
+              importKey: null,
+              isException: false,
+              exceptionReason: null,
+              exceptionBy: null,
+              exceptionAt: null,
+            }));
+          }
+        }
+        if (entries.length) {
+          const existing = await logs.find({
+            where: { orgId: schedule.orgId, scheduleKey: In(entries.map((entry) => entry.scheduleKey)) },
+          });
+          const existingKeys = new Set(existing.map((entry) => entry.scheduleKey));
+          const missing = entries.filter((entry) => !existingKeys.has(entry.scheduleKey));
+          if (missing.length) await logs.save(missing);
+        }
+        schedule.lastRunLocalDate = runDate;
+        schedule.lastRunAt = now;
+      }
+      schedule.lastError = null;
+      await schedules.save(schedule);
+    });
   }
 
   async generateDailyFormsForOrg(orgId: string) {

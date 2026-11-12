@@ -1,6 +1,6 @@
 import { DocumentCategory } from '@complyfood/shared';
 import { cleanupTestStorage, createTestApp, destroyTestApp } from '../src/test-utils/pg-mem';
-import { LogType } from '../src/modules/logs/entities/log-entry.entity';
+import { LogEntry, LogType } from '../src/modules/logs/entities/log-entry.entity';
 import { ReminderEvent } from '../src/modules/automation/entities/reminder-event.entity';
 import { Document } from '../src/modules/documents/entities/document.entity';
 import { PdfParsingService } from '../src/modules/documents/pdf-parsing.service';
@@ -42,6 +42,31 @@ describe('ComplyFood API workflows (e2e)', () => {
     expect(bootstrap.status).toBe(201);
     const adminToken = bootstrap.body.accessToken as string;
     const orgId = bootstrap.body.user.orgId as string;
+
+    const savedPin = await postJson('/users/me/supermode/pin', { pin: '1234' }, adminToken);
+    expect(savedPin.status).toBe(201);
+    const schedule = await postJson('/automation/supermode-schedule', {
+      pin: '1234',
+      enabled: false,
+      cadence: 'weekly',
+      runTime: '06:30',
+      timezone: 'Europe/Rome',
+      weeklyRunDay: 1,
+      openingDays: [1, 2, 3, 4, 5],
+      appliances: [{ name: 'Walk-in fridge', category: 'fridge', limit: 4 }],
+    }, adminToken);
+    expect(schedule.status).toBe(201);
+    expect(schedule.body.timezone).toBe('Europe/Rome');
+    expect(schedule.body.appliances).toHaveLength(1);
+    expect((await postJson('/automation/supermode-schedule', {
+      pin: '9999',
+      enabled: false,
+      cadence: 'daily',
+      runTime: '06:30',
+      timezone: 'UTC',
+      openingDays: [1],
+      appliances: [{ name: 'Fridge', category: 'fridge', limit: 4 }],
+    }, adminToken)).status).toBe(401);
 
     const location = await postJson(
       `/organizations/${orgId}/locations`,
@@ -95,12 +120,53 @@ describe('ComplyFood API workflows (e2e)', () => {
     });
     expect(staffLogin.status).toBe(201);
     const staffToken = staffLogin.body.accessToken as string;
+    expect((await getJson('/automation/supermode-schedule', staffToken)).status).toBe(403);
+    expect((await getJson('/automation/daily-check-date', staffToken)).status).toBe(200);
+    expect((await postJson('/logs/demo', {
+      type: LogType.INCIDENT,
+      fields: { description: 'Simulated incident' },
+    }, staffToken)).status).toBe(403);
+
+    const demoLog = await postJson('/logs/demo', {
+      type: LogType.INCIDENT,
+      fields: { description: 'Simulated incident' },
+    }, adminToken);
+    expect(demoLog.status).toBe(201);
+    const forgedSampleMarker = await postJson('/logs', {
+      type: LogType.INCIDENT,
+      fields: { description: 'Real incident with a user-supplied sample marker', 'Sample data': 'yes' },
+    }, staffToken);
+    expect(forgedSampleMarker.status).toBe(201);
+    const normalIncidents = await getJson('/logs?type=incident', adminToken);
+    const demoIncidents = await getJson('/logs/demo?type=incident', adminToken);
+    expect(normalIncidents.body.some((entry: any) => entry.id === demoLog.body.id)).toBe(false);
+    expect(normalIncidents.body.some((entry: any) => entry.id === forgedSampleMarker.body.id)).toBe(true);
+    expect(demoIncidents.body.some((entry: any) => entry.id === demoLog.body.id)).toBe(true);
+    expect(demoIncidents.body.some((entry: any) => entry.id === forgedSampleMarker.body.id)).toBe(false);
+    expect((await getJson(`/logs/${demoLog.body.id}`, adminToken)).status).toBe(404);
+    expect((await getJson(`/overrides/log/${demoLog.body.id}`, adminToken)).status).toBe(404);
+    const incidentSummary = await getJson('/reports/summary?type=incident', adminToken);
+    expect(incidentSummary.body.totalLogs).toBe(1);
+    const dashboard = await getJson('/automation/dashboard', adminToken);
+    expect(dashboard.body.pendingLogs.some((entry: any) => entry.id === demoLog.body.id)).toBe(false);
+    const ambiguous = await dataSource.getRepository(LogEntry).save({
+      orgId,
+      type: LogType.INCIDENT,
+      fields: { description: 'Legacy record requiring review' },
+    });
+    expect((await getJson('/logs?type=incident', adminToken)).body.some((entry: any) => entry.id === ambiguous.id)).toBe(false);
+    expect((await getJson(`/logs/${ambiguous.id}`, adminToken)).status).toBe(404);
+    expect((await patchJson(`/logs/${ambiguous.id}/confirm`, {}, staffToken)).status).toBe(404);
+    expect((await getJson('/logs/review', staffToken)).status).toBe(403);
+    expect((await getJson('/logs/review', adminToken)).body.some((entry: any) => entry.id === ambiguous.id)).toBe(true);
+    expect((await patchJson(`/logs/${ambiguous.id}/classification`, { classification: 'real' }, adminToken)).status).toBe(200);
+    expect((await getJson('/logs?type=incident', adminToken)).body.some((entry: any) => entry.id === ambiguous.id)).toBe(true);
 
     const createdLog = await postJson(
       '/logs',
       {
         type: LogType.CLEANING,
-        fields: { task: 'Opening sanitation', responsible: 'Chef' },
+        fields: { 'Area / Item': 'Opening sanitation', 'Cleaning date': '2026-11-12' },
         locationId: location.body.id,
       },
       staffToken,
@@ -144,9 +210,9 @@ describe('ComplyFood API workflows (e2e)', () => {
     );
     expect(manualDocument.status).toBe(201);
 
-    const dashboard = await getJson('/automation/dashboard', adminToken);
-    expect(dashboard.status).toBe(200);
-    expect(dashboard.body.pendingLogs.length).toBeGreaterThanOrEqual(1);
+    const finalDashboard = await getJson('/automation/dashboard', adminToken);
+    expect(finalDashboard.status).toBe(200);
+    expect(finalDashboard.body.pendingLogs.length).toBeGreaterThanOrEqual(1);
 
     const reports = await getJson('/reports/summary', adminToken);
     expect(reports.status).toBe(200);
@@ -288,7 +354,10 @@ describe('ComplyFood API workflows (e2e)', () => {
     await postJson('/users', { email: 'attachment-staff@example.com', password: 'password123', role: 'staff' }, token);
     const login = await postJson('/auth/login', { email: 'attachment-staff@example.com', password: 'password123' });
     const staffToken = login.body.accessToken as string;
-    const log = await postJson('/logs', { type: LogType.CLEANING, fields: { task: 'Clean kitchen' } }, staffToken);
+    const log = await postJson('/logs', {
+      type: LogType.CLEANING,
+      fields: { 'Area / Item': 'Clean kitchen', 'Cleaning date': '2026-11-12' },
+    }, staffToken);
     const uploaded = await uploadDocument('/documents', { linkedEntryId: log.body.id }, staffToken, 'photo.jpg', 'image/jpeg', 'photo');
     expect(uploaded.status).toBe(201);
     expect(uploaded.body.processingStatus).toBe('completed');

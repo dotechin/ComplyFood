@@ -21,11 +21,14 @@
 
 ## Daily workflow
 1. Check the dashboard for pending tasks and reminders
-2. Open **Daily Logs** to create or update entries
-3. Use **Checklists** to create checklist-based daily tasks
-4. Review **Reports** for compliance summaries and exports
-5. Store supporting files in **Documents**
-6. Admins maintain **HACCP Manual** templates, sections, approvals, and exports
+2. Open **Daily Checks** to enter actual readings and confirm checks performed; unfinished checks remain pending
+3. Open **Daily Logs** for cleaning, receiving, incidents, and historical server-stored readings
+4. Use **Checklists** to create checklist-based daily tasks
+5. Review **Reports** for compliance summaries and exports
+6. Store supporting files in **Documents**
+7. Admins maintain **HACCP Manual** templates, sections, approvals, and exports
+
+Administrators can configure an opt-in daily or weekly temperature-check schedule, review ambiguous records, and import browser-local readings through PIN-protected **Supermode**. See [Supermode and Daily Checks](supermode-daily-checks.md) for scheduling, data classification, and recovery procedures.
 
 ## Historical temperature records
 - The annual temperature sheets cover the three bar counters and the kitchen chest freezer; Sundays display as closed days.
