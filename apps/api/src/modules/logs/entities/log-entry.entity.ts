@@ -14,6 +14,13 @@ export enum LogStatus {
   OVERRIDDEN = 'overridden',
 }
 
+export enum LogDataClassification {
+  REAL = 'real',
+  DEMO = 'demo',
+  UNREVIEWED = 'unreviewed',
+  HISTORICAL = 'historical',
+}
+
 @Entity('log_entries')
 export class LogEntry {
   @PrimaryGeneratedColumn('uuid')
@@ -33,6 +40,9 @@ export class LogEntry {
 
   @Column({ type: 'enum', enum: LogStatus, default: LogStatus.PENDING })
   status: LogStatus;
+
+  @Column({ name: 'data_classification', type: 'varchar', default: LogDataClassification.UNREVIEWED })
+  dataClassification: LogDataClassification;
 
   @Column({ name: 'submitted_by', nullable: true })
   submittedBy: string | null;
@@ -57,6 +67,12 @@ export class LogEntry {
 
   @Column({ name: 'source_page', type: 'integer', nullable: true })
   sourcePage: number | null;
+
+  @Column({ name: 'schedule_key', type: 'varchar', nullable: true })
+  scheduleKey: string | null;
+
+  @Column({ name: 'import_key', type: 'varchar', nullable: true })
+  importKey: string | null;
 
   @Column({ name: 'is_exception', type: 'boolean', default: false })
   isException: boolean;

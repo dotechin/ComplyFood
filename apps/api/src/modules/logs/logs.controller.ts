@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsIn, IsISO8601, IsInt, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsISO8601, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -176,6 +176,66 @@ class ApplyExceptionDto {
   unlockToStatus?: LogStatus;
 }
 
+class CompleteScheduledCheckDto {
+  @IsBoolean()
+  performed: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-100)
+  @Max(200)
+  temperature?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  exceptionReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  correctiveAction?: string;
+}
+
+class BrowserTemperatureRecordDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  unit: string;
+
+  @IsIn(['fridge', 'freezer'])
+  category: 'fridge' | 'freezer';
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-100)
+  @Max(200)
+  temperature: number;
+
+  @IsISO8601()
+  measuredAt: string;
+
+  @IsIn(['real', 'demo'])
+  classification: 'real' | 'demo';
+}
+
+class BrowserTemperatureImportDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => BrowserTemperatureRecordDto)
+  records: BrowserTemperatureRecordDto[];
+}
+
+class ClassifyLogDto {
+  @IsIn(['real', 'demo'])
+  classification: 'real' | 'demo';
+}
+
 @Controller('logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LogsController {
@@ -187,6 +247,12 @@ export class LogsController {
   @Post()
   create(@CurrentUser() user: any, @Body() dto: CreateLogDto) {
     return this.logsService.create(user.orgId, user.id, dto);
+  }
+
+  @Post('demo')
+  @Roles(UserRole.ADMIN)
+  createDemo(@CurrentUser() user: any, @Body() dto: CreateLogDto) {
+    return this.logsService.createDemo(user.orgId, user.id, dto);
   }
 
   @Post('backfill')
@@ -244,9 +310,49 @@ export class LogsController {
     );
   }
 
+  @Get('demo')
+  findDemo(@CurrentUser() user: any, @Query() query: FindLogsQueryDto) {
+    return this.logsService.findAll(
+      user.orgId,
+      query.type,
+      query.locationId,
+      query.status,
+      query.dateFrom ? parseDateBoundary(query.dateFrom) : undefined,
+      query.dateTo ? parseDateBoundary(query.dateTo, true) : undefined,
+      true,
+    );
+  }
+
+  @Get('daily-checks')
+  findDailyChecks(@CurrentUser() user: any, @Query('date') date: string) {
+    const parsedDate = parseDateBoundary(date ?? '');
+    if (parsedDate.toISOString().slice(0, 10) !== date) {
+      throw new BadRequestException('date must be a valid YYYY-MM-DD calendar date');
+    }
+    return this.logsService.findScheduledForDate(user.orgId, date);
+  }
+
+  @Get('review')
+  @Roles(UserRole.ADMIN)
+  findUnreviewed(@CurrentUser() user: any) {
+    return this.logsService.findUnreviewed(user.orgId);
+  }
+
+  @Patch(':id/classification')
+  @Roles(UserRole.ADMIN)
+  classifyEntry(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: ClassifyLogDto) {
+    return this.logsService.classifyEntry(id, user.orgId, dto.classification);
+  }
+
+  @Post('temperature/browser-import')
+  @Roles(UserRole.ADMIN)
+  importBrowserTemperatures(@CurrentUser() user: any, @Body() dto: BrowserTemperatureImportDto) {
+    return this.logsService.importBrowserTemperatures(user.orgId, user.id, dto.records);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.logsService.findOne(id, user.orgId);
+    return this.logsService.findOperationalOne(id, user.orgId);
   }
 
   @Patch(':id')
@@ -262,6 +368,12 @@ export class LogsController {
   @Patch(':id/confirm')
   confirm(@CurrentUser() user: any, @Param('id') id: string) {
     return this.logsService.confirm(id, user.orgId, user.id);
+  }
+
+  @Patch(':id/complete-daily-check')
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  completeDailyCheck(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: CompleteScheduledCheckDto) {
+    return this.logsService.completeScheduledCheck(id, user.orgId, user.id, dto);
   }
 
   @Delete(':id')

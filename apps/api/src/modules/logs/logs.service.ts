@@ -1,7 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { LogEntry, LogStatus, LogType } from './entities/log-entry.entity';
+import { LogDataClassification, LogEntry, LogStatus, LogType } from './entities/log-entry.entity';
 import { Document } from '../documents/entities/document.entity';
 
 const HISTORICAL_TEMPERATURE_UNITS = new Set([
@@ -27,11 +27,19 @@ const CLEANING_OUTCOME_FIELDS = [
   'Shelves and cupboards',
 ];
 
+function classifyFields(fields: Record<string, any>) {
+  return fields?.['Sample data'] === 'yes'
+    || (typeof fields?.source === 'string' && fields.source.startsWith('supermode-'))
+    ? LogDataClassification.DEMO
+    : LogDataClassification.REAL;
+}
+
 interface CreateLogInput {
   type: LogType;
   fields: Record<string, any>;
   locationId?: string | null;
   presetId?: string | null;
+  demo?: boolean;
 }
 
 interface UpdateLogInput {
@@ -63,6 +71,7 @@ export class LogsService {
         locationId: data.locationId ?? null,
         type: data.type,
         fields: data.fields ?? {},
+        dataClassification: data.demo ? LogDataClassification.DEMO : LogDataClassification.REAL,
         presetId: data.presetId ?? null,
         submittedBy: null,
         submittedAt: null,
@@ -77,6 +86,10 @@ export class LogsService {
     );
   }
 
+  createDemo(orgId: string, userId: string | null, data: Omit<CreateLogInput, 'demo'>) {
+    return this.create(orgId, userId, { ...data, demo: true });
+  }
+
   async findAll(
     orgId: string,
     type?: LogType,
@@ -84,8 +97,15 @@ export class LogsService {
     status?: LogStatus,
     dateFrom?: Date,
     dateTo?: Date,
+    demoOnly = false,
   ): Promise<LogEntry[]> {
     const query = this.repo.createQueryBuilder('log').where('log.org_id = :orgId', { orgId });
+    query.andWhere(
+      demoOnly ? 'log.data_classification = :classification' : 'log.data_classification IN (:...classifications)',
+      demoOnly
+        ? { classification: LogDataClassification.DEMO }
+        : { classifications: [LogDataClassification.REAL, LogDataClassification.HISTORICAL] },
+    );
     if (type) query.andWhere('log.type = :type', { type });
     if (locationId) query.andWhere('log.location_id = :locationId', { locationId });
     if (status) query.andWhere('log.status = :status', { status });
@@ -109,14 +129,196 @@ export class LogsService {
     ).getMany();
   }
 
+  async findScheduledForDate(orgId: string, date: string): Promise<LogEntry[]> {
+    const recentDate = new Date(new Date(`${date}T00:00:00.000Z`).getTime() - 6 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    return this.repo.createQueryBuilder('log')
+      .where('log.org_id = :orgId', { orgId })
+      .andWhere('log.schedule_key IS NOT NULL')
+      .andWhere(
+        `((log.status = :pending AND log.fields->>'scheduledDate' <= :date)
+          OR (log.status <> :pending
+            AND log.fields->>'scheduledDate' BETWEEN :recentDate AND :date))`,
+        { date, recentDate, pending: LogStatus.PENDING },
+      )
+      .orderBy("log.fields->>'Workstation / unit'", 'ASC')
+      .getMany();
+  }
+
+  findUnreviewed(orgId: string) {
+    return this.repo.find({
+      where: { orgId, dataClassification: LogDataClassification.UNREVIEWED },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async classifyEntry(id: string, orgId: string, classification: 'real' | 'demo') {
+    const entry = await this.findOne(id, orgId);
+    if (entry.recordOrigin === 'historical_transcription' || entry.sourceDocumentId) {
+      throw new BadRequestException('Historical source records cannot be reclassified');
+    }
+    if (entry.dataClassification !== LogDataClassification.UNREVIEWED) {
+      throw new ConflictException('This record has already been reviewed');
+    }
+    entry.dataClassification = classification === 'demo'
+      ? LogDataClassification.DEMO
+      : LogDataClassification.REAL;
+    return this.repo.save(entry);
+  }
+
+  async completeScheduledCheck(
+    id: string,
+    orgId: string,
+    userId: string,
+    data: { performed: boolean; temperature?: number; exceptionReason?: string; correctiveAction?: string },
+  ) {
+    const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
+    if (!entry.scheduleKey) throw new BadRequestException('Only a scheduled daily check can be completed here');
+    if (!data.performed) return entry;
+    if (entry.status !== LogStatus.PENDING) throw new ConflictException('This daily check has already been completed');
+    if (typeof data.temperature !== 'number' || !Number.isFinite(data.temperature)) {
+      throw new BadRequestException('Enter the actual temperature reading');
+    }
+
+    const limit = Number(entry.fields.limit);
+    const outsideLimit = data.temperature > limit;
+    const exceptionReason = data.exceptionReason?.trim() ?? '';
+    const correctiveAction = data.correctiveAction?.trim() ?? '';
+    if ((outsideLimit || exceptionReason) && (!exceptionReason || !correctiveAction)) {
+      throw new BadRequestException('Record an exception and corrective action for a temperature outside its limit');
+    }
+
+    entry.fields = {
+      ...entry.fields,
+      temperature: data.temperature,
+      ...(exceptionReason ? { 'Exception reason': exceptionReason } : {}),
+      ...(correctiveAction ? { 'Corrective action': correctiveAction } : {}),
+    };
+    entry.status = LogStatus.CONFIRMED;
+    entry.submittedBy = userId;
+    entry.submittedAt = new Date();
+    entry.measuredAt = entry.submittedAt;
+    entry.isException = Boolean(exceptionReason);
+    entry.exceptionReason = exceptionReason || null;
+    entry.exceptionBy = exceptionReason ? userId : null;
+    entry.exceptionAt = exceptionReason ? entry.submittedAt : null;
+    return this.repo.save(entry);
+  }
+
+  async importBrowserTemperatures(
+    orgId: string,
+    userId: string,
+    records: Array<{
+      date: string;
+      unit: string;
+      category: 'fridge' | 'freezer';
+      temperature: number;
+      measuredAt: string;
+      classification: 'real' | 'demo';
+    }>,
+  ) {
+    let imported = 0;
+    let duplicates = 0;
+    const existingTemperatures = await this.repo.find({ where: { orgId, type: LogType.TEMPERATURE } });
+    for (const record of records) {
+      const date = this.parseHistoricalDate(record.date);
+      const measuredAt = new Date(record.measuredAt);
+      if (!Number.isFinite(measuredAt.getTime())) throw new BadRequestException('Invalid browser reading time');
+      if (!record.unit.trim() || !Number.isFinite(record.temperature)) {
+        throw new BadRequestException('Each browser reading needs a unit and a valid temperature');
+      }
+      const importKey = `browser-temperature:${record.date}:${record.unit}`;
+      const existing = await this.repo.findOne({ where: { orgId, importKey } });
+      const competingEntry = existingTemperatures.find((entry) => {
+        if (entry.importKey === importKey || entry.fields?.['Workstation / unit'] !== record.unit) return false;
+        const entryDate = String(entry.fields?.scheduledDate ?? entry.occurredAt?.toISOString().slice(0, 10) ?? '');
+        return entryDate === record.date;
+      });
+      if (competingEntry) {
+        throw new ConflictException(`A different server record already exists for ${record.unit} on ${record.date}; review it before importing`);
+      }
+      if (existing) {
+        const sameRecord = existing.fields.temperature === record.temperature
+          && existing.fields['Workstation / unit'] === record.unit
+          && existing.fields['Browser import classification'] === record.classification
+          && existing.measuredAt?.getTime() === measuredAt.getTime();
+        if (!sameRecord) throw new ConflictException(`A different server reading already exists for ${record.unit} on ${record.date}`);
+        duplicates += 1;
+        continue;
+      }
+      const fields: Record<string, any> = {
+        'Workstation / unit': record.unit,
+        category: record.category,
+        temperature: record.temperature,
+        'Browser import classification': record.classification,
+        'Browser reading time': record.measuredAt,
+        'Review status': 'Pending confirmation',
+        'Browser import reviewed by': userId,
+        'Browser import reviewed at': new Date().toISOString(),
+        ...(record.classification === 'demo' ? { 'Sample data': 'yes' } : {}),
+      };
+      try {
+        await this.repo.save(this.repo.create({
+          orgId,
+          locationId: null,
+          type: LogType.TEMPERATURE,
+          fields,
+          dataClassification: record.classification === 'demo'
+            ? LogDataClassification.DEMO
+            : LogDataClassification.REAL,
+          status: LogStatus.PENDING,
+          submittedBy: null,
+          submittedAt: null,
+          presetId: null,
+          occurredAt: date,
+          measuredAt,
+          recordOrigin: null,
+          sourceDocumentId: null,
+          sourcePage: null,
+          scheduleKey: null,
+          importKey,
+          isException: false,
+          exceptionReason: null,
+          exceptionBy: null,
+          exceptionAt: null,
+        }));
+        imported += 1;
+      } catch (error) {
+        if ((error as { code?: string })?.code === '23505') {
+          throw new ConflictException(`A server reading already exists for ${record.unit} on ${record.date}; no data was overwritten`);
+        }
+        throw error;
+      }
+    }
+    return { imported, duplicates };
+  }
+
   async findOne(id: string, orgId: string): Promise<LogEntry> {
     const entry = await this.repo.findOne({ where: { id, orgId } });
     if (!entry) throw new NotFoundException('Log entry not found');
     return entry;
   }
 
+  async findOperationalOne(id: string, orgId: string) {
+    const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
+    return entry;
+  }
+
+  private assertOperational(entry: LogEntry) {
+    if (
+      entry.dataClassification === LogDataClassification.DEMO
+      || entry.dataClassification === LogDataClassification.UNREVIEWED
+    ) {
+      throw new NotFoundException('Log entry not found');
+    }
+  }
+
   async update(id: string, orgId: string, data: UpdateLogInput): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
     if (entry.recordOrigin === 'historical_transcription') {
       throw new BadRequestException('Historical source transcriptions cannot be edited; add a new reviewed record instead');
     }
@@ -168,6 +370,7 @@ export class LogsService {
         locationId: data.locationId ?? null,
         type: data.type,
         fields: data.fields ?? {},
+        dataClassification: classifyFields(data.fields ?? {}),
         presetId: null,
         submittedBy: isConfirmed ? userId : null,
         submittedAt: isConfirmed ? data.createdAt : null,
@@ -260,6 +463,7 @@ export class LogsService {
           'Source PDF': source.name,
           'Source page': record.page,
         },
+        dataClassification: LogDataClassification.HISTORICAL,
         status: LogStatus.CONFIRMED,
         submittedBy: userId,
         submittedAt: now,
@@ -364,6 +568,7 @@ export class LogsService {
         locationId: null,
         type: LogType.CLEANING,
         fields,
+      dataClassification: LogDataClassification.HISTORICAL,
         status: LogStatus.CONFIRMED,
         submittedBy: userId,
         submittedAt: new Date(),
@@ -443,7 +648,18 @@ export class LogsService {
       .where('org_id = :orgId', { orgId })
       .andWhere('source_document_id IS NULL');
     if (scope === 'generated') {
-      query.andWhere(`fields->>'source' LIKE 'supermode-%'`);
+      query.andWhere(
+        `(data_classification = :demo OR
+          (data_classification = :unreviewed
+            AND (fields->>'source' LIKE 'supermode-%' OR fields->>'Sample data' = 'yes')))`,
+      ).setParameters({
+        demo: LogDataClassification.DEMO,
+        unreviewed: LogDataClassification.UNREVIEWED,
+      });
+    } else {
+      query.andWhere(`data_classification IN (:...classifications)`, {
+        classifications: [LogDataClassification.REAL, LogDataClassification.DEMO],
+      });
     }
     const result = await query.execute();
     return { deleted: result.affected ?? 0 };
@@ -451,6 +667,7 @@ export class LogsService {
 
   async remove(id: string, orgId: string): Promise<void> {
     const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
     if (entry.recordOrigin === 'historical_transcription') {
       throw new BadRequestException('Historical source transcriptions cannot be deleted');
     }
@@ -459,6 +676,7 @@ export class LogsService {
 
   async confirm(id: string, orgId: string, userId: string): Promise<LogEntry> {
     const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
     if (entry.recordOrigin === 'historical_transcription') {
       throw new BadRequestException('Historical source transcriptions are already reviewed and cannot be re-confirmed');
     }
@@ -476,6 +694,7 @@ export class LogsService {
     data: { occurredAt?: Date; measuredAt?: Date; unlockToStatus?: LogStatus },
   ) {
     const entry = await this.findOne(id, orgId);
+    this.assertOperational(entry);
     if (entry.recordOrigin === 'historical_transcription') {
       throw new BadRequestException('Historical source transcriptions cannot be changed through exception mode');
     }

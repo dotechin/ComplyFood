@@ -1,5 +1,5 @@
 import { LogType, type LogEntry } from '@complyfood/shared';
-import { apiDelete, apiGet, apiPost } from '../../../lib/api';
+import { apiGet, apiPost } from '../../../lib/api';
 import { CLEANING_AREA_FIELD, CLEANING_DATE_FIELD, CLEANING_SCHEDULE } from './cleaning-schedule';
 import { CHECKLIST_DATE_FIELD, CHECKLIST_ITEM_FIELD, CHECKLIST_SECTIONS } from './hygiene-checklist';
 import { INCIDENT_FIELDS } from './incident-log';
@@ -9,13 +9,11 @@ const SAMPLE_FIELD = 'Sample data';
 /** The API's "generated" reset scope matches `fields.source LIKE 'supermode-%'`. */
 const SAMPLE_SOURCE = { source: 'supermode-sample' };
 const TEMPERATURE_UNITS_KEY = 'complyfood-temperature-units';
-const SAMPLE_REGISTRY_KEY = 'complyfood-sample-temperature';
 const TEMPERATURE_PREFIX = 'complyfood-temperature-daily';
 const OPENING_DAYS_KEY = 'complyfood-opening-days';
 const DAYS = 30;
 
 type Reading = { temp: string; time: string };
-type Registry = Record<string, string[]>;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const between = (min: number, max: number) => min + Math.random() * (max - min);
@@ -103,11 +101,6 @@ async function inBatches<T>(items: T[], size: number, task: (item: T) => Promise
   }
 }
 
-const isSample = (log: LogEntry) =>
-  !log.sourceDocumentId
-  && log.recordOrigin !== 'historical_transcription'
-  && log.fields?.[SAMPLE_FIELD] === 'yes';
-
 /** Fills the opening days between `from` and `to` (inclusive) with temperature readings, cleaning and checklist ticks, and incidents. */
 export type SampleDataSelection = {
   temperatures: boolean;
@@ -131,8 +124,8 @@ export async function generateSampleData(
   selection: SampleDataSelection = ALL_SAMPLE_DATA,
 ) {
   const days = openDaysBetween(from, to);
-  const registry = readJson<Registry>(SAMPLE_REGISTRY_KEY, {});
   const incidents: Record<string, string>[] = [];
+  const temperatureLogs: { type: LogType; fields: Record<string, string | number> }[] = [];
   let readings = 0;
 
   if (selection.temperatures) for (const unit of units) {
@@ -143,12 +136,22 @@ export async function generateSampleData(
       if (entries[day]) continue;
       const { temp, outOfRange } = randomTemperature(unit, ranges);
       const time = randomTime();
-      entries[day] = { temp, time };
-      window.localStorage.setItem(key, JSON.stringify(entries));
-      registry[key] = [...new Set([...(registry[key] ?? []), day])];
+      temperatureLogs.push({
+        type: LogType.TEMPERATURE,
+        fields: {
+          scheduledDate: isoLocal(date),
+          'Workstation / unit': unit.value,
+          category: unit.category,
+          temperature: Number(temp),
+          'Demo time': time,
+          [SAMPLE_FIELD]: 'yes',
+          ...SAMPLE_SOURCE,
+        },
+      });
       readings += 1;
       if (selection.incidents && outOfRange) {
         incidents.push({
+          scheduledDate: isoLocal(date),
           [INCIDENT_FIELDS.description]: `${unit.label} read ${temp}°C on ${labelDate(date)} at ${time} (target ${unit.category === 'freezer' ? '≤ -18°C' : '≤ 4°C'}).`,
           [INCIDENT_FIELDS.correction]: chance(0.5) ? 'Door seal checked, thermostat adjusted, re-checked after 30 min.' : 'Stock moved to back-up unit, engineer called.',
           [INCIDENT_FIELDS.disposition]: chance(0.7) ? 'Retained' : 'Discarded',
@@ -159,7 +162,6 @@ export async function generateSampleData(
       }
     }
   }
-  window.localStorage.setItem(SAMPLE_REGISTRY_KEY, JSON.stringify(registry));
 
   const sheets = [
     ...(selection.cleaning ? [{ type: LogType.CLEANING, row: CLEANING_AREA_FIELD, date: CLEANING_DATE_FIELD, items: CLEANING_SCHEDULE.map((r) => r.area) }] : []),
@@ -178,8 +180,9 @@ export async function generateSampleData(
     }
   }
 
-  await inBatches(ticks, 4, (body) => apiPost<LogEntry>('/logs', body));
-  await inBatches(incidents, 4, (fields) => apiPost<LogEntry>('/logs', { type: LogType.INCIDENT, fields }));
+  await inBatches(temperatureLogs, 4, (body) => apiPost<LogEntry>('/logs/demo', body));
+  await inBatches(ticks, 4, (body) => apiPost<LogEntry>('/logs/demo', body));
+  await inBatches(incidents, 4, (fields) => apiPost<LogEntry>('/logs/demo', { type: LogType.INCIDENT, fields }));
 
   return { days: days.length, readings, ticks: ticks.length, incidents: incidents.length };
 }
@@ -189,25 +192,13 @@ type ResetResult = { deleted: number };
 /** Removes marked server-side samples. Browser readings need manual review. */
 export async function clearSampleData(pin: string) {
   const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'generated' });
-
-  // Entries generated before the server-side `source` marker existed.
-  const legacy = (
-    await Promise.all([LogType.CLEANING, LogType.CHECKLIST, LogType.INCIDENT].map((type) => apiGet<LogEntry[]>(`/logs?type=${type}`)))
-  ).flat().filter(isSample);
-  await inBatches(legacy, 4, (log) => apiDelete(`/logs/${log.id}`));
-  return deleted + legacy.length;
+  return deleted;
 }
 
-/** Deletes every log entry and every temperature reading. Opening days and units are kept. */
+/** Deletes explicitly classified server records while preserving browser originals and unreviewed records. */
 export async function resetAllData(pin: string) {
   const { deleted } = await apiPost<ResetResult>('/logs/reset', { pin, scope: 'all' });
-  const storage = window.localStorage;
-  const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter(
-    (key): key is string => !!key && key.startsWith(`${TEMPERATURE_PREFIX}:`),
-  );
-  for (const key of keys) storage.removeItem(key);
-  storage.removeItem(SAMPLE_REGISTRY_KEY);
-  return { logs: deleted, temperatureSheets: keys.length };
+  return { logs: deleted };
 }
 
 /** Temperature units configured on the Daily Logs page, or the defaults. */

@@ -12,11 +12,12 @@ import {
   defaultSamplePeriod,
   generateSampleData,
   resetAllData,
-  storedTemperatureUnits,
 } from '../logs/sample-data';
 import { TEMPERATURE_UNITS } from '../logs/temperature-log';
 import { CLEANING_SCHEDULE } from '../logs/cleaning-schedule';
 import { CHECKLIST_SECTIONS } from '../logs/hygiene-checklist';
+import { DailyScheduleSettings } from './daily-schedule';
+import { ExistingDataReview } from './data-review';
 
 type SupermodeStatus = { pinSet: boolean; lockedUntil: string | null; attemptsLeft: number };
 
@@ -313,14 +314,21 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
     if (action === 'clear' && !window.confirm('Remove marked sample log entries? Browser temperature readings will be kept for manual review.')) return;
     if (
       action === 'reset'
-      && window.prompt('This permanently deletes ALL log entries and temperature readings. Type RESET to confirm.') !== 'RESET'
+      && window.prompt('This permanently deletes classified log entries. Historical, unreviewed and browser-local records are retained. Type RESET to confirm.') !== 'RESET'
     ) return;
     setBusy(action);
     setMessage('');
     setError('');
     try {
       if (action === 'generate') {
-        const result = await generateSampleData(storedTemperatureUnits(TEMPERATURE_UNITS), fromDate, toDate, parsedRanges, sampleSelection);
+        const settings = await apiGet<{ units: typeof TEMPERATURE_UNITS }>('/automation/temperature-settings');
+        const result = await generateSampleData(
+          settings.units.length ? settings.units : TEMPERATURE_UNITS,
+          fromDate,
+          toDate,
+          parsedRanges,
+          sampleSelection,
+        );
         setMessage(
           `Added ${result.readings} temperature readings, ${result.ticks} cleaning/checklist ticks and ${result.incidents} incidents across ${result.days} opening days (${formatDay(fromDate)} – ${formatDay(toDate)}).`,
         );
@@ -329,7 +337,7 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
         setMessage(`Removed ${removed} marked sample log entries. Browser temperature readings were kept for manual review.`);
       } else {
         const result = await resetAllData(pin);
-        setMessage(`Reset complete: ${result.logs} log entries and ${result.temperatureSheets} temperature sheets deleted.`);
+        setMessage(`Reset complete: ${result.logs} classified log entries deleted. Browser temperature originals were retained.`);
       }
     } catch (err) {
       setError(errorText(err, 'Supermode action failed'));
@@ -340,6 +348,8 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <DailyScheduleSettings pin={pin} />
+      <ExistingDataReview />
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-6 shadow-card">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Sample data</h2>
@@ -523,10 +533,9 @@ function SupermodeTools({ pin, onLock }: { pin: string; onLock: () => void }) {
 
       <section className="flex flex-col gap-3 rounded-lg border border-danger/40 bg-card p-6 shadow-card">
         <div>
-          <h2 className="text-lg font-semibold text-danger">Reset</h2>
+          <h2 className="text-lg font-semibold text-danger">Reset classified records</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Deletes every entry in all daily logs at once: temperatures, cleaning, checklist, receiving and incidents.
-            Opening days, units and imported historical records are kept. This cannot be undone.
+            Deletes classified real and demo entries in all daily logs. Historical records, unreviewed ambiguous records, and browser-local temperature originals are retained. This cannot be undone.
           </p>
         </div>
         <div>

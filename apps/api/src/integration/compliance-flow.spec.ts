@@ -21,6 +21,7 @@ import { OverrideRecord } from '../modules/overrides/entities/override-record.en
 import { PresetRule } from '../modules/automation/entities/preset-rule.entity';
 import { ReminderRule } from '../modules/automation/entities/reminder-rule.entity';
 import { ReminderEvent } from '../modules/automation/entities/reminder-event.entity';
+import { SupermodeSchedule } from '../modules/automation/entities/supermode-schedule.entity';
 import { Document } from '../modules/documents/entities/document.entity';
 import { ChecklistTemplate } from '../modules/checklists/entities/checklist-template.entity';
 import { TEST_CONFIG, cleanupTestStorage, createTestDataSource } from '../test-utils/pg-mem';
@@ -55,6 +56,7 @@ describe('Compliance integration flow', () => {
       dataSource.getRepository(PresetRule),
       dataSource.getRepository(ReminderRule),
       dataSource.getRepository(ReminderEvent),
+      dataSource.getRepository(SupermodeSchedule),
       logsService,
     );
     documentsService = new DocumentsService(dataSource.getRepository(Document), {

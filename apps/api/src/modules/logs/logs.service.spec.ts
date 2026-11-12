@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { LogsService } from './logs.service';
 import { LogStatus, LogType } from './entities/log-entry.entity';
 
@@ -139,6 +139,112 @@ describe('LogsService', () => {
       }),
     );
     expect(result.status).toBe(LogStatus.CONFIRMED);
+  });
+
+  it('keeps scheduled checks pending until a person records an actual performed check', async () => {
+    const entry = {
+      id: 'scheduled-1',
+      orgId: 'org-1',
+      scheduleKey: 'schedule:date:fridge',
+      status: LogStatus.PENDING,
+      fields: { category: 'fridge', limit: 4, 'Workstation / unit': 'Fridge 1' },
+      submittedBy: null,
+      submittedAt: null,
+    };
+    repo.findOne.mockResolvedValue(entry);
+
+    await expect(service.completeScheduledCheck('scheduled-1', 'org-1', 'staff-1', {
+      performed: true,
+      temperature: 8,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.save).not.toHaveBeenCalled();
+
+    await service.completeScheduledCheck('scheduled-1', 'org-1', 'staff-1', {
+      performed: true,
+      temperature: 8,
+      exceptionReason: 'Unit above limit',
+      correctiveAction: 'Moved food to backup fridge',
+    });
+
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+      status: LogStatus.CONFIRMED,
+      submittedBy: 'staff-1',
+      submittedAt: expect.any(Date),
+      measuredAt: expect.any(Date),
+      isException: true,
+      exceptionReason: 'Unit above limit',
+      fields: expect.objectContaining({ temperature: 8, 'Corrective action': 'Moved food to backup fridge' }),
+    }));
+  });
+
+  it('leaves unperformed scheduled checks unchanged', async () => {
+    const entry = { id: 'scheduled-1', orgId: 'org-1', scheduleKey: 'key', status: LogStatus.PENDING, fields: {} };
+    repo.findOne.mockResolvedValue(entry);
+
+    await expect(service.completeScheduledCheck('scheduled-1', 'org-1', 'staff-1', { performed: false }))
+      .resolves.toBe(entry);
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('imports only explicitly classified browser readings and rejects competing server records', async () => {
+    repo.find.mockResolvedValue([]);
+    repo.findOne.mockResolvedValue(null);
+    const result = await service.importBrowserTemperatures('org-1', 'admin-1', [{
+      date: '2026-11-11',
+      unit: 'Fridge 1',
+      category: 'fridge',
+      temperature: 3.5,
+      measuredAt: '2026-11-11T08:30:00.000Z',
+      classification: 'real',
+    }]);
+
+    expect(result).toEqual({ imported: 1, duplicates: 0 });
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+      importKey: 'browser-temperature:2026-11-11:Fridge 1',
+      status: LogStatus.PENDING,
+      dataClassification: 'real',
+      submittedBy: null,
+    }));
+    expect(repo.save.mock.calls[0][0].fields['Browser import reviewed by']).toBe('admin-1');
+
+    repo.find.mockResolvedValue([{
+      id: 'server-log',
+      fields: { 'Workstation / unit': 'Fridge 1' },
+      occurredAt: new Date('2026-11-11T00:00:00.000Z'),
+      importKey: null,
+    }]);
+    repo.findOne.mockResolvedValue(null);
+    await expect(service.importBrowserTemperatures('org-1', 'admin-1', [{
+      date: '2026-11-11',
+      unit: 'Fridge 1',
+      category: 'fridge',
+      temperature: 3.5,
+      measuredAt: '2026-11-11T08:30:00.000Z',
+      classification: 'real',
+    }])).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('isolates demo and unreviewed data from the default log query', async () => {
+    const query = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    repo.createQueryBuilder.mockReturnValue(query);
+
+    await service.findAll('org-1');
+    expect(query.andWhere).toHaveBeenCalledWith(
+      'log.data_classification IN (:...classifications)',
+      { classifications: ['real', 'historical'] },
+    );
+
+    query.andWhere.mockClear();
+    await service.findAll('org-1', undefined, undefined, undefined, undefined, undefined, true);
+    expect(query.andWhere).toHaveBeenCalledWith(
+      'log.data_classification = :classification',
+      { classification: 'demo' },
+    );
   });
 
   it('throws when a log entry is missing', async () => {

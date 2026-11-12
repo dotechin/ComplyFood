@@ -36,7 +36,7 @@ export class OverridesService {
     if (!dto.reason || dto.reason.trim().length < 3) {
       throw new BadRequestException('A reason is required for every override');
     }
-    const entry = await this.logsService.findOne(dto.logEntryId, orgId);
+    const entry = await this.logsService.findOperationalOne(dto.logEntryId, orgId);
     await this.logsService.update(entry.id, orgId, {
       status: LogStatus.OVERRIDDEN,
       fields: { ...entry.fields, [dto.fieldName]: dto.newValue },
@@ -47,7 +47,7 @@ export class OverridesService {
   }
 
   async findByLogEntry(logEntryId: string, orgId: string) {
-    await this.logsService.findOne(logEntryId, orgId);
+    await this.logsService.findOperationalOne(logEntryId, orgId);
     return this.repo.find({ where: { logEntryId }, order: { createdAt: 'DESC' } });
   }
 

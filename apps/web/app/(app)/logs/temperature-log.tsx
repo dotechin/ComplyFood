@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActionButton, CheckIcon, CloseIcon, PlusIcon, TrashIcon } from '../../../components/icon-button';
-import { OpeningDaysPicker, WEEKDAY_SHORT, useOpeningDays } from './opening-days';
+import { LogType, type LogEntry } from '@complyfood/shared';
+import { apiGet } from '../../../lib/api';
 
 export type TemperatureUnitCategory = 'fridge' | 'freezer';
 export type TemperatureUnit = { value: string; label: string; category: TemperatureUnitCategory };
@@ -13,284 +13,158 @@ export const TEMPERATURE_UNITS: TemperatureUnit[] = [
   { value: 'Kitchen Fridge 5', label: 'Kitchen Fridge 5', category: 'fridge' },
 ];
 
-const SELECT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground';
-const INPUT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground';
-
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const ENTRIES_STORAGE_PREFIX = 'complyfood-temperature-daily';
-
 export { WEEKDAYS } from './opening-days';
 
-type DailyReading = { temp: string; time: string };
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SELECT_CLASSES = 'h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground';
 
-function readEntries(raw: string | null): Record<string, DailyReading> {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const entries: Record<string, DailyReading> = {};
-    for (const [day, value] of Object.entries(parsed)) {
-      if (value && typeof value === 'object' && typeof value.temp === 'string' && typeof value.time === 'string') {
-        entries[day] = { temp: value.temp, time: value.time };
-      }
-    }
-    return entries;
-  } catch {
-    return {};
-  }
-}
-
-function formatTime(date: Date) {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-}
+type DailyReading = { temp: string; time: string; status: string };
 
 function isOutOfRange(value: string, category: TemperatureUnitCategory) {
-  const n = Number(value);
-  if (value.trim() === '' || Number.isNaN(n)) return false;
-  return category === 'freezer' ? n > -18 : n > 4;
+  const temperature = Number(value);
+  return value.trim() !== '' && Number.isFinite(temperature)
+    && (category === 'freezer' ? temperature > -18 : temperature > 4);
+}
+
+function entryDate(entry: LogEntry) {
+  const date = entry.measuredAt
+    ?? entry.fields?.['Browser reading time']
+    ?? entry.occurredAt
+    ?? entry.submittedAt
+    ?? entry.createdAt
+    ?? entry.fields?.scheduledDate;
+  return typeof date === 'string' ? date.slice(0, 10) : '';
+}
+
+function readingTime(entry: LogEntry) {
+  const browserTime = entry.fields?.['Browser reading time'];
+  if (typeof browserTime === 'string' && browserTime) {
+    const date = new Date(browserTime);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  const raw = entry.fields?.Reading;
+  if (typeof raw === 'string' && raw) return raw;
+  const timestamp = entry.measuredAt ?? entry.submittedAt ?? entry.createdAt;
+  return timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 }
 
 export function TemperatureLog({
   units,
   unit,
   year,
-  onUnitsChange,
+  openingDays,
   onUnitChange,
   onYearChange,
 }: {
   units: TemperatureUnit[];
   unit: string;
   year: number;
-  onUnitsChange: (units: TemperatureUnit[]) => void;
+  openingDays: number[];
   onUnitChange: (unit: string) => void;
   onYearChange: (year: number) => void;
 }) {
   const sortedUnits = [...units].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-  const [newUnitName, setNewUnitName] = useState('');
-  const [newUnitCategory, setNewUnitCategory] = useState<TemperatureUnitCategory>('fridge');
-  const [unitError, setUnitError] = useState('');
   const selected = units.find((option) => option.value === unit) ?? units[0] ?? TEMPERATURE_UNITS[0];
-  const currentYear = new Date().getFullYear();
   const [month, setMonth] = useState(() => new Date().getMonth());
-  const [entries, setEntries] = useState<Record<string, DailyReading>>({});
-  const [loadedKey, setLoadedKey] = useState('');
-  const [editing, setEditing] = useState<{ day: number; draft: string } | null>(null);
-  const { openingDays, toggle: toggleOpeningDay } = useOpeningDays();
-  // Resolved after mount so the server render and the browser agree on "today".
-  const [today, setToday] = useState<{ year: number; month: number; day: number } | null>(null);
+  const [entries, setEntries] = useState<Record<number, DailyReading>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [today, setToday] = useState('');
+  const currentYear = new Date().getFullYear();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const target = selected.category === 'freezer' ? '≤ -18°C' : '≤ 4°C';
-  const storageKey = `${ENTRIES_STORAGE_PREFIX}:${selected.value}:${year}-${month + 1}`;
-  const monthDates = Array.from({ length: daysInMonth }, (_, index) => index + 1).map((day) => {
+  const monthDates = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
     const weekday = new Date(year, month, day).getDay();
     return { day, weekday, isOpen: openingDays.includes(weekday) };
   });
-  const isToday = (day: number) => today?.year === year && today.month === month && today.day === day;
 
   useEffect(() => {
     const now = new Date();
-    setToday({ year: now.getFullYear(), month: now.getMonth(), day: now.getDate() });
+    setToday(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
   }, []);
 
   useEffect(() => {
-    setEditing(null);
-    try {
-      setEntries(readEntries(window.localStorage.getItem(storageKey)));
-    } catch {
-      setEntries({});
-    }
-    setLoadedKey(storageKey);
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (loadedKey !== storageKey) return;
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(entries));
-    } catch {
-      // storage unavailable
-    }
-  }, [entries, loadedKey, storageKey]);
-
-  const commit = () => {
-    if (!editing) return;
-    const { day } = editing;
-    const temp = editing.draft.trim();
-    setEntries((prev) => {
-      const next = { ...prev };
-      if (!temp) delete next[day];
-      else if (prev[day]?.temp !== temp) next[day] = { temp, time: formatTime(new Date()) };
-      return next;
-    });
-    setEditing(null);
-  };
-
-  const addUnit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const name = newUnitName.trim();
-    if (!name) {
-      setUnitError('Enter a unit name.');
-      return;
-    }
-    const normalizedName = name.toLocaleLowerCase();
-    if (units.some((option) => [option.label, option.value].some((existing) => existing.toLocaleLowerCase() === normalizedName))) {
-      setUnitError('A unit with this name already exists.');
-      return;
-    }
-    const next = [...units, { value: name, label: name, category: newUnitCategory }];
-    onUnitsChange(next);
-    onUnitChange(name);
-    setNewUnitName('');
-    setUnitError('');
-  };
-
-  const deleteUnit = () => {
-    if (units.length <= 1) return;
-    const next = units.filter((option) => option.value !== selected.value);
-    onUnitsChange(next);
-    if (selected.value === unit) onUnitChange(next[0].value);
-  };
+    let active = true;
+    const from = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    const to = new Date(Date.UTC(year, month + 1, 1)).toISOString().slice(0, 10);
+    setLoading(true);
+    setError('');
+    apiGet<LogEntry[]>(`/logs?type=${LogType.TEMPERATURE}&dateFrom=${from}&dateTo=${to}`)
+      .then((logs) => {
+        if (!active) return;
+        const readings: Record<number, DailyReading> = {};
+        for (const entry of logs) {
+          if (entry.fields?.['Workstation / unit'] !== selected.value) continue;
+          const date = entryDate(entry);
+          if (!date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}-`)) continue;
+          const day = Number(date.slice(8, 10));
+          const raw = entry.fields?.temperature ?? entry.fields?.['Measured temperature'];
+          const temperature = typeof raw === 'number' ? String(raw) : String(raw ?? '').match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(',', '.') ?? '';
+          if (!temperature) continue;
+          readings[day] = {
+            temp: temperature,
+            time: readingTime(entry),
+            status: entry.status,
+          };
+        }
+        setEntries(readings);
+      })
+      .catch((err: Error) => active && setError(err.message))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [selected.value, year, month, daysInMonth]);
 
   return (
     <section aria-labelledby="temperature-heading" className="space-y-3 rounded-lg border bg-card p-4 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="temperature-heading" className="text-xl font-bold text-foreground">Temperature Log</h2>
         <div className="flex items-center gap-2">
-          <select aria-label="Temperature log" value={selected.value} onChange={(e) => onUnitChange(e.target.value)} className={SELECT_CLASSES}>
-{sortedUnits.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
+          <select aria-label="Temperature log" value={selected.value} onChange={(event) => onUnitChange(event.target.value)} className={SELECT_CLASSES}>
+            {sortedUnits.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
-          <ActionButton
-            icon={<TrashIcon />}
-            label={`Delete ${selected.label}`}
-            variant="danger"
-            disabled={units.length <= 1}
-            onClick={deleteUnit}
-          />
-          <select aria-label="Year" value={year} onChange={(e) => onYearChange(Number(e.target.value))} className={SELECT_CLASSES}>
-            {Array.from({ length: currentYear - 2019 }, (_, index) => currentYear - index).map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
+          <select aria-label="Year" value={year} onChange={(event) => onYearChange(Number(event.target.value))} className={SELECT_CLASSES}>
+            {Array.from({ length: currentYear - 2019 }, (_, index) => currentYear - index).map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
         </div>
       </div>
-      <form onSubmit={addUnit} className="flex flex-wrap items-end gap-2" aria-label="Add temperature unit">
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Unit name
-          <input
-            aria-label="Unit name"
-            className={INPUT_CLASSES}
-            maxLength={80}
-            value={newUnitName}
-            onChange={(event) => setNewUnitName(event.target.value)}
-            placeholder="e.g. Walk-in fridge"
-          />
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-foreground">
-          Type
-          <select
-            aria-label="Unit type"
-            className={SELECT_CLASSES}
-            value={newUnitCategory}
-            onChange={(event) => setNewUnitCategory(event.target.value as TemperatureUnitCategory)}
-          >
-            <option value="fridge">Fridge</option>
-            <option value="freezer">Freezer</option>
-          </select>
-        </label>
-        <ActionButton type="submit" icon={<PlusIcon />} label="Add unit" variant="primary" />
-        {unitError && <p role="alert" className="basis-full text-sm text-danger">{unitError}</p>}
-      </form>
-      <div
-        role="group"
-        aria-label={`Temperature Log — ${selected.label}, ${year} (blank sheet)`}
-        className="overflow-hidden rounded-md border border-border bg-card"
-      >
+      <p className="text-sm text-muted-foreground">
+        Server-stored readings across your organization. Enter and confirm actual readings in Daily Checks. Browser-local readings remain available for administrator review in Supermode.
+      </p>
+      <p className="text-xs text-muted-foreground">Opening days: {WEEKDAY_SHORT.filter((_, day) => openingDays.includes(day)).join(', ') || 'none configured'}</p>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {loading && <p role="status" className="text-sm text-muted-foreground">Loading server readings…</p>}
+      <div role="group" aria-label={`Temperature Log — ${selected.label}, ${year}`} className="overflow-hidden rounded-md border border-border bg-card">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 text-sm">
           <span className="font-semibold text-foreground">Daily Temperature Monitoring Log — {selected.label}</span>
-          <select aria-label="Month" value={month} onChange={(e) => setMonth(Number(e.target.value))} className={SELECT_CLASSES}>
-            {MONTHS.map((name, index) => (
-              <option key={name} value={index}>{name} {year}</option>
-            ))}
+          <select aria-label="Month" value={month} onChange={(event) => setMonth(Number(event.target.value))} className={SELECT_CLASSES}>
+            {MONTHS.map((name, index) => <option key={name} value={index}>{name} {year}</option>)}
           </select>
         </div>
-        <OpeningDaysPicker openingDays={openingDays} onToggle={toggleOpeningDay} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[32rem] border-collapse text-sm">
             <thead>
               <tr className="bg-primary text-primary-foreground">
                 <th scope="col" className="w-24 border border-primary-foreground/20 px-2 py-2">Weekday</th>
                 <th scope="col" className="w-32 border border-primary-foreground/20 px-2 py-2">Date</th>
-                <th scope="col" className="border border-primary-foreground/20 px-2 py-2">Time<br /><span className="font-normal">(automatic)</span></th>
+                <th scope="col" className="border border-primary-foreground/20 px-2 py-2">Time</th>
                 <th scope="col" className="border border-primary-foreground/20 px-2 py-2">Temperature<br /><span className="font-normal">(Target {target})</span></th>
               </tr>
             </thead>
             <tbody>
               {monthDates.map(({ day, weekday, isOpen }, index) => {
                 const reading = entries[day];
-                const open = isOpen && editing?.day === day;
-                const current = isToday(day);
-                const out = reading ? isOutOfRange(reading.temp, selected.category) : false;
-                const weekdayLabel = WEEKDAY_SHORT[weekday];
-                const dateText = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
-                const dateLabel = `${weekdayLabel} ${dateText}`;
-                const rowClass = !isOpen
-                  ? 'bg-muted text-muted-foreground'
-                  : current
-                    ? 'bg-accent text-accent-foreground'
-                    : index % 2 === 1
-                      ? 'bg-accent/30 text-foreground'
-                      : 'bg-card text-foreground';
+                const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const current = date === today;
+                const rowClass = !isOpen ? 'bg-muted text-muted-foreground' : current ? 'bg-accent text-accent-foreground' : index % 2 ? 'bg-accent/30 text-foreground' : 'bg-card text-foreground';
                 return (
-                  <tr
-                    key={day}
-                    aria-current={current ? 'date' : undefined}
-                    aria-disabled={isOpen ? undefined : true}
-                    className={rowClass}
-                  >
-                    <td className={`border border-border px-2 py-2 ${current && isOpen ? 'font-semibold' : ''}`}>
-                      {weekdayLabel}
-                    </td>
-                    <th scope="row" className={`border border-border px-2 py-2 text-left tabular-nums ${current && isOpen ? 'font-semibold' : 'font-normal'}`}>
-                      {dateText}
-                    </th>
-                    <td className="border border-border px-2 py-2 tabular-nums">
-                      {isOpen ? reading?.time ?? '' : <span className="text-xs uppercase tracking-wide">Closed</span>}
-                    </td>
-                    <td className="relative border border-border p-0">
-                      <button
-                        type="button"
-                        aria-label={`Temperature ${dateLabel}${isOpen ? '' : ' (closed)'}`}
-                        aria-haspopup="dialog"
-                        aria-expanded={open}
-                        disabled={!isOpen || !current}
-                        title={!isOpen ? 'Closed day — no reading required' : current ? undefined : 'Readings can only be registered on the current day'}
-                        onClick={() => setEditing({ day, draft: reading?.temp ?? '' })}
-                        className={`block h-10 w-full px-2 text-left tabular-nums enabled:hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed ${out && isOpen ? 'font-semibold text-danger' : ''}`}
-                      >
-                        {isOpen && reading ? `${reading.temp}°C` : ''}
-                      </button>
-                      {open && (
-                        <form
-                          role="dialog"
-                          aria-label={`Edit temperature ${dateLabel}`}
-                          onSubmit={(event) => { event.preventDefault(); commit(); }}
-                          onKeyDown={(event) => { if (event.key === 'Escape') setEditing(null); }}
-                          className="absolute right-0 top-full z-20 mt-1 flex w-56 items-center gap-1 rounded-md border bg-card p-2 shadow-lg"
-                        >
-                          <input
-                            autoFocus
-                            aria-label="Temperature (°C)"
-                            type="number"
-                            step="0.1"
-                            value={editing.draft}
-                            onChange={(event) => setEditing({ day, draft: event.target.value })}
-                            className={`${INPUT_CLASSES} min-w-0 flex-1`}
-                          />
-                          <ActionButton type="submit" icon={<CheckIcon />} label="Save" variant="primary" />
-                          <ActionButton icon={<CloseIcon />} label="Cancel" onClick={() => setEditing(null)} />
-                        </form>
-                      )}
+                  <tr key={day} aria-current={current ? 'date' : undefined} aria-disabled={!isOpen || undefined} className={rowClass}>
+                    <td className="border border-border px-2 py-2">{WEEKDAY_SHORT[weekday]}</td>
+                    <th scope="row" className="border border-border px-2 py-2 text-left tabular-nums font-normal">{`${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`}</th>
+                    <td className="border border-border px-2 py-2 tabular-nums">{isOpen ? reading?.time ?? '' : <span className="text-xs uppercase tracking-wide">Closed</span>}</td>
+                    <td className={`border border-border px-2 py-2 tabular-nums ${reading && isOutOfRange(reading.temp, selected.category) ? 'font-semibold text-danger' : ''}`}>
+                      {isOpen && reading ? <>{reading.temp}°C{reading.status !== 'confirmed' && <span className="ml-2 text-xs text-warning">Pending confirmation</span>}</> : ''}
                     </td>
                   </tr>
                 );

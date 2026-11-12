@@ -152,43 +152,6 @@ function readingStamp(date = new Date()) {
   return `${time} (${date.getHours() < 12 ? 'AM' : 'PM'})`;
 }
 
-const TEMPERATURE_UNITS_STORAGE_KEY = 'complyfood-temperature-units';
-
-function readTemperatureUnits(value: string | null): TemperatureUnit[] | null {
-  if (!value) return null;
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) return null;
-    const seen = new Set<string>();
-    const units = parsed.filter((unit): unit is TemperatureUnit => {
-      if (
-        !unit
-        || typeof unit !== 'object'
-        || !('value' in unit)
-        || typeof unit.value !== 'string'
-        || !('label' in unit)
-        || typeof unit.label !== 'string'
-        || !('category' in unit)
-        || (unit.category !== 'fridge' && unit.category !== 'freezer')
-        || !unit.value.trim()
-        || !unit.label.trim()
-      ) return false;
-      const key = unit.value.trim().toLocaleLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    if (!units.length) return null;
-    const existing = new Set(units.map((unit) => unit.value.trim().toLocaleLowerCase()));
-    return [
-      ...units,
-      ...TEMPERATURE_UNITS.filter((unit) => !existing.has(unit.value.toLocaleLowerCase())),
-    ];
-  } catch {
-    return null;
-  }
-}
-
 function defaultTarget(unit: string, units: TemperatureUnit[]) {
   return units.find((option) => option.value === unit)?.category === 'freezer'
     ? 'Frozen ≤ -18°C'
@@ -208,7 +171,7 @@ export default function LogsPage() {
   const [temperatureUnits, setTemperatureUnits] = useState<TemperatureUnit[]>(() =>
     [...TEMPERATURE_UNITS].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
   );
-  const [temperatureUnitsLoaded, setTemperatureUnitsLoaded] = useState(false);
+  const [openingDays, setOpeningDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [temperatureUnit, setTemperatureUnit] = useState<string>(() =>
     [...TEMPERATURE_UNITS].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))[0].value,
   );
@@ -228,31 +191,21 @@ export default function LogsPage() {
     : temperatureUnits[0].value;
 
   useEffect(() => {
-    try {
-      const storedUnits = readTemperatureUnits(window.localStorage.getItem(TEMPERATURE_UNITS_STORAGE_KEY));
-      if (storedUnits) {
-        const sortedUnits = [...storedUnits].sort((a, b) =>
-          a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
-        );
-        const selectedUnit = sortedUnits[0].value;
-        setTemperatureUnits(sortedUnits);
-        setTemperatureUnit(selectedUnit);
-        setFormValues((prev) => ({ ...prev, target: defaultTarget(selectedUnit, storedUnits) }));
-      }
-    } catch {
-      // Keep the default units when browser storage is unavailable.
-    }
-    setTemperatureUnitsLoaded(true);
+    let active = true;
+    apiGet<{ units: TemperatureUnit[]; openingDays: number[] }>('/automation/temperature-settings')
+      .then((settings) => {
+        if (!active) return;
+        if (settings.units.length) {
+          const sorted = [...settings.units].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+          setTemperatureUnits(sorted);
+          setTemperatureUnit(sorted[0].value);
+          setFormValues((prev) => ({ ...prev, target: defaultTarget(sorted[0].value, sorted) }));
+        }
+        setOpeningDays(settings.openingDays);
+      })
+      .catch((err: Error) => active && setError(err.message));
+    return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (!temperatureUnitsLoaded) return;
-    try {
-      window.localStorage.setItem(TEMPERATURE_UNITS_STORAGE_KEY, JSON.stringify(temperatureUnits));
-    } catch {
-      // Unit management remains available for this session when storage is unavailable.
-    }
-  }, [temperatureUnits, temperatureUnitsLoaded]);
 
   const filters = useMemo(
     () => (hasEntryList
@@ -473,7 +426,7 @@ export default function LogsPage() {
           units={temperatureUnits}
           unit={selectedTemperatureUnit}
           year={temperatureYear}
-          onUnitsChange={setTemperatureUnits}
+          openingDays={openingDays}
           onUnitChange={selectTemperatureUnit}
           onYearChange={setTemperatureYear}
         />

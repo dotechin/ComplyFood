@@ -9,7 +9,7 @@ describe('OverridesService', () => {
     find: jest.fn(),
   };
   const logsService = {
-    findOne: jest.fn(),
+    findOperationalOne: jest.fn(),
     update: jest.fn(),
   };
 
@@ -32,7 +32,7 @@ describe('OverridesService', () => {
   });
 
   it('updates the log entry and persists the override record', async () => {
-    logsService.findOne.mockResolvedValue({
+    logsService.findOperationalOne.mockResolvedValue({
       id: 'log-1',
       orgId: 'org-1',
       fields: { temperature: '4', item: 'Fridge 1' },
@@ -62,12 +62,12 @@ describe('OverridesService', () => {
   });
 
   it('lists overrides for a log entry after validating organization access', async () => {
-    logsService.findOne.mockResolvedValue({ id: 'log-1', orgId: 'org-1' });
+    logsService.findOperationalOne.mockResolvedValue({ id: 'log-1', orgId: 'org-1' });
     repo.find.mockResolvedValue([]);
 
     await service.findByLogEntry('log-1', 'org-1');
 
-    expect(logsService.findOne).toHaveBeenCalledWith('log-1', 'org-1');
+    expect(logsService.findOperationalOne).toHaveBeenCalledWith('log-1', 'org-1');
     expect(repo.find).toHaveBeenCalledWith({
       where: { logEntryId: 'log-1' },
       order: { createdAt: 'DESC' },

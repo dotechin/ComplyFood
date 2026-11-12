@@ -1,7 +1,7 @@
 {
   "moduleFileExtensions": ["ts", "js", "json"],
   "moduleNameMapper": {
-    "^@complyfood/shared$": "<rootDir>/../../packages/shared/src/index.ts"
+    "^@complyfood/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
   },
   "rootDir": ".",
   "testEnvironment": "node",
