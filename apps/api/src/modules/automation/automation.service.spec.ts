@@ -1,4 +1,5 @@
 import { AutomationService } from './automation.service';
+import { SupermodeSchedule } from './entities/supermode-schedule.entity';
 
 describe('AutomationService', () => {
   const presetRepo = {
@@ -102,7 +103,7 @@ describe('AutomationService', () => {
     let transactionQueue = Promise.resolve();
     const manager = {
       getRepository: (entity: unknown) => entity === undefined ? null
-        : entity === require('./entities/supermode-schedule.entity').SupermodeSchedule
+        : entity === SupermodeSchedule
           ? {
               findOne: jest.fn(async () => schedule),
               save: jest.fn(async (value) => value),
